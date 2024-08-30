@@ -22,7 +22,7 @@ class BinaryVHFTrace:
     raw_word_type = np.uint64
     i_arr_type = np.int32
     q_arr_type = np.int32
-    m_arr_type = np.int64
+    m_arr_type = np.int32
 
     bytes_per_word: int = 8
     potential_m_overflow_tolerance: int = 0x7F00
@@ -54,10 +54,8 @@ class BinaryVHFTrace:
     def read_m_arr(trace: NDArray[raw_word_type]) -> NDArray[m_arr_type]:
         """Gets the M portion of a word."""
         # is it safe to lower the size of this?
-        return np.right_shift(
-            trace, 48,
-            dtype=np.dtype(BinaryVHFTrace.m_arr_type)
-        )
+        result = np.right_shift(trace, 48, dtype=np.dtype(np.int64))
+        return result.astype(BinaryVHFTrace.m_arr_type)
 
 
 class TraceTimer:
@@ -449,6 +447,7 @@ class ManifoldRollover:
         last_m: BinaryVHFTrace.m_arr_type = m_block[-1]
 
         if self._potential_overflow(m_block):  # Perform only if necessary
+            self.logger.debug("_potential_overflow found!")
             # We first perform the np.diff for the self._trace_blk_id > 1 case:
             x = None
             if self._prev_trc_last_m is not None:
@@ -469,6 +468,7 @@ class ManifoldRollover:
             if idx.size > 0:
                 self._list_m_delta.extend(deltas)
                 self._list_m_delta_idx.extend(idx)
+            self.logger.debug("self._list_m_delta_idx.len() = %d", len(self._list_m_delta_idx))
 
         # End the loop
         self._prev_trc_last_m = last_m
