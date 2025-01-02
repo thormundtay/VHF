@@ -1,0 +1,12 @@
+[package]
+name = "VHF"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "stream"
+
+[dependencies]
+nix = { version = "0.29.0", features = ["fs", "ioctl",] }
+libc = { version = "0.2" }
+mmap-rs = { version = "0.6.1" }
