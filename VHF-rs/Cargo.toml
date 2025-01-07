@@ -6,7 +6,19 @@ edition = "2021"
 [[bin]]
 name = "stream"
 
+[lib]
+name = "vhf"
+
 [dependencies]
-nix = { version = "0.29.0", features = ["fs", "ioctl",] }
+configparser = { version = "3.1.0", default-features = false }
+evalexpr = { version = "12.0.2", features = ["regex",] }
 libc = { version = "0.2" }
+log = { version = "0.4.22" }
+log4rs = { version = "1.3.0", features = ["console_appender",] }
 mmap-rs = { version = "0.6.1" }
+nix = { version = "0.29.0", features = ["fs", "ioctl",] }
+once_cell = { version = "1.20.2" }
+regex = { version = "1.11.1" }
+
+[dev-dependencies]
+test-log = { version = "0.2.16", features = ["trace", "color",] }
