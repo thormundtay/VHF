@@ -65,6 +65,73 @@ impl PythonMath for String {
     }
 }
 
+/// In the case of VHF_board_ini having "toggleable" keys, we check if the enable_key exists, then
+/// the corresponding value of the actual key.
+/// Returns Err if _enable could not be found,
+///         Ok(None) if _enable key is false, Ok(val as T) otherwise.
+///         if as T fails, returns Err
+pub fn if_enabled_value<T>(
+    config: &ini::Ini,
+    section: &str,
+    key: &str,
+    bound: impl FnOnce(u64) -> bool,
+) -> Result<Option<T>>
+where
+    T: num_traits::bounds::Bounded + Into<u64> + TryFrom<u64>,
+{
+    let key_enable = &format!("{}_enable", key);
+    let map = config.get_map_ref();
+
+    if let None = map
+        .get(&section.to_ascii_lowercase())
+        .expect(&format!("ini file '{}' section not found.", section))
+        .get(key_enable)
+    {
+        return Err(crate::Error::new(&format!(
+            "ini file '{section} - {key_enable}' not found."
+        )));
+    }
+    log::debug!("ini file '{section} - {key_enable}' found.");
+    // Check if key_enable is boolean
+    if let None = config.getbool(section, key_enable).unwrap() {
+        return Err(crate::Error::new(&format!(
+            "ini file '{section} - {key_enable}' was not boolean."
+        )));
+    }
+
+    // We now check if key_enable is true/false
+    if !config.getbool(section, key_enable).unwrap().unwrap() {
+        // _enable key found to be false
+        return Ok(None);
+    }
+    // key_enable found to be true, we now try to push to read the regular key.
+
+    // Err(...) => key exists, parsing failed => Error
+    // Ok(None) => key ????, value not found => Error
+    // Ok(Some(v)) => key exists, value parsed => bounds(v)
+    if let Ok(None) = config.getuint(section, key) {
+        log::warn!("ini file '{section} - {key}' not found.");
+        return Err(crate::Error::new(&format!(
+            "ini file '{section} - {key}' not found."
+        )));
+    }
+    let v = config.getuint(section, key).unwrap_or_else(|v| {
+        // Avoid eager evaluation creating logging side effect
+        log::warn!("ini file '{section} - {key}' could not be parsed into u64 directly.");
+        Some(v.parse().unwrap_or(0))
+    });
+    if !bound(v.unwrap()) {
+        return Err(crate::Error::new(&format!(
+            "ini file '{section} - {key}' not within bounds."
+        )));
+    }
+
+    match T::try_from(v.unwrap()) {
+        Ok(t) => Ok(Some(t)),
+        Err(_) => Err(crate::Error::new(&format!("ini file '{section} - {key}' within bounds but not type-bounds (could not be coerced).")))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use test_log::test;
