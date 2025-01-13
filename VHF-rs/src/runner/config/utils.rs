@@ -133,15 +133,13 @@ where
 }
 
 #[cfg(test)]
-mod tests {
-    use test_log::test;
-    // use tracing::info;
-
+mod pythonmath_tests {
     use super::PythonMath;
     use evalexpr::Value;
+    use test_log::test;
 
     #[test]
-    fn case_a() {
+    fn pythonmath_basic() {
         let inp = "27+ 32".to_string();
         let result: i64 = match inp.eval().unwrap() {
             Value::Int(t) => t,
@@ -152,7 +150,7 @@ mod tests {
     }
 
     #[test]
-    fn case_b() {
+    fn pythonmath_2exponentiation() {
         let inp = "2**  27 + 1".to_string();
         let result: i64 = match inp.eval().unwrap() {
             Value::Int(t) => t,
@@ -160,5 +158,78 @@ mod tests {
         };
         let expected = (1 << 27) + 1;
         assert_eq!(result, expected)
+    }
+}
+
+#[cfg(test)]
+mod configutil_tests {
+    use crate::Result;
+    use configparser::ini;
+    use test_log::test;
+
+    #[test]
+    fn value_enabled_false() {
+        let mut conf = ini::Ini::new();
+        let _ = match conf.read(String::from(
+            "[Board]
+             vga_num_enable = False",
+        )) {
+            Err(v) => panic!("{}", v),
+            Ok(v) => v,
+        };
+        let result: Result<Option<u8>> =
+            super::if_enabled_value(&conf, "Board", "vga_num", |v| v <= 8);
+        let expected = Ok(None);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn value_enabled_true_normal() {
+        let mut conf = ini::Ini::new();
+        let _ = match conf.read(String::from(
+            "[Board]
+             vga_num_enable = True
+             vga_num = 2",
+        )) {
+            Err(v) => panic!("{}", v),
+            Ok(v) => v,
+        };
+        let result: Result<Option<u8>> =
+            super::if_enabled_value(&conf, "Board", "vga_num", |v| v <= 8);
+        let expected = Ok(Some(2));
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn value_enabled_true_parse_error() {
+        let mut conf = ini::Ini::new();
+        let _ = match conf.read(String::from(
+            "[Board]
+             vga_num_enable = True
+             vga_num = 2v",
+        )) {
+            Err(v) => panic!("{}", v),
+            Ok(v) => v,
+        };
+        let result: Result<Option<u8>> =
+            super::if_enabled_value(&conf, "Board", "vga_num", |v| v <= 8);
+        assert!(result.is_err()); // Current failing because code is being permissive
+    }
+
+    #[test]
+    fn value_enabled_true_parse_partial_error() {
+        let mut conf = ini::Ini::new();
+        let _ = match conf.read(String::from(
+            "[Board]
+             vga_num_enable = True
+             vga_num = 2*3",
+        )) {
+            Err(v) => panic!("{}", v),
+            Ok(v) => v,
+        };
+        let result: Result<Option<u8>> =
+            super::if_enabled_value(&conf, "Board", "vga_num", |v| v <= 8);
+        let expected = Ok(Some(6));
+        assert_eq!(result, expected);
     }
 }

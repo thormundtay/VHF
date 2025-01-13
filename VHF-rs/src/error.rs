@@ -4,7 +4,7 @@ use std::fmt;
 pub type Result<T> = core::result::Result<T, Error>;
 
 // This should move into an enum as the error types are made clearer
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Error {
     details: String,
 }
