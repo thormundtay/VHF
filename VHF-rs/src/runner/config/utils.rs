@@ -4,12 +4,6 @@ use evalexpr::{DefaultNumericTypes, HashMapContext, Value};
 use once_cell::sync::Lazy;
 use regex::{Captures, Regex};
 
-impl From<std::convert::Infallible> for crate::Error {
-    fn from(value: std::convert::Infallible) -> Self {
-        value.try_into().unwrap()
-    }
-}
-
 /// Used to run `eval` on Python strings, specific to getting only Math types
 pub trait PythonMath {
     /// Subset of Python's eval function to work with math expressions.
@@ -26,6 +20,7 @@ fn has_pow_2(s: &str) -> bool {
 
 impl PythonMath for String {
     fn eval(self) -> Result<evalexpr::Value> {
+        log::debug!("[PythonMath::eval] called with self = {:?}", &self);
         let mut context = HashMapContext::<DefaultNumericTypes>::new();
         // Replace any 2**n Python expressions as evalexpr crate would coerce into float.
         let to_eval: Result<String> = if has_pow_2(&self) {
@@ -34,7 +29,9 @@ impl PythonMath for String {
                 .captures_iter(&self)
                 .any(|captured: Captures| captured["expo"].parse::<u32>().is_err())
             {
-                return Err(crate::Error::new("Failed to parse exponent as u32"));
+                return Err(crate::Error::ParseUnrecognised(
+                    "Failed to parse exponent as u32".to_string(),
+                ));
             }
 
             // No parse int error found, we can continue
@@ -51,16 +48,24 @@ impl PythonMath for String {
             Ok(self)
         };
         // We let evalexpr handle everything except for powers of 2
-        let result = evalexpr::eval_with_context(&to_eval.unwrap(), &mut context).unwrap();
+        log::debug!("[PythonMath::eval] evaluating on {:?}", &to_eval);
+        let result = evalexpr::eval_with_context(&to_eval.unwrap(), &mut context)
+            .map_err(crate::Error::EvalExpr)?;
         match result {
-            Value::Boolean(_) => Err(crate::Error::new(
-                "Could not cast into generic from Boolean",
+            Value::Boolean(_) => Err(crate::Error::IniParse(
+                "Could not cast into numeric from Boolean".to_string(),
             )),
-            Value::Empty => Err(crate::Error::new("Could not cast into generic from Empty")),
+            Value::Empty => Err(crate::Error::IniParse(
+                "Could not cast into numeric from Empty".to_string(),
+            )),
             Value::Float(t) => Ok(Value::Float(t)),
             Value::Int(t) => Ok(Value::Int(t)),
-            Value::String(_) => Err(crate::Error::new("Could not cast into generic from String")),
-            Value::Tuple(_) => Err(crate::Error::new("Could not cast into generic from Tuple")),
+            Value::String(_) => Err(crate::Error::IniParse(
+                "Could not cast into numeric from String".to_string(),
+            )),
+            Value::Tuple(_) => Err(crate::Error::IniParse(
+                "Could not cast into numeric from Tuple".to_string(),
+            )),
         }
     }
 }
@@ -87,16 +92,16 @@ where
         .expect(&format!("ini file '{}' section not found.", section))
         .get(key_enable)
     {
-        return Err(crate::Error::new(&format!(
-            "ini file '{section} - {key_enable}' not found."
-        )));
+        return Err(crate::Error::IniMissing(
+            "'{section} - {key_enable}'".to_string(),
+        ));
     }
     log::debug!("ini file '{section} - {key_enable}' found.");
     // Check if key_enable is boolean
     if let None = config.getbool(section, key_enable).unwrap() {
-        return Err(crate::Error::new(&format!(
-            "ini file '{section} - {key_enable}' was not boolean."
-        )));
+        return Err(crate::Error::IniParse(
+            "ini file '{section} - {key_enable}' was not boolean.".to_string(),
+        ));
     }
 
     // We now check if key_enable is true/false
@@ -111,9 +116,7 @@ where
     // Ok(Some(v)) => key exists, value parsed => bounds(v)
     if let Ok(None) = config.getuint(section, key) {
         log::warn!("ini file '{section} - {key}' not found.");
-        return Err(crate::Error::new(&format!(
-            "ini file '{section} - {key}' not found."
-        )));
+        return Err(crate::Error::ini_missing(section, key));
     }
     let v = config.getuint(section, key).unwrap_or_else(|v| {
         // Avoid eager evaluation creating logging side effect
@@ -121,14 +124,14 @@ where
         Some(v.parse().unwrap_or(0))
     });
     if !bound(v.unwrap()) {
-        return Err(crate::Error::new(&format!(
+        return Err(crate::Error::ParseUnrecognised(format!(
             "ini file '{section} - {key}' not within bounds."
         )));
     }
 
     match T::try_from(v.unwrap()) {
         Ok(t) => Ok(Some(t)),
-        Err(_) => Err(crate::Error::new(&format!("ini file '{section} - {key}' within bounds but not type-bounds (could not be coerced).")))
+        Err(_) => Err(crate::Error::ParseUnrecognised(format!("ini file '{section} - {key}' within bounds but not type-bounds (could not be coerced).")))
     }
 }
 
@@ -179,8 +182,8 @@ mod configutil_tests {
         };
         let result: Result<Option<u8>> =
             super::if_enabled_value(&conf, "Board", "vga_num", |v| v <= 8);
-        let expected = Ok(None);
-        assert_eq!(result, expected);
+        let expected = None;
+        assert_eq!(result.unwrap(), expected);
     }
 
     #[test]
@@ -196,8 +199,8 @@ mod configutil_tests {
         };
         let result: Result<Option<u8>> =
             super::if_enabled_value(&conf, "Board", "vga_num", |v| v <= 8);
-        let expected = Ok(Some(2));
-        assert_eq!(result, expected);
+        let expected = Some(2);
+        assert_eq!(result.unwrap(), expected);
     }
 
     #[test]
@@ -229,7 +232,8 @@ mod configutil_tests {
         };
         let result: Result<Option<u8>> =
             super::if_enabled_value(&conf, "Board", "vga_num", |v| v <= 8);
-        let expected = Ok(Some(6));
-        assert_eq!(result, expected);
+        let expected = Some(6u8);
+        log::info!("result = {:?}", result);
+        assert_eq!(result.unwrap(), expected);
     }
 }

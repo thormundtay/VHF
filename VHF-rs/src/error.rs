@@ -3,28 +3,31 @@ use std::fmt;
 
 pub type Result<T> = core::result::Result<T, Error>;
 
-// This should move into an enum as the error types are made clearer
-#[derive(Debug, PartialEq, Eq)]
-pub struct Error {
-    details: String,
+#[derive(Debug)]
+pub enum Error {
+    EvalExpr(evalexpr::EvalexprError),
+    IniParse(String),
+    IniMissing(String),
+    ParseEmpty,
+    ParseUnrecognised(String),
+}
+
+impl error::Error for Error {}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl Error {
-    pub fn new(details: &str) -> Error {
-        Error {
-            details: details.to_string(),
-        }
+    pub fn ini_missing(section: &str, key: &str) -> Self {
+        Error::IniMissing(format!("ini file '{section} - {key}' could not be found"))
     }
-}
 
-impl fmt::Display for Error {
-    fn fmt(&self, fmtter: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmtter, "{}", self.details)
-    }
-}
-
-impl error::Error for Error {
-    fn description(&self) -> &str {
-        &self.details
+    pub fn ini_coerce(section: &str, key: &str, typing: &str) -> Self {
+        Error::IniParse(format!(
+            "ini file '{section} - {key}' could not be coerced to {typing}"
+        ))
     }
 }

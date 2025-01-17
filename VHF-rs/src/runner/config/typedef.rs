@@ -21,10 +21,12 @@ impl TryFrom<String> for SamplingSpeed {
     type Error = crate::Error;
     fn try_from(value: String) -> Result<Self> {
         match value.chars().next() {
-            None => Err(Error::new("Empty String")),
+            None => Err(Error::ParseEmpty),
             Some('l') => Ok(SamplingSpeed::Low),
             Some('h') => Ok(SamplingSpeed::High),
-            Some(_) => Err(Error::new("Unrecognised Input")),
+            Some(v) => Err(Error::ParseUnrecognised(format!(
+                "SamplingSpeed::try_from got value: {v}"
+            ))),
         }
     }
 }
@@ -57,7 +59,9 @@ impl TryFrom<String> for Encode {
             "hex" => Ok(Encode::Hexadecimal),
             "tex" => Ok(Encode::ASCII),
             "txt" => Ok(Encode::ASCII),
-            _ => Err(Error::new("Unrecognised Input")),
+            v => Err(Error::ParseUnrecognised(format!(
+                "Encode::try_from got value: {v}"
+            ))),
         }
     }
 }

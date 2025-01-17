@@ -67,49 +67,26 @@ impl Configs {
             .unwrap_or("0".to_string())
             .eval()?
         {
-            self.num_samples = usize::try_from(num_samples).unwrap();
-        } else {
-            return Err(Error::new(
-                "ini file 'Board - num_samples' not coercible into a usize.",
-            ));
+            self.num_samples = usize::try_from(num_samples)
+                .map_err(|_| Error::ini_coerce("Board", "num_samples", "usize"))?
         };
         if let evalexpr::Value::Int(skip_num) = config
             .get("Board", "skip_num")
             .unwrap_or("0".to_string())
             .eval()?
         {
-            self.skip_num = skip_num as u16;
-        } else {
-            return Err(Error::new(
-                "ini file 'Board - skip_num' not coercible into a u16.",
-            ));
-        }
-        self.speed = match config
+            self.skip_num = u16::try_from(skip_num)
+                .map_err(|_| Error::ini_coerce("Board", "skip_num", "u16"))?
+        };
+        self.speed = config
             .get("Board", "speed")
             .unwrap_or(Configs::default().speed.to_string())
-            .try_into()
-        {
-            Ok(s) => s,
-            Err(_) => {
-                return Err(Error::new(
-                    "ini file 'Board - skip' not coercible into SamplingSpeed.",
-                ))
-            }
-        };
+            .try_into()?;
 
-        self.encode = match config
+        self.encode = config
             .get("Board", "encode")
             .unwrap_or(Configs::default().encode.to_string())
-            .try_into()
-        {
-            Ok(t) => t,
-            Err(_) => {
-                return Err(Error::new(
-                    "ini file 'Board - encode' not coercible into Encode.",
-                ))
-            }
-        };
-
+            .try_into()?;
         Ok(())
     }
 }
