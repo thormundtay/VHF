@@ -92,9 +92,7 @@ where
         .expect(&format!("ini file '{}' section not found.", section))
         .get(key_enable)
     {
-        return Err(crate::Error::IniMissing(
-            "'{section} - {key_enable}'".to_string(),
-        ));
+        return Err(crate::Error::ini_missing(section, key));
     }
     log::debug!("ini file '{section} - {key_enable}' found.");
     // Check if key_enable is boolean
@@ -111,28 +109,39 @@ where
     }
     // key_enable found to be true, we now try to push to read the regular key.
 
-    // Err(...) => key exists, parsing failed => Error
+    // Err(...) => key exists, parsing failed => TryWithParse or Error
     // Ok(None) => key ????, value not found => Error
     // Ok(Some(v)) => key exists, value parsed => bounds(v)
     if let Ok(None) = config.getuint(section, key) {
         log::warn!("ini file '{section} - {key}' not found.");
         return Err(crate::Error::ini_missing(section, key));
     }
-    let v = config.getuint(section, key).unwrap_or_else(|v| {
-        // Avoid eager evaluation creating logging side effect
-        log::warn!("ini file '{section} - {key}' could not be parsed into u64 directly.");
-        Some(v.parse().unwrap_or(0))
-    });
-    if !bound(v.unwrap()) {
-        return Err(crate::Error::ParseUnrecognised(format!(
-            "ini file '{section} - {key}' not within bounds."
-        )));
+
+    let v: u64 = match config.getuint(section, key) {
+        Ok(None) => unreachable!(),
+        Ok(Some(t)) => t,
+        Err(_) => match config.get(section, key).unwrap().eval() {
+            Err(e) => return Err(e),
+            Ok(Value::Int(v)) => v as u64,
+            Ok(t) => {
+                log::trace!("{section} - {key} getuint yielded {}", t);
+                return Err(crate::Error::IniParse(
+                    "ini file '{section} - {key}' was not integer.".to_string(),
+                ));
+            }
+        },
+    };
+    if !bound(v) {
+        return Err(crate::Error::IniParse(
+            "ini file '{section} - {key}' not within bounds.".to_string(),
+        ));
     }
 
-    match T::try_from(v.unwrap()) {
-        Ok(t) => Ok(Some(t)),
-        Err(_) => Err(crate::Error::ParseUnrecognised(format!("ini file '{section} - {key}' within bounds but not type-bounds (could not be coerced).")))
-    }
+    Ok(Some(T::try_from(v).map_err(|_| {
+        crate::Error::ParseUnrecognised(format!(
+            "ini file '{section} - {key}' got value {v:?} but could not be coerced into T."
+        ))
+    })?))
 }
 
 #[cfg(test)]
