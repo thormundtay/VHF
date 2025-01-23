@@ -144,6 +144,31 @@ where
     })?))
 }
 
+// Account for the fact that ExtendedInterpolation is not provided by config
+const EXT_INTERP_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"\$\{((?<section>\S+):)?(?<key>\S+)\}").unwrap());
+
+/// As [configparser] has yet to implement Basic/Extended Interpolation, we fetch a value and
+/// interpolate before storing in the struct.
+pub fn get_with_ext_interp(config: &ini::Ini, section: &str, key: &str) -> Result<String> {
+    let read_value = config.get(section, key).map_or("".to_string(), |v| v);
+    log::debug!("external_interpolate: key = {key}; read_value = {read_value}");
+    if EXT_INTERP_RE.is_match(&read_value) {
+        Ok(EXT_INTERP_RE
+            .replace(&read_value, |capt: &Captures| -> String {
+                // Index 1 is associated with section. If it fails, means there was no section, and
+                // we use the current section
+                // "section" and "key" keys in capt are given by EXT_INTERP_RE construct
+                let section = capt.get(1).map_or(section, |_| &capt["section"]);
+                let key = &capt["key"];
+                get_with_ext_interp(config, section, key).unwrap_or("".to_owned())
+            })
+            .to_string())
+    } else {
+        Ok(read_value)
+    }
+}
+
 #[cfg(test)]
 mod pythonmath_tests {
     use super::PythonMath;
@@ -244,5 +269,56 @@ mod configutil_tests {
         let expected = Some(6u8);
         log::info!("result = {:?}", result);
         assert_eq!(result.unwrap(), expected);
+    }
+
+    #[test]
+    fn external_interpolate_same_section() {
+        let mut conf = ini::Ini::new();
+        let _ = match conf.read(String::from(
+            "[Paths]
+            base_dir: .
+            board: ${base_dir}/vhf_board.softlink
+            ",
+        )) {
+            Err(v) => panic!("{}", v),
+            Ok(v) => v,
+        };
+        let result = super::get_with_ext_interp(&conf, "Paths", "board");
+        let expected = "./vhf_board.softlink";
+        assert_eq!(result.unwrap(), expected);
+    }
+
+    #[test]
+    fn external_interpolate_diff_section() {
+        let mut conf = ini::Ini::new();
+        let _ = match conf.read(String::from(
+            "[A]
+            a: ${B:b}/a
+
+            [B]
+            b: 2
+            ",
+        )) {
+            Err(v) => panic!("{}", v),
+            Ok(v) => v,
+        };
+        let result = super::get_with_ext_interp(&conf, "A", "a");
+        let expected = "2/a";
+        assert_eq!(result.unwrap(), expected);
+    }
+
+    #[test]
+    fn external_interpolate_diff_section_missing() {
+        let mut conf = ini::Ini::new();
+        let _ = match conf.read(String::from(
+            "[A]
+            a: ${B:b}/a
+            ",
+        )) {
+            Err(v) => panic!("{}", v),
+            Ok(v) => v,
+        };
+        let result = super::get_with_ext_interp(&conf, "A", "a");
+        assert!(result.is_err());
     }
 }
