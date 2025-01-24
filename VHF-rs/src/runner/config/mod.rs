@@ -29,6 +29,12 @@ pub struct Configs {
     pub speed: SamplingSpeed,
     /// The manner by which (I, Q, M) data is stored into the file.
     pub encode: Encode,
+
+    // base_dir // removed because we do not call into ./teststream.exec (or whatever)
+    /// Location where files should be written to
+    pub save_dir: PathBuf,
+    pub board: PathBuf,
+    pub save_to_file: bool,
 }
 
 impl Default for Configs {
@@ -39,6 +45,10 @@ impl Default for Configs {
             skip_num: 0,
             speed: SamplingSpeed::High,
             encode: Encode::Binary,
+
+            save_dir: PathBuf::from("./Data"),
+            board: PathBuf::from("/dev/usbhybrid0"),
+            save_to_file: false,
         }
     }
 }
@@ -87,6 +97,26 @@ impl Configs {
             .get("Board", "encode")
             .unwrap_or(Configs::default().encode.to_string())
             .try_into()?;
+
+        // Section: Paths
+        match utils::get_with_ext_interp(&config, "Paths", "save_dir") {
+            Ok(save_dir) => self.save_dir = PathBuf::from(save_dir),
+            Err(_) => log::warn!("No save directory provided by INI file. Using default."),
+        };
+        match utils::get_with_ext_interp(&config, "Paths", "board") {
+            Ok(board) => self.board = PathBuf::from(board),
+            Err(_) => log::warn!("No board provided by INI file. Using default."),
+        };
+        self.save_to_file = match config.getbool("Paths", "save_to_file") {
+            Err(e) => {
+                return Err(Error::IniParse(format!(
+                    "ini file 'Path - save_to_file' parse failed: {e}"
+                )))
+            }
+            Ok(None) => return Err(Error::ini_missing("Path", "save_to_file")),
+            Ok(Some(t)) => t,
+        };
+
         Ok(())
     }
 }
