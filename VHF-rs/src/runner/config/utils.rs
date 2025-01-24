@@ -151,22 +151,19 @@ const EXT_INTERP_RE: Lazy<Regex> =
 /// As [configparser] has yet to implement Basic/Extended Interpolation, we fetch a value and
 /// interpolate before storing in the struct.
 pub fn get_with_ext_interp(config: &ini::Ini, section: &str, key: &str) -> Result<String> {
-    let read_value = config.get(section, key).map_or("".to_string(), |v| v);
-    log::debug!("external_interpolate: key = {key}; read_value = {read_value}");
+    let mut read_value = config
+        .get(section, key)
+        .ok_or_else(|| crate::Error::ini_missing(section, key))?;
+    log::debug!("get_with_ext_interp: [{section}]: {key} = {read_value}");
     if EXT_INTERP_RE.is_match(&read_value) {
-        Ok(EXT_INTERP_RE
-            .replace(&read_value, |capt: &Captures| -> String {
-                // Index 1 is associated with section. If it fails, means there was no section, and
-                // we use the current section
-                // "section" and "key" keys in capt are given by EXT_INTERP_RE construct
-                let section = capt.get(1).map_or(section, |_| &capt["section"]);
-                let key = &capt["key"];
-                get_with_ext_interp(config, section, key).unwrap_or("".to_owned())
-            })
-            .to_string())
-    } else {
-        Ok(read_value)
+        let capt = EXT_INTERP_RE.captures(&read_value).unwrap();
+        let section = capt.get(1).map_or(section, |_| &capt["section"]);
+        let key = &capt["key"];
+        let replace_range = EXT_INTERP_RE.find(&read_value).unwrap().range();
+        let replace_with = get_with_ext_interp(config, section, key)?;
+        read_value.replace_range(replace_range, replace_with.as_str());
     }
+    Ok(read_value)
 }
 
 #[cfg(test)]
