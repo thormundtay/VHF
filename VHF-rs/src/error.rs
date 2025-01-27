@@ -10,6 +10,10 @@ pub enum Error {
     IniMissing(String),
     ParseEmpty,
     ParseUnrecognised(String),
+    CIo(nix::errno::Errno),
+    Io(std::io::Error),
+    MMap(mmap_rs::Error),
+    Ioctl(nix::errno::Errno),
 }
 
 impl error::Error for Error {}
