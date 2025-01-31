@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 from plot_VHF_output import get_phase, plot_rad_spec
 from matplotlib import pyplot as plt
+import numpy as np
 import subprocess
 from subprocess import PIPE
 import sys
@@ -11,7 +12,7 @@ from VHF.parse import VHFparser
 from VHF.runner import VHFRunner
 
 
-def main():
+def run_and_plot():
     """Runs VHF board for some amount of time, and displays out temporarily."""
 
     print("\x1b[41mRuns VHF board and shows 15s of data. Does not save data!\x1B[0m")  # noqa: E501
@@ -21,7 +22,7 @@ def main():
         force_to_buffer=True,
         overwrite_properties={
             'skip_num': 4,
-            'num_samples': 2**25,
+            'num_samples': 2**23,
         }
     )
     vhf_runner.inform_params()
@@ -71,6 +72,7 @@ def main():
 
         parsed = VHFparser(tmp_store.name)
         tmp_store_name = tmp_store.name
+        logging.debug("min(m) = %f, max(m) = %f", np.min(parsed.m_arr), np.max(parsed.m_arr))
 
     phase = get_phase(parsed)
     print(f"Phase mean: {phase[12000:].mean()}\nPhase Std Dev: {phase[12000:].std()}")
@@ -84,6 +86,33 @@ def main():
     plt.show(block=True)
 
     return
+
+
+def main():
+    from argparse import ArgumentParser
+    import logging
+    import sys
+    from VHF.log_utils import no_matplot
+
+    argp = ArgumentParser(prog="plot_vhf", description="Plots VHFparser files.")
+    argp.add_argument("-d", "--debug", action="store_true", help="Prints logger to stdout")
+    args = argp.parse_args()
+
+    if args.debug:
+        logger = logging.getLogger()
+        logger.setLevel(logging.DEBUG)
+        fmtter = logging.Formatter(
+            '[%(asctime)s%(msecs)d] (%(levelname)s) %(name)s:%(funcName)s - \t %(message)s', datefmt='%H:%M:%S:')
+        streamhandler = logging.StreamHandler(sys.stdout)
+        streamhandler.addFilter(no_matplot)
+        streamhandler.setLevel(logging.DEBUG)
+        streamhandler.setFormatter(fmtter)
+        logger.addHandler(streamhandler)
+        logger.debug("run and plot started")
+    else:
+        logger = logging.getLogger()
+
+    run_and_plot()
 
 
 if __name__ == "__main__":

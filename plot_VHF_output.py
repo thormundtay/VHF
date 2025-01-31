@@ -144,8 +144,37 @@ def plot_rad_spec(radius: bool, velocity: bool, spectrum: bool) -> Callable:
 
 
 def main():
-    print("Please select files intended for plotting.")
-    files = get_files(init_dir=str(Path(__file__).parent))
+    from argparse import ArgumentParser
+    import logging
+    import sys
+    from VHF.log_utils import no_matplot
+
+    argp = ArgumentParser(prog="plot_vhf", description="Plots VHFparser files.")
+    argp.add_argument("-d", "--debug", action="store_true", help="Prints logger to stdout")
+    argp.add_argument("-f", "--file", help="File to plot")
+    argp.add_argument("file", nargs='?', help="File to plot")
+    args = argp.parse_args()
+
+    if args.debug:
+        logger = logging.getLogger()
+        logger.setLevel(logging.DEBUG)
+        streamhandler = logging.StreamHandler(sys.stdout)
+        fmtter = logging.Formatter(
+            '[%(asctime)s%(msecs)d] (%(levelname)s) %(name)s:%(funcName)s - \t %(message)s', datefmt='%H:%M:%S:')
+        streamhandler.addFilter(no_matplot)
+        streamhandler.setLevel(logging.DEBUG)
+        streamhandler.setFormatter(fmtter)
+        logger.addHandler(streamhandler)
+        logger.debug("plot started")
+    else:
+        logger = logging.getLogger()
+
+    if args.file is not None:
+        files = args.file
+        logger.info("File selected: %s", files)
+    else:
+        print("Please select files intended for plotting.")
+        files = get_files(init_dir=str(Path(__file__).parent))
 
     print(f"{files = }")
     if files is None:
@@ -162,13 +191,13 @@ def main():
         file: Path = files
 
     parsed = VHFparser(file)
-    print(f"Debug {parsed.header = }")
+    if args.debug:
+        logging.debug(f"{parsed.header = }")
     plot_radius = user_input_bool("Do you want to plot the radius?")
     plot_velocity = user_input_bool("Do you want to plot the radius first derivative?")
     plot_spec = user_input_bool("Do you want to plot the spectrum?")
 
-    phase = get_phase(parsed)
-    fig = plot_rad_spec(plot_radius, plot_velocity, plot_spec)(parsed, phase)
+    fig = plot_rad_spec(plot_radius, plot_velocity, plot_spec)(parsed, parsed.reduced_phase)
 
     view_const = 2.3
     fig.legend()
