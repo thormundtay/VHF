@@ -23,6 +23,7 @@ def run_and_plot():
         overwrite_properties={
             'skip_num': 4,
             'num_samples': 2**23,
+            'v': 3,
         }
     )
     vhf_runner.inform_params()
