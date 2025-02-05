@@ -75,6 +75,7 @@ impl VHF {
             buf_write
                 .write(format!("cstream {};", 0x120).as_bytes())
                 .map_err(Error::Io)?;
+            buf_write.flush().map_err(Error::Io)?;
         }
 
         Ok(())
@@ -82,6 +83,11 @@ impl VHF {
 
     /// Stops USB Machine and close FDs.
     pub fn stop(&self) -> Result<()> {
+        self.raw_handle
+            .try_clone()
+            .map_err(Error::Io)?
+            .write(b"stop; config 0;")
+            .map_err(Error::Io)?;
         consts::ioctl_end(self.handle).map(|_| ())
     }
 }
