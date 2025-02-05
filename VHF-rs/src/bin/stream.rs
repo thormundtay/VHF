@@ -18,10 +18,6 @@ fn main() -> Result<()> {
     vhf.start()?;
     log::info!("VHF started");
 
-    nix::ioctl_read_bad! {
-        /// This is to read integers from the board.
-        usb_ioctl_read, TRANSFERRED_BYTES, libc::c_int
-    }
 
     // try to get some data
     let mut i = 0;

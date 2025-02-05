@@ -14,13 +14,18 @@ nix::ioctl_write_int_bad! {
 
 #[inline]
 pub fn ioctl_start(handle: libc::c_int) -> Result<libc::c_int> {
-    let x = unsafe { usb_ioctl_start(handle, 0) };
-    Ok(x.map_err(|x| Error::Ioctl(x))?)
+    Ok(unsafe { usb_ioctl_start(handle, 0) }.map_err(Error::Ioctl)?)
 }
 
 nix::ioctl_read_bad! {
     /// This is to read integers from the board.
     usb_ioctl_read, TRANSFERRED_BYTES, libc::c_int
+}
+
+#[inline(always)]
+pub fn ioctl_read(handle: libc::c_int) -> Result<libc::c_int> {
+    // 1 is arbitrary
+    Ok(unsafe { usb_ioctl_read(handle, 0 as *mut i32) }.map_err(Error::Ioctl)?)
 }
 
 nix::ioctl_write_int_bad! {
@@ -30,6 +35,5 @@ nix::ioctl_write_int_bad! {
 
 #[inline]
 pub fn ioctl_end(handle: libc::c_int) -> Result<libc::c_int> {
-    let x = unsafe { usb_ioctl_end(handle, 0) };
-    Ok(x.map_err(|x| Error::Ioctl(x))?)
+    Ok(unsafe { usb_ioctl_end(handle, 0) }.map_err(|x| Error::Ioctl(x))?)
 }

@@ -90,4 +90,11 @@ impl VHF {
             .map_err(Error::Io)?;
         consts::ioctl_end(self.handle).map(|_| ())
     }
+
+    /// Assumes the USB Machine has started.
+    /// Gets the next index to read up to as given by ioctl
+    #[inline(always)]
+    pub fn ioctl_next(&self) -> Result<libc::c_int> {
+        consts::ioctl_read(self.handle)
+    }
 }
