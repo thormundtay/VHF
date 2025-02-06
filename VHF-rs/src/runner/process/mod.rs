@@ -66,7 +66,7 @@ impl VHF {
             let mut buf_write = BufWriter::new(self.raw_handle.try_clone().map_err(Error::Io)?);
             buf_write.write(b"clockinit; adcinit;").map_err(Error::Io)?;
             buf_write.write(b"config 16; param 0;").map_err(Error::Io)?;
-            buf_write.write(b"config 1; param 4;").map_err(Error::Io)?; // skips 4 samples
+            buf_write.write(b"config 1; param 9;").map_err(Error::Io)?; // skips 9 samples
             buf_write.write(b"config 2; param 0;").map_err(Error::Io)?; // Gain parameter = 0
             buf_write.write(b"config 3; param 0;").map_err(Error::Io)?; // debug param = 0
             buf_write.write(b"skip; skip;").unwrap();
