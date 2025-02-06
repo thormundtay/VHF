@@ -50,6 +50,18 @@ def get_spec(o: VHFparser) -> Tuple[np.ndarray, np.ndarray]:
     return f, spec
 
 
+def plot_iqm(o: VHFparser):
+    t = np.arange(len(o.i_arr)) / o.header["sampling freq"]
+    fig, axs = plt.subplots(nrows=3, ncols=1, sharex=True)
+    axs[0].plot(t, o.i_arr)
+    axs[1].plot(t, o.q_arr)
+    axs[2].plot(t, o.m_arr)
+    axs[0].set_ylabel(r"$I$/ADC units", usetex=True)
+    axs[1].set_ylabel(r"$Q$/ADC units", usetex=True)
+    axs[2].set_ylabel(r"$M$/ADC units", usetex=True)
+    axs[2].set_xlabel(r"$t$/s", usetex=True)
+    return fig
+
 def plot_rad_spec(radius: bool, velocity: bool, spectrum: bool) -> Callable:
     """Yield desired function for plotting phase, radius and spectrum.
 
@@ -151,6 +163,9 @@ def main():
 
     argp = ArgumentParser(prog="plot_vhf", description="Plots VHFparser files.")
     argp.add_argument("-d", "--debug", action="store_true", help="Prints logger to stdout")
+    argp_mode = argp.add_mutually_exclusive_group()
+    argp_mode.add_argument("--normal", action="store_true", help="Displays radius only.")
+    argp_mode.add_argument("--iqm", action="store_true", help="Displays IQM values instead.")
     argp.add_argument("-f", "--file", help="File to plot")
     argp.add_argument("file", nargs='?', help="File to plot")
     args = argp.parse_args()
@@ -193,11 +208,18 @@ def main():
     parsed = VHFparser(file)
     if args.debug:
         logging.debug(f"{parsed.header = }")
-    plot_radius = user_input_bool("Do you want to plot the radius?")
-    plot_velocity = user_input_bool("Do you want to plot the radius first derivative?")
-    plot_spec = user_input_bool("Do you want to plot the spectrum?")
 
-    fig = plot_rad_spec(plot_radius, plot_velocity, plot_spec)(parsed, parsed.reduced_phase)
+    if (not args.iqm) or (args.normal):
+        plot_radius = user_input_bool("Do you want to plot the radius?")
+        plot_velocity = user_input_bool("Do you want to plot the radius first derivative?")
+        plot_spec = user_input_bool("Do you want to plot the spectrum?")
+
+        fig = plot_rad_spec(plot_radius, plot_velocity, plot_spec)(parsed, parsed.reduced_phase)
+    elif (args.iqm):
+        fig = plot_iqm(parsed)
+    else:
+        logging.error("This shouldn't be occurring!")
+        sys.exit(2)
 
     view_const = 2.3
     fig.legend()
