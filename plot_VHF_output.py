@@ -215,6 +215,11 @@ def main():
         plot_spec = user_input_bool("Do you want to plot the spectrum?")
 
         fig = plot_rad_spec(plot_radius, plot_velocity, plot_spec)(parsed, parsed.reduced_phase)
+        if args.debug:
+            t = np.arange(len(parsed.reduced_phase)) / parsed.header["sampling freq"]
+            lower_lim = np.max(np.where(t < 0.003))
+            logging.info(f"{parsed.reduced_phase[lower_lim:].mean() = }")
+            logging.info(f"{parsed.reduced_phase[lower_lim:].std() = }")
     elif (args.iqm):
         fig = plot_iqm(parsed)
     else:
