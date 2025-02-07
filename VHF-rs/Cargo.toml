@@ -10,6 +10,7 @@ name = "stream"
 name = "vhf"
 
 [dependencies]
+byteorder = "1.5.0"
 configparser = { version = "3.1.0", default-features = false }
 evalexpr = { version = "12.0.2", features = ["regex",] }
 libc = { version = "0.2" }
