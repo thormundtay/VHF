@@ -53,6 +53,12 @@ fn main() -> Result<()> {
     let mut file = {
         use std::fs::OpenOptions;
         use std::io::BufWriter;
+
+        // Delete output if it already exists (truncate is supposed to fix this, but ?)
+        if std::fs::exists("/dev/shm/rustout.bin").unwrap() {
+            std::fs::remove_file("/dev/shm/rustout.bin").unwrap();
+        }
+
         BufWriter::new(
             OpenOptions::new()
                 .create(true)
@@ -92,7 +98,7 @@ fn main() -> Result<()> {
     while i < 800 {
         let tfb32 = (vhf.ioctl_next()? >> 3 << 3) as u32 % (1 << 22);
         if tfb32 == tfb32_old {
-            sleep(Duration::from_nanos(200));
+            sleep(Duration::from_nanos(1000));
             continue;
         }
         // log::trace!("tfb32 = {}", tfb32);
@@ -127,12 +133,10 @@ fn main() -> Result<()> {
             this_cycle.chunks_exact(8).for_each(|x| {
                 let x: [u8; 8] = x.try_into().unwrap();
                 // use from_le_bytes documentation
-                file.write_u64::<LittleEndian>(u64::from_le_bytes(x))
+                file.write_u64::<LittleEndian>(u64::from_ne_bytes(x))
                     .map_err(Error::Io)
                     .unwrap()
-                // file.write_all(x).map_err(Error::Io).unwrap()
             });
-            // file.write_all(this_cycle.as_slice()).map_err(Error::Io)?
         }
 
         // We have yet to implement number of elements being read out thus far.
