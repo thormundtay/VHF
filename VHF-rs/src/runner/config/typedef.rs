@@ -1,4 +1,5 @@
 use crate::{Error, Result};
+use std::str::FromStr;
 
 /// VHF Board collecting data in 10MHz or 20MHz mode.
 #[derive(Copy, Clone, Debug)]
@@ -17,9 +18,9 @@ impl ToString for SamplingSpeed {
     }
 }
 
-impl TryFrom<String> for SamplingSpeed {
-    type Error = crate::Error;
-    fn try_from(value: String) -> Result<Self> {
+impl FromStr for SamplingSpeed {
+    type Err = crate::Error;
+    fn from_str(value: &str) -> Result<Self> {
         match value.chars().next() {
             None => Err(Error::ParseEmpty),
             Some('l') => Ok(SamplingSpeed::Low),
@@ -50,9 +51,9 @@ impl ToString for Encode {
     }
 }
 
-impl TryFrom<String> for Encode {
-    type Error = crate::Error;
-    fn try_from(value: String) -> Result<Self> {
+impl FromStr for Encode {
+    type Err = crate::Error;
+    fn from_str(value: &str) -> Result<Self> {
         match &value[..3] {
             "asc" => Ok(Encode::ASCII),
             "bin" => Ok(Encode::Binary),

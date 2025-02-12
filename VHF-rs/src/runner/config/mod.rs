@@ -6,7 +6,10 @@ mod typedef;
 
 use crate::{Error, Result};
 use configparser::ini;
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 use typedef::*;
 use utils::PythonMath;
 
@@ -88,15 +91,19 @@ impl Configs {
             self.skip_num = u16::try_from(skip_num)
                 .map_err(|_| Error::ini_coerce("Board", "skip_num", "u16"))?
         };
-        self.speed = config
-            .get("Board", "speed")
-            .unwrap_or(Configs::default().speed.to_string())
-            .try_into()?;
+        self.speed = SamplingSpeed::from_str(
+            config
+                .get("Board", "speed")
+                .unwrap_or(Configs::default().speed.to_string())
+                .as_str(),
+        )?;
 
-        self.encode = config
-            .get("Board", "encode")
-            .unwrap_or(Configs::default().encode.to_string())
-            .try_into()?;
+        self.encode = Encode::from_str(
+            config
+                .get("Board", "encode")
+                .unwrap_or(Configs::default().encode.to_string())
+                .as_str(),
+        )?;
 
         // Section: Paths
         match utils::get_with_ext_interp(&config, "Paths", "save_dir") {
