@@ -1,5 +1,7 @@
 //! Interface with VHF, with things such as starting the VHF, reading out from it, closing it.
+
 mod consts;
+mod pages;
 
 use super::Config;
 use crate::{Error, Result};
