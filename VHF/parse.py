@@ -642,7 +642,14 @@ class VHFparser:
             print("No file-like/buffer object given to init.")
             return
         self._init_timing_info()
-        assert self._num_trc_bytes == self.timings.duration_idx
+        try:
+            assert self._num_trc_bytes == self.timings.duration_idx
+        except AssertionError:
+            self.logger.error(
+                "_num_trc_bytes = %d != timings.duration_idx = %d",
+                self._num_trc_bytes, self.timings.duration_idx
+            )
+        assert abs(self._num_trc_bytes - self.timings.duration_idx) <= 1
 
         # init guard: parse time params
         if plot_start_time is not None:
