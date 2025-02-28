@@ -120,9 +120,9 @@ class TraceTimer:
         """
         self.logger = logging.getLogger("vhfparser")
 
-        if trace_freq > 1e7:
+        if trace_freq > 10_000_000:
             raise ValueError("trace_freq cannot be created by VHF board")
-        tmp = int(tmp2 := (2e7/trace_freq))
+        tmp = int(tmp2 := (20_000_000/trace_freq))
         if tmp != tmp2:
             raise ValueError("trace_freq cannot be created by VHF board; Skip parameter was fractional?")
 
@@ -280,7 +280,7 @@ class TraceTimer:
         """From datetime.datetime to number of ns from some t=0."""
         # We shouldn't be needing to check for fractional components despite
         # timestamp being a float.
-        return int(t.timestamp() * 1e9)
+        return int(t.timestamp() * 1_000_000_000)
 
     def _datetime_aware(self, dt: datetime) -> bool:
         """Determine if a datetime object is aware, or otherwise (naive)."""
