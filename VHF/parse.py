@@ -127,9 +127,9 @@ class TraceTimer:
             raise ValueError("trace_freq cannot be created by VHF board; Skip parameter was fractional?")
 
         self.trace_start = trace_start
-        self._trace_start_ns = int(self._dt_to_ns(trace_start))
+        self._trace_start_ns = self._dt_to_ns(trace_start)
         self.trace_duration = timedelta(microseconds=1e6*trace_size/trace_freq)
-        self._trace_duration_ns = int(1e9*trace_size/trace_freq)
+        self._trace_duration_ns = self._to_int(1e9*trace_size/trace_freq)
         self.sample_interval = timedelta(microseconds=1e6/trace_freq)  # this is still fallible
         self._sample_interval_ns: float = 1e9/trace_freq
         self.trace_end = self.trace_start + self.trace_duration
@@ -276,11 +276,16 @@ class TraceTimer:
 
         return start_changed or end_changed
 
+    def _to_int(self, x: float) -> int:
+        result = int(np.rint(x))
+        assert np.isclose(result, x), "Something terrible has gone wrong."
+        return result
+
     def _dt_to_ns(self, t: datetime) -> int:
         """From datetime.datetime to number of ns from some t=0."""
         # We shouldn't be needing to check for fractional components despite
         # timestamp being a float.
-        return int(t.timestamp() * 1_000_000_000)
+        return self._to_int(t.timestamp() * 1_000_000_000)
 
     def _datetime_aware(self, dt: datetime) -> bool:
         """Determine if a datetime object is aware, or otherwise (naive)."""
@@ -312,13 +317,13 @@ class TraceTimer:
     @property
     def trace_duration_idx(self) -> int:
         """Length of trace"""
-        return int(self._trace_duration_ns/self._sample_interval_ns)
+        return self._to_int(self._trace_duration_ns/self._sample_interval_ns)
 
     @property
     def start_idx(self) -> int:
         """Start index of plot window relative to trace[0] for plot_start."""
         delta = self._plot_start_ns - self._trace_start_ns
-        return int(delta/self._sample_interval_ns)
+        return self._to_int(delta/self._sample_interval_ns)
 
     @property
     def end_idx(self) -> int:
@@ -329,7 +334,7 @@ class TraceTimer:
     def duration_idx(self) -> int:
         """Duration index of plot window specifying number of bytes to read."""
         delta = self._plot_end_ns - self._plot_start_ns
-        return int(delta/self._sample_interval_ns)
+        return self._to_int(delta/self._sample_interval_ns)
 
 
 class ManifoldRollover:
