@@ -131,7 +131,7 @@ class TraceTimer:
         self.trace_duration = timedelta(microseconds=1e6*trace_size/trace_freq)
         self._trace_duration_ns = self._to_int(1e9*trace_size/trace_freq)
         self.sample_interval = timedelta(microseconds=1e6/trace_freq)  # this is still fallible
-        self._sample_interval_ns: float = 1e9/trace_freq
+        self._sample_interval_ns = self._try_to_int(1e9/trace_freq)
         self.trace_end = self.trace_start + self.trace_duration
         self._trace_end_ns: int = self._trace_start_ns + self._trace_duration_ns
         self.trace_freq = trace_freq
@@ -280,6 +280,13 @@ class TraceTimer:
         result = int(np.rint(x))
         assert np.isclose(result, x), "Something terrible has gone wrong."
         return result
+
+    def _try_to_int(self, x: float) -> float | int:
+        try:
+            return self._to_int(x)
+        except AssertionError:
+            self.logger.debug("_to_int expectedly failed on: %f", x)
+            return x
 
     def _dt_to_ns(self, t: datetime) -> int:
         """From datetime.datetime to number of ns from some t=0."""
