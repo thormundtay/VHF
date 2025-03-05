@@ -183,6 +183,18 @@ def test_TraceTimer_illegal_freq():
         timings = TraceTimer(example_start, example_freq, example_size)
 
 
+def test_TraceTimer_very_long():
+    example_start = datetime(2024, 1, 19, 0, 34, 36,
+                             tzinfo=timezone(timedelta(seconds=28800)))
+    example_freq = 2_000_000  # Hz
+    example_size = (1 << 33) + (1<<7)
+    timings = TraceTimer(example_start, example_freq, example_size)
+    # expected = timedelta(hours=2)
+    # assert timings.trace_end - example_start == expected
+    assert timings.start_idx == 0
+    assert timings.end_idx == example_size
+
+
 def test_TraceTimer_run_and_plot():
     start = datetime.fromisoformat("2024-07-22 12:56:17+08:00")
     freq = 2000000.0
