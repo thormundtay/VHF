@@ -758,19 +758,32 @@ class VHFparser:
             self.logger.error("parse_header invoked with empty argument: header_raw")
             raise ValueError("header_raw was not given.")
 
+        def func_header_trim(s: bytes) -> bytes:
+            """Trims an otherwise unsanitized bytestring."""
+            sp = s.split(b"\n")
+            if len(sp) > 1 and sp[1] != b"":
+                self.logger.warning("header_raw has non-zero bytes after \\n: %s", sp[1:])
+            return sp[0]
+
+        def func_cmd_line(x: bytes) -> bool:
+            return b"command line: " in x
+
+        def func_record(x: bytes) -> bool:
+            return b"recording start: " in x
+
         # init
         self.header: dict = dict()
-        header_raw: list[bytes] = header_raw.split(b"# ")[1:]
+        header_raw: list[bytes] = list(
+            map(func_header_trim, header_raw.split(b"# ")[1:])
+        )
         self.logger.debug("parsed_header received header_raw = %s", header_raw)
         # populate self.header from command line
-        func_cmd_line = lambda x: "command line: " in x.decode()
         for header_line in filter(func_cmd_line, header_raw):
             for x in header_line.split(b" -")[1:]:
                 x = x.decode().strip(" ")
                 self.header[x[0]] = x[1:].strip()
 
         # populate self.header["Time start"]
-        func_record = lambda x: "recording start: " in x.decode()
         if any(map(func_record, header_raw)):
             filtered_header = filter(func_record, header_raw)
             entry = next(filtered_header)
