@@ -118,7 +118,7 @@ class TraceTimer:
         """
         self.logger = logging.getLogger("vhfparser")
 
-        if trace_freq > 10_000_000:
+        if trace_freq > 20_000_000:
             raise ValueError("trace_freq cannot be created by VHF board")
         tmp = int(tmp2 := (20_000_000/trace_freq))
         if tmp != tmp2:
