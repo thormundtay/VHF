@@ -7,7 +7,7 @@ use vhf::{Error, Result};
 fn process_binary(
     old_bytes: usize,
     new_bytes: usize,
-    rbbuffer: &mmap_rs::MmapMut,
+    rbbuffer: &mmap_rs::Mmap,
 ) -> std::io::Result<Vec<u8>> {
     // if old_bytes - new_bytes > 1 << 22 {
     //     Err(Error::...)

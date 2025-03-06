@@ -5,7 +5,7 @@ mod pages;
 
 use super::Config;
 use crate::{Error, Result};
-use mmap_rs::MmapMut;
+use mmap_rs::Mmap;
 use nix::fcntl;
 use std::io::{BufWriter, Write};
 
@@ -14,7 +14,7 @@ pub struct VHF {
     configuration: Config,
     pub handle: libc::c_int,
     pub raw_handle: std::fs::File,
-    pub readback: MmapMut,
+    pub readback: Mmap,
 }
 
 impl VHF {
@@ -51,14 +51,14 @@ impl VHF {
         .map_err(|e| Error::CIo(e))?)
     }
 
-    fn readback_buffer(raw_handle: &std::fs::File) -> Result<MmapMut> {
+    fn readback_buffer(raw_handle: &std::fs::File) -> Result<Mmap> {
         let mmap_options = unsafe {
             mmap_rs::MmapOptions::new(1 << 22)
                 .map_err(Error::MMap)?
                 .with_file(raw_handle, 0)
                 .with_flags(mmap_rs::MmapFlags::SHARED)
         };
-        let mut result = mmap_options.map_mut().map_err(Error::MMap)?;
+        let mut result = mmap_options.map().map_err(Error::MMap)?;
         result.lock().map_err(Error::MMap)?; // Make RAM only
 
         Ok(result)
