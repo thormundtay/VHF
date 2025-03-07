@@ -12,25 +12,6 @@ from VHF.user_io import get_files, user_input_bool
 from VHF.parse import VHFparser
 
 
-def get_phase(o: VHFparser) -> np.ndarray:
-    """Return phi/2pi; phi:= atan(Q/I).
-
-    Input
-    -----
-    o: VHFparser class, initialised with file being parsed.
-
-    Returns
-    -----
-    phase: Divided by 2pi
-    """
-    if o.reduced_phase is None:
-        phase = -np.arctan2(o.i_arr, o.q_arr)
-        phase /= 2 * np.pi
-        phase -= o.m_arr
-        o.reduced_phase = phase
-    return o.reduced_phase
-
-
 def get_radius(o: VHFparser) -> np.ndarray:
     """Return norm of (I, Q)."""
     result = np.hypot(o.i_arr, o.q_arr)
