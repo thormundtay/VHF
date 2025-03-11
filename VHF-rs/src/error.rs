@@ -14,6 +14,7 @@ pub enum Error {
     Io(std::io::Error),
     MMap(mmap_rs::Error),
     Ioctl(nix::errno::Errno),
+    IoctlCall(String),
 }
 
 impl error::Error for Error {}
@@ -33,5 +34,9 @@ impl Error {
         Error::IniParse(format!(
             "ini file '{section} - {key}' could not be coerced to {typing}"
         ))
+    }
+
+    pub fn ioctl_call(reason: &str) -> Self {
+        Error::IoctlCall(format!("Calling ioctl had error: '{reason}'"))
     }
 }

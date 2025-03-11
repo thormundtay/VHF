@@ -1,6 +1,7 @@
 //! Interface with VHF, with things such as starting the VHF, reading out from it, closing it.
 
 mod consts;
+mod mmap_reader;
 mod pages;
 
 use super::Config;
@@ -8,6 +9,9 @@ use crate::{Error, Result};
 use mmap_rs::Mmap;
 use nix::fcntl;
 use std::io::{BufWriter, Write};
+
+/// This is the size in bytes of the Mmap that is backed by the VHF device.
+const MMAP_BYTES_LEN: usize = 1 << 22;
 
 /// Everything necessary to ensure the lifetime of pulling memory out from the VHF for its runtime
 pub struct VHF {
