@@ -11,6 +11,7 @@ use crate::{Error, Result};
 use mmap_rs::Mmap;
 use std::collections::VecDeque;
 use std::hint::spin_loop;
+use std::num::NonZeroU64;
 use std::sync::{
     atomic::{self, AtomicBool},
     Arc, Mutex,
@@ -35,12 +36,17 @@ pub(super) struct MMapReader {
     last_tfb32: libc::c_int,
     /// This is the last index being read from.
     prev_bytes: usize,
+    /// Number of VHF Pages to read. 0 for an infinite amount.
+    total_pages: NonZeroU64,
+    /// Number of pages thus far.
+    collected_pages: u64,
 }
 
 impl MMapReader {
     pub(super) fn new(
         mmap: Mmap,
         transfer_buffer: Arc<Mutex<VecDeque<MmapPage>>>,
+        total_pages: NonZeroU64,
         handle: libc::c_int,
     ) -> Result<Self> {
         Ok(Self {
@@ -49,6 +55,8 @@ impl MMapReader {
             transfer_buffer,
             last_tfb32: 0,
             prev_bytes: 0,
+            total_pages,
+            collected_pages: 0,
         })
     }
 
@@ -110,6 +118,9 @@ impl MMapReader {
                     Err(_) => spin_loop(),
                     Ok(mut inner) => {
                         use itertools::Itertools;
+
+                        let mut num_pages = 0;
+
                         self.get_mmap_iter(self.prev_bytes, next_bytes)
                             .chunks(8)
                             .into_iter()
@@ -129,14 +140,29 @@ impl MMapReader {
                             .map(Arc::new)
                             .map(super::pages::Page::new)
                             .map(MmapPage::Page)
-                            .for_each(|x| (*inner).push_back(x));
+                            .for_each(|x| {
+                                num_pages += 1;
+                                (*inner).push_back(x);
+                            });
+
+                        // Update counter
+                        debug_assert_eq!(
+                            num_pages as usize,
+                            (next_bytes - self.prev_bytes)
+                                .min(MMAP_BYTES_LEN - next_bytes - self.prev_bytes)
+                        );
+                        self.collected_pages += num_pages;
+                        self.prev_bytes = next_bytes;
+
                         break 'push_back;
                     }
                 };
             }
 
-            // Update counter
-            self.prev_bytes = next_bytes;
+            // If number of pages read has exceeded break
+            if self.collected_pages >= self.total_pages.into() {
+                break;
+            }
         }
 
         Ok(())
@@ -155,9 +181,10 @@ impl core::ops::Drop for MMapReader {
 pub(super) fn mmap_thread(
     mmap: Mmap,
     buffer: Arc<Mutex<VecDeque<MmapPage>>>,
+    total_pages: NonZeroU64,
     handle: libc::c_int,
 ) -> Result<()> {
-    let mut mmap_reader = MMapReader::new(mmap, buffer, handle)?;
+    let mut mmap_reader = MMapReader::new(mmap, buffer, total_pages, handle)?;
 
     // Main drive: Place into Buffer.
     mmap_reader.stream()?;
