@@ -1,5 +1,7 @@
 //! [MMapReader] aims to act as a "child class" for [super::VHF], but with the sole responsibility
 //! of [mmap_rs::MMap] + ioctl management.
+//! The intended entry point for [super::VHF] is to spawn [MMapReader] into a child thread through
+//! the use of [mmap_thread].
 
 use super::{
     pages::{MmapPage, MMAP_PAGE_LEN},
@@ -148,4 +150,19 @@ impl core::ops::Drop for MMapReader {
             false => log::info!("MMapReader has been dropped."),
         }
     }
+}
+
+pub(super) fn mmap_thread(
+    mmap: Mmap,
+    buffer: Arc<Mutex<VecDeque<MmapPage>>>,
+    handle: libc::c_int,
+) -> Result<()> {
+    let mut mmap_reader = MMapReader::new(mmap, buffer, handle)?;
+
+    // Main drive: Place into Buffer.
+    mmap_reader.stream()?;
+
+    // Cleanup: Automatic?
+
+    Ok(())
 }
