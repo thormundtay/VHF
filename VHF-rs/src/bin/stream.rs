@@ -4,47 +4,12 @@ use std::time::Duration;
 use vhf::runner::{Config, VHF};
 use vhf::{Error, Result};
 
-fn process_binary(
-    old_bytes: usize,
-    new_bytes: usize,
-    rbbuffer: &mmap_rs::Mmap,
-) -> std::io::Result<Vec<u8>> {
-    // if old_bytes - new_bytes > 1 << 22 {
-    //     Err(Error::...)
-    // }
-
-    // Handle potential wrap-around in the ring buffer:
-    let data: Vec<_> = if old_bytes > new_bytes {
-        log::warn!(
-            "crossed? mmap boundary: old={}, new={}",
-            old_bytes,
-            new_bytes
-        );
-        // let first_part = &rbbuffer[old_bytes..];
-        let first_part = rbbuffer.iter().skip(old_bytes).take(1 << 22 - old_bytes);
-
-        // let second_part = &rbbuffer[..new_bytes];
-        let second_part = rbbuffer.iter().take(new_bytes);
-        first_part.chain(second_part)
-    } else {
-        // let second_part = &rbbuffer[old_bytes..new_bytes];
-        let second_part = rbbuffer.iter().skip(old_bytes).take(new_bytes - old_bytes);
-        second_part.chain(rbbuffer.iter().take(0))
-    }
-    .copied()
-    // .map(u8::from_le) // can't seem to see a difference between le/be
-    .collect();
-
-    Ok(data)
-}
-
 fn main() -> Result<()> {
-    let _ = log4rs::init_file("log4rs.yml", Default::default()).unwrap(); // Logger init
+    let _ = log4rs::init_file("log4rs.yml", Default::default()).expect("log4rs.yml not found!"); // Logger init
     let conf = Config::new(Some(PathBuf::from("./VHF_board_params.ini")))?;
 
     let vhf = VHF::new(conf)?;
     log::info!("VHF Struct created");
-    log::info!("VHF.handle = {}", vhf.handle);
 
     vhf.start()?;
     log::info!("VHF started");
@@ -91,63 +56,14 @@ fn main() -> Result<()> {
             .for_each(|x| file.write_u32::<LittleEndian>(x).unwrap());
     }
 
-    // try to get some data
-    let mut i = 0;
-    let mut tfb32_old: u32 = 0;
-    let mut debug = false; // This is just for checking transfer addresses.
-    while i < 800 {
-        let tfb32 = (vhf.ioctl_next()? >> 3 << 3) as u32 % (1 << 22);
-        if tfb32 == tfb32_old {
-            sleep(Duration::from_nanos(1000));
-            continue;
-        }
-        // log::trace!("tfb32 = {}", tfb32);
-
-        let this_cycle: Vec<_> = if let Ok(this_cycle) =
-            process_binary(tfb32_old as usize, tfb32 as usize, &vhf.readback)
-        {
-            this_cycle
-        } else {
-            unreachable!()
-        };
-        if tfb32_old > tfb32 {
-            debug = true;
-            log::warn!(
-                "this_cycle has been obtained for tfb32_old = {} > tfb32 ={}.",
-                tfb32_old,
-                tfb32
-            )
-        };
-
-        tfb32_old = tfb32;
-
-        if debug {
-            log::warn!("tfb32_old has now been set to {}", tfb32_old);
-            debug = false;
-        };
-
-        {
-            use byteorder::{LittleEndian, WriteBytesExt};
-            // assert_eq!(this_cycle.len() % 8, 0);
-            // chunks_exact is given by >> 3 << 3
-            this_cycle.chunks_exact(8).for_each(|x| {
-                let x: [u8; 8] = x.try_into().unwrap();
-                // use from_le_bytes documentation
-                file.write_u64::<LittleEndian>(u64::from_ne_bytes(x))
-                    .map_err(Error::Io)
-                    .unwrap()
-            });
-        }
-
-        // We have yet to implement number of elements being read out thus far.
-        i += 1;
-    }
+    // TODO: Use iterator method on VHF to get stream of data, and transform down before passing to
+    // BufWriter.
+    todo!();
 
     log::info!("Run completed");
 
     // VHF cleanup
     vhf.stop()?;
-    log::info!("VHF Stopped");
 
     {
         // File cleanup
