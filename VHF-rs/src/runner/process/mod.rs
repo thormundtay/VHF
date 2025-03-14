@@ -4,11 +4,19 @@ mod consts;
 mod mmap_reader;
 mod pages;
 
+use self::mmap_reader::mmap_thread;
+use self::pages::MmapPage;
 use super::Config;
 use crate::{Error, Result};
 use mmap_rs::Mmap;
 use nix::fcntl;
+use std::collections::VecDeque;
 use std::io::{BufWriter, Write};
+use std::num::NonZeroU64;
+use std::sync::{
+    atomic::self, Arc, Mutex,
+};
+use std::thread::{self, JoinHandle};
 
 /// This is the size in bytes of the Mmap that is backed by the VHF device.
 const MMAP_BYTES_LEN: usize = 1 << 22;
@@ -16,12 +24,24 @@ const MMAP_BYTES_LEN: usize = 1 << 22;
 /// Everything necessary to ensure the lifetime of pulling memory out from the VHF for its runtime
 pub struct VHF {
     configuration: Config,
-    pub handle: libc::c_int,
-    pub raw_handle: std::fs::File,
-    pub readback: Mmap,
+    handle: libc::c_int,
+    // It might be possible that File as created by Handle in mmap_thread might lead to a double
+    // close. (remove comment after test. remove pub after test.)
+    raw_handle: std::fs::File,
+    /// map_reader contains the thread that is responsible for pulling elements out of the MMap
+    /// into a [buffer].
+    /// More details is as given in [self::mmap_reader].
+    map_reader: JoinHandle<Result<()>>,
+    /// buffer is a local mirror of Mmap that is intended for the likes of SlidingWindow
+    /// [itertools::tuple_windows] and par_map, which has more Rust Semantics than reading straight
+    /// out of a Mmap.
+    buffer: Arc<Mutex<VecDeque<MmapPage>>>,
+    total_to_read: NonZeroU64,
 }
 
 impl VHF {
+    /// Create a new instance of VHF control. The goal of [VHF] is to create all necessary control
+    /// flow to read out of Mmap and to stream in the `impl Iterator for VHF` trait.
     pub fn new(config: Config) -> Result<Self> {
         let handle = Self::open_dev(
             config
@@ -30,17 +50,41 @@ impl VHF {
                 .into_os_string()
                 .to_str()
                 .ok_or_else(|| Error::ParseEmpty)?,
-        )?; // OsStr -> &str validation should be done by Config
-        use std::os::unix::io::FromRawFd;
-        let raw_handle = unsafe { std::fs::File::from_raw_fd(handle) };
-        let readback = Self::readback_buffer(&raw_handle)?;
+        )?; // TODO: OsStr -> &str validation should be done by Config
+
+        // WARN: Hardcoded for now.
+        // This is the number of heap-allocated pages being emitted from the [self::MMapReader].
+        let total_to_read = unsafe { NonZeroU64::new(1 << 23).unwrap_unchecked() };
+
+        let raw_handle = {
+            use std::os::unix::io::FromRawFd;
+            unsafe { std::fs::File::from_raw_fd(handle) }
+        };
+        let buffer = {
+            let mut buffer = VecDeque::with_capacity(256);
+            // WARN: Number of Empty pages should be given by the transform. Currently hardcoded.
+            buffer.push_back(MmapPage::Empty);
+            Arc::new(Mutex::new(buffer))
+        };
+
+        let map_reader: JoinHandle<Result<()>> = {
+            let readback = Self::readback_buffer(&raw_handle)?;
+            let buffer = buffer.clone();
+            thread::Builder::new()
+                .name("mmap_reader".to_string())
+                .spawn(move || mmap_thread(readback, buffer, total_to_read, handle))
+                .map_err(Error::Io)
+        }?;
+
         log::debug!("Readback buffer created");
 
         Ok(Self {
             configuration: config,
             handle,
             raw_handle,
-            readback,
+            map_reader,
+            buffer,
+            total_to_read,
         })
     }
 
@@ -55,9 +99,12 @@ impl VHF {
         .map_err(|e| Error::CIo(e))?)
     }
 
+    // We do not want both the parent(main) thread and child thread to have to hold ownership of
+    // the MmapMut, which would mean that this struct would have to consistently reach into an
+    // Arc<Mutex<_>> just to read out of the MMapMut.
     fn readback_buffer(raw_handle: &std::fs::File) -> Result<Mmap> {
         let mmap_options = unsafe {
-            mmap_rs::MmapOptions::new(1 << 22)
+            mmap_rs::MmapOptions::new(MMAP_BYTES_LEN)
                 .map_err(Error::MMap)?
                 .with_file(raw_handle, 0)
                 .with_flags(mmap_rs::MmapFlags::SHARED)
@@ -68,7 +115,9 @@ impl VHF {
         Ok(result)
     }
 
-    /// Start USB Machine, with all the specified configuration
+    /// Start USB Machine, with all the specified configuration.
+    // We spawn a thread here that reads off from the MmapMut into our own "buffer", which gets
+    // sliding window overed before being passed to a transformer (in either a map or par_map).
     pub fn start(&self) -> Result<()> {
         consts::ioctl_start(self.handle).map(|_| ())?;
         {
@@ -89,18 +138,25 @@ impl VHF {
                 .map_err(Error::Io)?;
             buf_write.flush().map_err(Error::Io)?;
         }
+        self.map_reader.thread().unpark();
 
         Ok(())
     }
 
     /// Stops USB Machine and close FDs.
+    // Might want to consider moving this routine as to being called from the MmapMut reader thread
+    // instead of being called from the main() function.
     pub fn stop(&self) -> Result<()> {
         self.raw_handle
             .try_clone()
             .map_err(Error::Io)?
             .write(b"stop; config 0;")
             .map_err(Error::Io)?;
-        consts::ioctl_end(self.handle).map(|_| ())
+
+        let result = consts::ioctl_end(self.handle).map(|_| ());
+        log::info!("VHF stopped!");
+
+        result
     }
 
     /// Assumes the USB Machine has started.
