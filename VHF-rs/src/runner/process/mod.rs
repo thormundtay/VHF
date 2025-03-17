@@ -14,7 +14,8 @@ use std::collections::VecDeque;
 use std::io::{BufWriter, Write};
 use std::num::NonZeroU64;
 use std::sync::{
-    atomic::self, Arc, Mutex,
+    atomic::{self, AtomicBool},
+    Arc, Mutex,
 };
 use std::thread::{self, JoinHandle};
 
@@ -32,6 +33,8 @@ pub struct VHF {
     /// into a [buffer].
     /// More details is as given in [self::mmap_reader].
     map_reader: JoinHandle<Result<()>>,
+    /// Used to signal to [self::mmap_reader::MMapReader] has started, and to determine that child has stopped.
+    engine_running: Arc<AtomicBool>,
     /// buffer is a local mirror of Mmap that is intended for the likes of SlidingWindow
     /// [itertools::tuple_windows] and par_map, which has more Rust Semantics than reading straight
     /// out of a Mmap.
@@ -56,6 +59,7 @@ impl VHF {
         // This is the number of heap-allocated pages being emitted from the [self::MMapReader].
         let total_to_read = unsafe { NonZeroU64::new(1 << 23).unwrap_unchecked() };
 
+        let engine_running = Arc::new(AtomicBool::new(false));
         let raw_handle = {
             use std::os::unix::io::FromRawFd;
             unsafe { std::fs::File::from_raw_fd(handle) }
@@ -70,9 +74,10 @@ impl VHF {
         let map_reader: JoinHandle<Result<()>> = {
             let readback = Self::readback_buffer(&raw_handle)?;
             let buffer = buffer.clone();
+            let engine_running = engine_running.clone();
             thread::Builder::new()
                 .name("mmap_reader".to_string())
-                .spawn(move || mmap_thread(readback, buffer, total_to_read, handle))
+                .spawn(move || mmap_thread(readback, engine_running, buffer, total_to_read, handle))
                 .map_err(Error::Io)
         }?;
 
@@ -83,6 +88,7 @@ impl VHF {
             handle,
             raw_handle,
             map_reader,
+            engine_running,
             buffer,
             total_to_read,
         })
@@ -119,6 +125,10 @@ impl VHF {
     // We spawn a thread here that reads off from the MmapMut into our own "buffer", which gets
     // sliding window overed before being passed to a transformer (in either a map or par_map).
     pub fn start(&self) -> Result<()> {
+        if self.engine_running.load(atomic::Ordering::Acquire) {
+            return Err(Error::EngineRunning);
+        };
+
         consts::ioctl_start(self.handle).map(|_| ())?;
         {
             let mut buf_write = BufWriter::new(self.raw_handle.try_clone().map_err(Error::Io)?);
@@ -138,6 +148,7 @@ impl VHF {
                 .map_err(Error::Io)?;
             buf_write.flush().map_err(Error::Io)?;
         }
+        self.engine_running.store(true, atomic::Ordering::Release);
         self.map_reader.thread().unpark();
 
         Ok(())
@@ -147,13 +158,21 @@ impl VHF {
     // Might want to consider moving this routine as to being called from the MmapMut reader thread
     // instead of being called from the main() function.
     pub fn stop(&self) -> Result<()> {
+        if !self.engine_running.load(atomic::Ordering::Acquire) {
+            return Err(Error::EngineStopped);
+        };
+
+        // Stop USB device.
         self.raw_handle
             .try_clone()
             .map_err(Error::Io)?
             .write(b"stop; config 0;")
             .map_err(Error::Io)?;
-
+        // Stop hostside USB device.
         let result = consts::ioctl_end(self.handle).map(|_| ());
+
+        self.engine_running.store(false, atomic::Ordering::Relaxed);
+
         log::info!("VHF stopped!");
 
         result

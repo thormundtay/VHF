@@ -27,6 +27,10 @@ pub(super) struct MMapReader {
     // Ownership of [Mmap] throughout the lifetime of the entire program should be limited to this
     // struct.
     mmap: Mmap,
+    // Used to determine that parents has started, and to signal back to parent thread that stop
+    // can be called.
+    // NOTE: Reading into this if infinite stream to know to stop?
+    engine_running: Arc<AtomicBool>, // Suboptimal
     /// This is the means by which MMapReader passes pages back to [VHF] for VHF to act as an
     /// iterator.
     // Strongly note that MMapPages are therefore fragmented with respect to each other, but we eat
@@ -45,6 +49,7 @@ pub(super) struct MMapReader {
 impl MMapReader {
     pub(super) fn new(
         mmap: Mmap,
+        engine_running: Arc<AtomicBool>,
         transfer_buffer: Arc<Mutex<VecDeque<MmapPage>>>,
         total_pages: NonZeroU64,
         handle: libc::c_int,
@@ -52,6 +57,7 @@ impl MMapReader {
         Ok(Self {
             handle,
             mmap,
+            engine_running,
             transfer_buffer,
             last_tfb32: 0,
             prev_bytes: 0,
@@ -180,11 +186,17 @@ impl core::ops::Drop for MMapReader {
 
 pub(super) fn mmap_thread(
     mmap: Mmap,
+    engine: Arc<AtomicBool>,
     buffer: Arc<Mutex<VecDeque<MmapPage>>>,
     total_pages: NonZeroU64,
     handle: libc::c_int,
 ) -> Result<()> {
-    let mut mmap_reader = MMapReader::new(mmap, buffer, total_pages, handle)?;
+    let mut mmap_reader = MMapReader::new(mmap, engine, buffer, total_pages, handle)?;
+
+    // Block until parent has started.
+    while !mmap_reader.engine_running.load(atomic::Ordering::Acquire) {
+        thread::park();
+    }
 
     // Main drive: Place into Buffer.
     mmap_reader.stream()?;

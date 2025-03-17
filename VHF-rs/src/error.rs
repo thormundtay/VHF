@@ -15,6 +15,8 @@ pub enum Error {
     MMap(mmap_rs::Error),
     Ioctl(nix::errno::Errno),
     IoctlCall(String),
+    EngineRunning,
+    EngineStopped,
 }
 
 impl error::Error for Error {}
