@@ -14,7 +14,7 @@ use std::hint::spin_loop;
 use std::num::NonZeroU64;
 use std::sync::{
     atomic::{self, AtomicBool},
-    Arc, Mutex,
+    Arc, Condvar, Mutex,
 };
 use std::thread;
 
@@ -31,6 +31,8 @@ pub(super) struct MMapReader {
     // can be called.
     // NOTE: Reading into this if infinite stream to know to stop?
     engine_running: Arc<AtomicBool>, // Suboptimal
+    /// Used to signal back to parent that a page hasbeen placedinto [self.transfer_buffer].
+    transfer_buffer_signal: Arc<Condvar>,
     /// This is the means by which MMapReader passes pages back to [VHF] for VHF to act as an
     /// iterator.
     // Strongly note that MMapPages are therefore fragmented with respect to each other, but we eat
@@ -50,6 +52,7 @@ impl MMapReader {
     pub(super) fn new(
         mmap: Mmap,
         engine_running: Arc<AtomicBool>,
+        transfer_buffer_signal: Arc<Condvar>,
         transfer_buffer: Arc<Mutex<VecDeque<MmapPage>>>,
         total_pages: NonZeroU64,
         handle: libc::c_int,
@@ -58,6 +61,7 @@ impl MMapReader {
             handle,
             mmap,
             engine_running,
+            transfer_buffer_signal,
             transfer_buffer,
             last_tfb32: 0,
             prev_bytes: 0,
@@ -157,8 +161,12 @@ impl MMapReader {
                             (next_bytes - self.prev_bytes)
                                 .min(MMAP_BYTES_LEN - next_bytes - self.prev_bytes)
                         );
+
                         self.collected_pages += num_pages;
                         self.prev_bytes = next_bytes;
+
+                        // Signal back to parent thread that pages have been placed in.
+                        self.transfer_buffer_signal.notify_all();
 
                         break 'push_back;
                     }
@@ -184,14 +192,17 @@ impl core::ops::Drop for MMapReader {
     }
 }
 
+/// Used as the child thread of [super::VHF] at driving [MMapReader].
 pub(super) fn mmap_thread(
     mmap: Mmap,
     engine: Arc<AtomicBool>,
+    buffer_signal: Arc<Condvar>,
     buffer: Arc<Mutex<VecDeque<MmapPage>>>,
     total_pages: NonZeroU64,
     handle: libc::c_int,
 ) -> Result<()> {
-    let mut mmap_reader = MMapReader::new(mmap, engine, buffer, total_pages, handle)?;
+    let mut mmap_reader =
+        MMapReader::new(mmap, engine, buffer_signal, buffer, total_pages, handle)?;
 
     // Block until parent has started.
     while !mmap_reader.engine_running.load(atomic::Ordering::Acquire) {

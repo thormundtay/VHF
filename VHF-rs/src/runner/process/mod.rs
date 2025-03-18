@@ -15,7 +15,7 @@ use std::io::{BufWriter, Write};
 use std::num::NonZeroU64;
 use std::sync::{
     atomic::{self, AtomicBool},
-    Arc, Mutex,
+    Arc, Condvar, Mutex,
 };
 use std::thread::{self, JoinHandle};
 
@@ -35,10 +35,14 @@ pub struct VHF {
     map_reader: JoinHandle<Result<()>>,
     /// Used to signal to [self::mmap_reader::MMapReader] has started, and to determine that child has stopped.
     engine_running: Arc<AtomicBool>,
+    /// Used to receive signal from [self::mmap_reader::MMapReader] that new pages have been placed into
+    /// [self.buffer].
+    buffer_signal: Arc<Condvar>,
     /// buffer is a local mirror of Mmap that is intended for the likes of SlidingWindow
     /// [itertools::tuple_windows] and par_map, which has more Rust Semantics than reading straight
     /// out of a Mmap.
     buffer: Arc<Mutex<VecDeque<MmapPage>>>,
+    /// This is the total number of pages to be read by [self::MMapReader].
     total_to_read: NonZeroU64,
 }
 
@@ -70,14 +74,25 @@ impl VHF {
             buffer.push_back(MmapPage::Empty);
             Arc::new(Mutex::new(buffer))
         };
+        let buffer_signal = Arc::new(Condvar::new()); // merge into buffer?
 
         let map_reader: JoinHandle<Result<()>> = {
             let readback = Self::readback_buffer(&raw_handle)?;
+            let buffer_signal = buffer_signal.clone();
             let buffer = buffer.clone();
             let engine_running = engine_running.clone();
             thread::Builder::new()
                 .name("mmap_reader".to_string())
-                .spawn(move || mmap_thread(readback, engine_running, buffer, total_to_read, handle))
+                .spawn(move || {
+                    mmap_thread(
+                        readback,
+                        engine_running,
+                        buffer_signal,
+                        buffer,
+                        total_to_read,
+                        handle,
+                    )
+                })
                 .map_err(Error::Io)
         }?;
 
@@ -89,6 +104,7 @@ impl VHF {
             raw_handle,
             map_reader,
             engine_running,
+            buffer_signal,
             buffer,
             total_to_read,
         })
