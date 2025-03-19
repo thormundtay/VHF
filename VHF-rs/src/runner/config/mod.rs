@@ -126,4 +126,10 @@ impl Configs {
 
         Ok(())
     }
+
+    /// This the frequency in Hertz at which data is being emitted from the board after skip_num (`s`)
+    /// decimation.
+    pub fn sampling_frequency(&self) -> f64 {
+        self.speed.base_sampling_freq() as f64 / (1. + self.skip_num as f64)
+    }
 }

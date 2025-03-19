@@ -32,6 +32,19 @@ impl FromStr for SamplingSpeed {
     }
 }
 
+impl SamplingSpeed {
+    /// This is the sampling frequency in Hertz in the board internal prior to skip-number (`s`) decimation.
+    ///
+    /// The board samples the analogue signal at 80MHz. To get a singular IQM value, it then
+    /// considers either 4 or 8 data points, giving the low and high rate.
+    pub fn base_sampling_freq(&self) -> u32 {
+        match self {
+            SamplingSpeed::High => 20_000_000,
+            SamplingSpeed::Low => 10_000_000,
+        }
+    }
+}
+
 /// The structure of the file saved.
 #[derive(Copy, Clone, Debug)]
 pub enum Encode {
