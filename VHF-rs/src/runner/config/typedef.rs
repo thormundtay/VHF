@@ -43,6 +43,13 @@ impl SamplingSpeed {
             SamplingSpeed::Low => 10_000_000,
         }
     }
+
+    pub fn in_ns(&self) -> jiff::Span {
+        match self {
+            SamplingSpeed::High => jiff::Span::new().nanoseconds(50),
+            SamplingSpeed::Low => jiff::Span::new().nanoseconds(100),
+        }
+    }
 }
 
 /// The structure of the file saved.

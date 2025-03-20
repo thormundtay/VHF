@@ -14,6 +14,7 @@ byteorder = "1.5.0"
 configparser = { version = "3.1.0", default-features = false }
 evalexpr = { version = "12.0.2", features = ["regex",] }
 itertools = { version = "0.14.0" }
+jiff = { version = "0.2.4", features = ["alloc", "serde",] }
 libc = { version = "0.2" }
 log = { version = "0.4.22" }
 log4rs = { version = "1.3.0", features = ["console_appender",] }

@@ -4,23 +4,31 @@ mod consts;
 mod mmap_reader;
 mod pages;
 
-use self::mmap_reader::mmap_thread;
-use self::pages::MmapPage;
 use super::Config;
 use crate::{Error, Result};
+use jiff::Span;
+use mmap_reader::mmap_thread;
 use mmap_rs::Mmap;
 use nix::fcntl;
+use pages::MmapPage;
 use std::collections::VecDeque;
 use std::io::{BufWriter, Write};
 use std::num::NonZeroU64;
 use std::sync::{
     atomic::{self, AtomicBool},
-    Arc, Condvar, Mutex,
+    Arc, Condvar, Mutex, RwLock,
 };
 use std::thread::{self, JoinHandle};
+use std::time::Instant;
 
 /// This is the size in bytes of the Mmap that is backed by the VHF device.
 const MMAP_BYTES_LEN: usize = 1 << 22;
+// NOTE: HARDCODED! Currently used to determine the size of window being passed out from VHF.next()
+// for mathematical transformation. This might need to increase if transforms really need to peer
+// that far back. (Related?: https://github.com/rust-lang/rust/issues/60551)
+const VHF_MMAP_WINDOW_LEN: usize = 20;
+/// The size of the first continuous ring buffer that is VecDeque.
+const DEQUE_CAP: usize = 256;
 
 /// Everything necessary to ensure the lifetime of pulling memory out from the VHF for its runtime
 pub struct VHF {
@@ -42,6 +50,10 @@ pub struct VHF {
     /// [itertools::tuple_windows] and par_map, which has more Rust Semantics than reading straight
     /// out of a Mmap.
     buffer: Arc<Mutex<VecDeque<MmapPage>>>,
+    /// This is the amount of time between any two pages. Used for determining other timings.
+    time_between_pages: Span,
+    /// Expected time when to next wake up mmap_reader thread.
+    wake_mmap: Arc<RwLock<Instant>>,
     /// This is the total number of pages to be read by [self::MMapReader].
     total_to_read: NonZeroU64,
 }
@@ -59,6 +71,10 @@ impl VHF {
                 .ok_or_else(|| Error::ParseEmpty)?,
         )?; // TODO: OsStr -> &str validation should be done by Config
 
+        let time_between_pages: Span = pages::time_between_pages_in_ns(&config.speed)?;
+
+        let wake_mmap = Arc::new(RwLock::new(Instant::now()));
+
         // WARN: Hardcoded for now.
         // This is the number of heap-allocated pages being emitted from the [self::MMapReader].
         let total_to_read = unsafe { NonZeroU64::new(1 << 23).unwrap_unchecked() };
@@ -69,7 +85,7 @@ impl VHF {
             unsafe { std::fs::File::from_raw_fd(handle) }
         };
         let buffer = {
-            let mut buffer = VecDeque::with_capacity(256);
+            let mut buffer = VecDeque::with_capacity(DEQUE_CAP);
             // WARN: Number of Empty pages should be given by the transform. Currently hardcoded.
             buffer.push_back(MmapPage::Empty);
             Arc::new(Mutex::new(buffer))
@@ -78,9 +94,16 @@ impl VHF {
 
         let map_reader: JoinHandle<Result<()>> = {
             let readback = Self::readback_buffer(&raw_handle)?;
+            let engine_running = engine_running.clone();
             let buffer_signal = buffer_signal.clone();
             let buffer = buffer.clone();
-            let engine_running = engine_running.clone();
+            let time_between_stream_resume =
+                ((TryInto::<i64>::try_into(VHF_MMAP_WINDOW_LEN).unwrap() - 4)
+                // Hardcoded for now... should be determined by config
+                * time_between_pages)
+                    .try_into()
+                    .map_err(Error::Jiff)?;
+            let next_collect_time = wake_mmap.clone();
             thread::Builder::new()
                 .name("mmap_reader".to_string())
                 .spawn(move || {
@@ -89,6 +112,9 @@ impl VHF {
                         engine_running,
                         buffer_signal,
                         buffer,
+                        &time_between_pages,
+                        time_between_stream_resume,
+                        next_collect_time,
                         total_to_read,
                         handle,
                     )
@@ -96,7 +122,8 @@ impl VHF {
                 .map_err(Error::Io)
         }?;
 
-        log::debug!("Readback buffer created");
+        log::debug!("Readback buffer thread created");
+
 
         Ok(Self {
             configuration: config,
@@ -106,6 +133,8 @@ impl VHF {
             engine_running,
             buffer_signal,
             buffer,
+            time_between_pages,
+            wake_mmap,
             total_to_read,
         })
     }

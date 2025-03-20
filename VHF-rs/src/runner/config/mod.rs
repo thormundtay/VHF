@@ -2,7 +2,7 @@
 mod utils;
 
 /// Convenience Type definitions associated with properties during the lifetime of the experiment.
-mod typedef;
+pub(crate) mod typedef;
 
 use crate::{Error, Result};
 use configparser::ini;

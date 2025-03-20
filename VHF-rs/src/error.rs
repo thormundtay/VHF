@@ -17,6 +17,7 @@ pub enum Error {
     IoctlCall(String),
     EngineRunning,
     EngineStopped,
+    Jiff(jiff::Error),
 }
 
 impl error::Error for Error {}

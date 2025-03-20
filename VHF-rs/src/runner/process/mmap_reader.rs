@@ -8,15 +8,17 @@ use super::{
     MMAP_BYTES_LEN,
 };
 use crate::{Error, Result};
+use jiff::Span;
 use mmap_rs::Mmap;
 use std::collections::VecDeque;
 use std::hint::spin_loop;
 use std::num::NonZeroU64;
 use std::sync::{
     atomic::{self, AtomicBool},
-    Arc, Condvar, Mutex,
+    Arc, Condvar, Mutex, RwLock,
 };
 use std::thread;
+use std::time::{Duration, Instant};
 
 /// Bottom 12 bytes should be zero'd to align to [MMapPage::Page].
 const ALIGN_PAGES: usize = 9 + 3;
@@ -42,6 +44,14 @@ pub(super) struct MMapReader {
     last_tfb32: libc::c_int,
     /// This is the last index being read from.
     prev_bytes: usize,
+    /// Time for a single page.
+    page_duration: Duration,
+    /// Time between stream wakeups
+    stream_pause: Duration,
+    /// Maximal amount of time alloweable waiting for parent thread to unpark before self unpark.
+    loop_timeout: Duration,
+    /// Time after this is when we expect to start collecting the next set of pages.
+    next_collect_time: Arc<RwLock<Instant>>,
     /// Number of VHF Pages to read. 0 for an infinite amount.
     total_pages: NonZeroU64,
     /// Number of pages thus far.
@@ -54,9 +64,19 @@ impl MMapReader {
         engine_running: Arc<AtomicBool>,
         transfer_buffer_signal: Arc<Condvar>,
         transfer_buffer: Arc<Mutex<VecDeque<MmapPage>>>,
+        time_between_mmap_page: &Span,
+        time_between_stream_resume: Duration,
+        next_collect_time: Arc<RwLock<Instant>>,
         total_pages: NonZeroU64,
         handle: libc::c_int,
     ) -> Result<Self> {
+        let loop_timeout: Duration = (*time_between_mmap_page
+            * (4 * super::VHF_MMAP_WINDOW_LEN)
+                .max(super::DEQUE_CAP / 2)
+                .try_into()
+                .unwrap())
+        .try_into()
+        .map_err(Error::Jiff)?;
         Ok(Self {
             handle,
             mmap,
@@ -65,6 +85,10 @@ impl MMapReader {
             transfer_buffer,
             last_tfb32: 0,
             prev_bytes: 0,
+            page_duration: (*time_between_mmap_page).try_into().map_err(Error::Jiff)?,
+            stream_pause: time_between_stream_resume,
+            loop_timeout,
+            next_collect_time,
             total_pages,
             collected_pages: 0,
         })
@@ -102,7 +126,11 @@ impl MMapReader {
     /// This converts Mmap u8s into VHFPages which are placed into [self.buffer].
     fn stream(&mut self) -> Result<()> {
         let mut next_bytes;
+        let mut time_after_mmap_fetch;
         loop {
+            // If the current time has exceed the next expected fetch time, then proceed, else sleep.
+            thread::park_timeout(self.loop_timeout); // May apparently spuriously wake.
+
             // Pull out from Mmap and place into heap
             'next_mmap: loop {
                 let next = self.ioctl_next()?;
@@ -110,6 +138,9 @@ impl MMapReader {
                     return Err(Error::ioctl_call("Negative next value received."));
                 }
                 if next.wrapping_sub(self.last_tfb32) <= (1 << ALIGN_PAGES) {
+                    log::debug!("tried getting next before having more than a page of data...");
+                    log::debug!("last_tfb32 = {}, next = {}", self.last_tfb32, next);
+                    thread::park_timeout(self.page_duration);
                     continue;
                 }
 
@@ -117,6 +148,7 @@ impl MMapReader {
                 let offset = (next as usize % MMAP_BYTES_LEN) >> ALIGN_PAGES << ALIGN_PAGES;
                 self.last_tfb32 = next;
                 next_bytes = offset;
+                time_after_mmap_fetch = Instant::now();
                 break 'next_mmap;
             }
 
@@ -168,6 +200,12 @@ impl MMapReader {
                         // Signal back to parent thread that pages have been placed in.
                         self.transfer_buffer_signal.notify_all();
 
+                        // Set next wake time
+                        {
+                            let mut to_write = self.next_collect_time.write().unwrap();
+                            *to_write = time_after_mmap_fetch + self.stream_pause;
+                        }
+
                         break 'push_back;
                     }
                 };
@@ -198,11 +236,23 @@ pub(super) fn mmap_thread(
     engine: Arc<AtomicBool>,
     buffer_signal: Arc<Condvar>,
     buffer: Arc<Mutex<VecDeque<MmapPage>>>,
+    time_between_mmap_page: &Span,
+    time_between_stream_resume: Duration,
+    next_collect_time: Arc<RwLock<Instant>>,
     total_pages: NonZeroU64,
     handle: libc::c_int,
 ) -> Result<()> {
-    let mut mmap_reader =
-        MMapReader::new(mmap, engine, buffer_signal, buffer, total_pages, handle)?;
+    let mut mmap_reader = MMapReader::new(
+        mmap,
+        engine,
+        buffer_signal,
+        buffer,
+        time_between_mmap_page,
+        time_between_stream_resume,
+        next_collect_time,
+        total_pages,
+        handle,
+    )?;
 
     // Block until parent has started.
     while !mmap_reader.engine_running.load(atomic::Ordering::Acquire) {

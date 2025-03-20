@@ -2,6 +2,7 @@
 
 /// The individual elements as obtained from [super::consts::usb_ioctl_read].
 use crate::types::RawVHFWord;
+use crate::{Error, Result};
 use std::sync::Arc;
 
 /// This is the number of [crate::types::RawVHFWord] in one (kernel-sized) page emitted from the
@@ -33,4 +34,13 @@ impl<const N: usize> Page<N> {
     pub fn new(x: Arc<[RawVHFWord; N]>) -> Self {
         Self(x)
     }
+}
+
+pub fn time_between_pages_in_ns(
+    speed: &super::super::config::typedef::SamplingSpeed,
+) -> Result<jiff::Span> {
+    speed
+        .in_ns()
+        .checked_mul(MMAP_PAGE_LEN.try_into().unwrap())
+        .map_err(Error::Jiff)
 }
