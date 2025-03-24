@@ -4,7 +4,7 @@
 //! the use of [mmap_thread].
 
 use super::{
-    pages::{MmapPage, MMAP_PAGE_LEN},
+    pages::{MmapPage, Page, MMAP_PAGE_LEN},
     MMAP_BYTES_LEN,
 };
 use crate::{Error, Result};
@@ -104,22 +104,21 @@ impl MMapReader {
     /// With the previous (rounded) bytes to current (rounded) byes, create a lazy iterator for
     /// pushing onto buffer.  
     /// Rounding done must be in accordance with [MMAP_PAGE_LEN]. Note that each [crate::types::RawVHFWord] is 8 bytes.
-    fn get_mmap_iter<'a>(&'a self, prev: usize, next: usize) -> impl Iterator<Item = &'a u8> {
+    fn get_mmap_iter<'a>(&'a self, prev: usize, next: usize) -> impl Iterator<Item = &'a u64> {
+        use bytemuck::try_cast_slice;
         // Bytes rounded to page length should have
         debug_assert!(prev % (8 * MMAP_PAGE_LEN) == 0);
         debug_assert!(next % (8 * MMAP_PAGE_LEN) == 0);
         if prev < next {
-            self.mmap
-                .iter()
-                .skip(prev)
-                .take(next - prev)
-                .chain([0; 0].iter().take(0))
+            try_cast_slice(&self.mmap[prev..next])
+                .unwrap()
+                .into_iter()
+                .chain(try_cast_slice(&self.mmap[..0]).unwrap())
         } else {
-            self.mmap
-                .iter()
-                .skip(prev)
-                .take(MMAP_BYTES_LEN - prev)
-                .chain(self.mmap.iter().take(next))
+            try_cast_slice(&self.mmap[prev..MMAP_BYTES_LEN])
+                .unwrap()
+                .into_iter()
+                .chain(try_cast_slice(&self.mmap[..next]).unwrap())
         }
     }
 
@@ -164,23 +163,11 @@ impl MMapReader {
                         let mut num_pages = 0;
 
                         self.get_mmap_iter(self.prev_bytes, next_bytes)
-                            .chunks(8)
-                            .into_iter()
-                            .map(|x| -> u64 {
-                                let x: [u8; 8] = unsafe {
-                                    x.into_iter().copied().collect_array().unwrap_unchecked()
-                                };
-                                u64::from_ne_bytes(x)
-                            })
                             .chunks(MMAP_PAGE_LEN)
                             .into_iter()
-                            .map(|x| -> [u64; MMAP_PAGE_LEN] {
-                                let x: [u64; MMAP_PAGE_LEN] =
-                                    unsafe { x.into_iter().collect_array().unwrap_unchecked() };
-                                x
-                            })
+                            .map(|x| x.copied().collect_array().unwrap())
                             .map(Arc::new)
-                            .map(super::pages::Page::new)
+                            .map(Page::new)
                             .map(MmapPage::Page)
                             .for_each(|x| {
                                 num_pages += 1;
