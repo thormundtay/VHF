@@ -3,7 +3,7 @@ import logging
 import subprocess
 from matplotlib import pyplot as plt
 from pathlib import Path
-from plot_VHF_output import plot_rad_spec, get_phase
+from plot_VHF_output import plot_rad_spec
 from tempfile import TemporaryFile
 from VHF.parse import VHFparser
 from VHF.runner import VHFRunner
@@ -33,8 +33,8 @@ def main():
             logging.info("Subprocess ran with %s", str(sb_run))
             logging.info("Retcode %s", retcode)
             parsed = VHFparser(f)
-            phase = get_phase(parsed)
-            fig = plot_rad_spec(True, True)(parsed, phase)
+            phase = parsed.reduced_phase
+            fig = plot_rad_spec(True, False, True)(parsed, phase)
 
     except KeyboardInterrupt:
         logging.info("Subprocess ran with %s", str(sb_run))

@@ -1,7 +1,7 @@
 import datetime
 import logging
 from pathlib import Path
-from plot_VHF_output import get_phase, plot_rad_spec
+from plot_VHF_output import plot_rad_spec
 from matplotlib import pyplot as plt
 import numpy as np
 import subprocess
@@ -75,7 +75,7 @@ def run_and_plot():
         tmp_store_name = tmp_store.name
         logging.debug("min(m) = %f, max(m) = %f", np.min(parsed.m_arr), np.max(parsed.m_arr))
 
-    phase = get_phase(parsed)
+    phase = parsed.reduced_phase
     print(f"Phase mean: {phase[12000:].mean()}\nPhase Std Dev: {phase[12000:].std()}")
     fig = plot_rad_spec(True, False, True)(parsed, phase)
     view_const = 2.3
