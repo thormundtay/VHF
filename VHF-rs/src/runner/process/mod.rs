@@ -6,6 +6,7 @@ mod pages;
 
 use super::Config;
 use crate::{Error, Result};
+use itertools::Itertools;
 use jiff::Span;
 use mmap_reader::mmap_thread;
 use mmap_rs::Mmap;
@@ -56,6 +57,8 @@ pub struct VHF {
     wake_mmap: Arc<RwLock<Instant>>,
     /// This is the total number of pages to be read by [self::MMapReader].
     total_to_read: NonZeroU64,
+    /// Number of windows released to .iter() or par_iter() so far.
+    windows_released: usize,
 }
 
 impl VHF {
@@ -136,6 +139,7 @@ impl VHF {
             time_between_pages,
             wake_mmap,
             total_to_read,
+            windows_released: 0,
         })
     }
 
@@ -228,5 +232,85 @@ impl VHF {
     #[inline(always)]
     pub fn ioctl_next(&self) -> Result<libc::c_int> {
         consts::ioctl_read(self.handle)
+    }
+}
+
+impl std::iter::Iterator for VHF {
+    type Item = (usize, [MmapPage; VHF_MMAP_WINDOW_LEN]);
+
+    // The idea: To ensure not having to manually drop any lifetimes (which could probably be
+    // consumed by the LPF transformer or the FileWriter), it is easier for a SlidingWindow to
+    // holdonto the Rc<RefCell<_>> instead. This way, dropping from the heap is automatically
+    // managed by the reference counting of Rc<_>.
+    // Next, we can dynamically increase the "prior" context window that is necessary for the LPF
+    // transformer (or any other transformer), since LPF might often require data that precedes
+    // the initial data point associated to the page of data. However, there probably is a need to
+    // distinguish None for end of iterator versus None for no-prior data for start of stream
+    // (transformers must implement the difference themselves).
+    // Transformers in the steady state would not know where in the stream they are in, which may
+    // quite likely be necessary to know which data points to skip (or not), and so, would also
+    // want to take an index of the "body" page (i.e.: the first page that is not involved with
+    // context).
+    // The body page's index in the window has yet to be decided as being coordinated between the
+    // Transform generator and this VHF, or if should be passed as a parameter.
+    //
+    // This method should be responsible for only moving the window forward by one.
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.windows_released as u64 >= self.total_to_read.try_into().unwrap() {
+            return None;
+        }
+
+        // Condvar needs a mutex guard for wait time out. We're using condvar "as a channel for now".
+        // WARN: Mutex creation every time next method is called.
+        let mg = Mutex::new(());
+
+        let time_between_pages = self.time_between_pages.try_into().unwrap();
+
+        'get_page: loop {
+            // Return first if there are more elements in the buffer
+            if let Ok(mut buf) = self.buffer.try_lock() {
+                // if length >> num_items then assign to variable, pop left most, and return
+                if buf.len() >= VHF_MMAP_WINDOW_LEN {
+                    let arr = buf
+                        .iter()
+                        .take(VHF_MMAP_WINDOW_LEN)
+                        .cloned()
+                        .collect_array()
+                        .unwrap();
+                    let idx = self.windows_released;
+                    self.windows_released += 1;
+                    let _ = buf.pop_front();
+                    return Some((idx, arr));
+                }
+            }
+
+            // No more elements in the buffer, we have to wake the thread.
+            // We will wake up and fetch when either
+            // 1. Condvar activated or
+            // 2. We self check that the current instant exceeds the time as a last measure.
+
+            while Instant::now() < *self.wake_mmap.read().unwrap() {
+                let timeout = self
+                    .buffer_signal
+                    .wait_timeout(mg.lock().unwrap(), time_between_pages)
+                    .unwrap();
+                if timeout.1.timed_out() {
+                    continue 'get_page;
+                }
+                continue;
+            }
+
+            if Instant::now() >= *self.wake_mmap.read().unwrap() {
+                self.map_reader.thread().unpark();
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        // Account for window being slightly different from number of pages being collected.
+        let total: u64 = self.total_to_read.try_into().unwrap();
+        let lb = total - (self.windows_released as u64);
+        let lb = lb as usize;
+        (lb, Some(lb + VHF_MMAP_WINDOW_LEN))
     }
 }

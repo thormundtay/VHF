@@ -10,6 +10,7 @@ use std::sync::Arc;
 pub(super) const MMAP_PAGE_LEN: usize = 512;
 
 /// All possible pages placed in to the buffer of [super::VHF].
+#[derive(Clone)]
 pub enum MmapPage {
     /// For the very beginning of the stream being pulled out from the MMap, there is no "previous"
     /// page before the current page, and so, any function that works on the window from
@@ -27,6 +28,7 @@ pub enum MmapPage {
 /// One heap-allocated kernel page of 4KiB.  
 /// This can be checked with `grep -ir pagesize /proc/self/smaps`.
 /// This is used to allocate from VHF Memmap raw bytes onto the Heap.
+#[derive(Clone)]
 #[repr(transparent)]
 pub struct Page<const N: usize = MMAP_PAGE_LEN>(Arc<[RawVHFWord; N]>);
 
