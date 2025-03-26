@@ -205,6 +205,12 @@ impl MMapReader {
 
         Ok(())
     }
+
+    /// Cleaning up before thread exits.
+    fn close(&self) -> Result<()> {
+        self.engine_running.store(false, atomic::Ordering::Relaxed);
+        Ok(())
+    }
 }
 
 impl core::ops::Drop for MMapReader {
@@ -248,7 +254,8 @@ pub(super) fn mmap_thread(
     // Main drive: Place into Buffer.
     mmap_reader.stream()?;
 
-    // Cleanup: Automatic?
+    // Cleanup
+    mmap_reader.close()?;
 
     Ok(())
 }
