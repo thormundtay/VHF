@@ -20,23 +20,13 @@ pub enum MmapPage {
     // NOTE: The allocation between pages can be considered as being fragmented; in contrast to the
     // VecDeque.
     Page(Page),
-    /// Denotes the MMapReader has reached the final page. Iterator trait for [super::VHF::next]
-    /// should exit.
-    End,
 }
 
 /// One heap-allocated kernel page of 4KiB.  
 /// This can be checked with `grep -ir pagesize /proc/self/smaps`.
 /// This is used to allocate from VHF Memmap raw bytes onto the Heap.
-#[derive(Clone)]
-#[repr(transparent)]
-pub struct Page<const N: usize = MMAP_PAGE_LEN>(Arc<[RawVHFWord; N]>);
+pub type Page = Arc<[RawVHFWord; MMAP_PAGE_LEN]>;
 
-impl<const N: usize> Page<N> {
-    pub fn new(x: Arc<[RawVHFWord; N]>) -> Self {
-        Self(x)
-    }
-}
 
 pub fn time_between_pages_in_ns(
     speed: &super::super::config::typedef::SamplingSpeed,

@@ -4,7 +4,7 @@
 //! the use of [mmap_thread].
 
 use super::{
-    pages::{MmapPage, Page, MMAP_PAGE_LEN},
+    pages::{MmapPage, MMAP_PAGE_LEN},
     MMAP_BYTES_LEN,
 };
 use crate::{Error, Result};
@@ -167,7 +167,6 @@ impl MMapReader {
                             .into_iter()
                             .map(|x| x.copied().collect_array().unwrap())
                             .map(Arc::new)
-                            .map(Page::new)
                             .map(MmapPage::Page)
                             .for_each(|x| {
                                 num_pages += 1;
