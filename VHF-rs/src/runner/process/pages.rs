@@ -27,6 +27,25 @@ pub enum MmapPage {
 /// This is used to allocate from VHF Memmap raw bytes onto the Heap.
 pub type Page = Arc<[RawVHFWord; MMAP_PAGE_LEN]>;
 
+/// Convenience methods for reaching into [MMapPage] or [Page].
+pub(crate) trait PageInner {
+    fn inner(&self) -> &[RawVHFWord];
+}
+
+impl PageInner for Page {
+    fn inner(&self) -> &[RawVHFWord] {
+        self.as_ref()
+    }
+}
+
+impl PageInner for MmapPage {
+    fn inner(&self) -> &[RawVHFWord] {
+        match self {
+            MmapPage::Empty => &[],
+            MmapPage::Page(x) => (&x).inner(),
+        }
+    }
+}
 
 pub fn time_between_pages_in_ns(
     speed: &super::super::config::typedef::SamplingSpeed,
