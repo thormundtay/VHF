@@ -314,3 +314,6 @@ impl std::iter::Iterator for VHF {
         (lb, Some(lb + VHF_MMAP_WINDOW_LEN))
     }
 }
+
+#[cfg(test)]
+mod test_vhf;
