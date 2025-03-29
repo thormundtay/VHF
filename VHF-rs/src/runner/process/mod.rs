@@ -284,7 +284,15 @@ impl std::iter::Iterator for VHF {
                 }
             }
 
-            // No more elements in the buffer, we have to wake the thread.
+            // Early break - Engine is not running anymore for any reason (Thread panic perhaps?)
+            if self
+                .engine_running
+                .fetch_not(std::sync::atomic::Ordering::Relaxed)
+            {
+                return None;
+            };
+
+            // No more elements in the buffer, and engine is running, we have to wake the thread.
             // We will wake up and fetch when either
             // 1. Condvar activated or
             // 2. We self check that the current instant exceeds the time as a last measure.
