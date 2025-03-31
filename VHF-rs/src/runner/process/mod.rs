@@ -1,11 +1,13 @@
 //! Interface with VHF, with things such as starting the VHF, reading out from it, closing it.
 
 mod board_ioctl_consts;
+pub(self) mod consts;
 mod mmap_reader;
 mod pages;
 
 use super::Config;
 use crate::{Error, Result};
+use consts::VHF_MMAP_WINDOW_LEN;
 use itertools::Itertools;
 use jiff::Span;
 use mmap_reader::mmap_thread;
@@ -24,10 +26,6 @@ use std::time::Instant;
 
 /// This is the size in bytes of the Mmap that is backed by the VHF device.
 const MMAP_BYTES_LEN: usize = 1 << 22;
-// NOTE: HARDCODED! Currently used to determine the size of window being passed out from VHF.next()
-// for mathematical transformation. This might need to increase if transforms really need to peer
-// that far back. (Related?: https://github.com/rust-lang/rust/issues/60551)
-const VHF_MMAP_WINDOW_LEN: usize = 20;
 /// The size of the first continuous ring buffer that is VecDeque.
 const DEQUE_CAP: usize = 256;
 

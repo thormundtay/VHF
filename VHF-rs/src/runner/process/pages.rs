@@ -1,13 +1,10 @@
 //! Map mmap fetched items into Heap-allocated chunks.
 
+use super::consts::MMAP_PAGE_LEN;
 // The individual elements as obtained from [super::board_ioctl_consts::ioctl_read].
 use crate::types::RawVHFWord;
 use crate::{Error, Result};
 use std::sync::Arc;
-
-/// This is the number of [crate::types::RawVHFWord] in one (kernel-sized) page emitted from the
-/// MMap onto the heap.
-pub(super) const MMAP_PAGE_LEN: usize = 512;
 
 /// All possible pages placed in to the buffer of [super::VHF].
 #[derive(Clone)]

@@ -3,10 +3,7 @@
 //! The intended entry point for [super::VHF] is to spawn [MMapReader] into a child thread through
 //! the use of [mmap_thread].
 
-use super::{
-    pages::{MmapPage, MMAP_PAGE_LEN},
-    MMAP_BYTES_LEN,
-};
+use super::{consts::MMAP_PAGE_LEN, pages::MmapPage, MMAP_BYTES_LEN};
 use crate::{Error, Result};
 use jiff::Span;
 use mmap_rs::Mmap;
@@ -20,8 +17,8 @@ use std::sync::{
 use std::thread;
 use std::time::{Duration, Instant};
 
-/// Bottom 12 bytes should be zero'd to align to [MMapPage::Page].
-const ALIGN_PAGES: usize = 9 + 3;
+/// Bottom 12 bytes of [super::board_ioctl_consts::ioctl_read] should be zero'd to align to [MMapPage::Page].
+pub const ALIGN_VHF_OUTPUT_TO_PAGES: usize = 9 + 3;
 
 pub(super) struct MMapReader {
     // FileHandle associated to mmap is needed to ioctl_next;
@@ -136,7 +133,7 @@ impl MMapReader {
                 if next < 0 {
                     return Err(Error::ioctl_call("Negative next value received."));
                 }
-                if next.wrapping_sub(self.last_tfb32) <= (1 << ALIGN_PAGES) {
+                if next.wrapping_sub(self.last_tfb32) <= (1 << ALIGN_VHF_OUTPUT_TO_PAGES) {
                     log::debug!("tried getting next before having more than a page of data...");
                     log::debug!("last_tfb32 = {}, next = {}", self.last_tfb32, next);
                     thread::park_timeout(self.page_duration);
@@ -144,7 +141,8 @@ impl MMapReader {
                 }
 
                 // Enough pages have accumulated.
-                let offset = (next as usize % MMAP_BYTES_LEN) >> ALIGN_PAGES << ALIGN_PAGES;
+                let offset = (next as usize % MMAP_BYTES_LEN) >> ALIGN_VHF_OUTPUT_TO_PAGES
+                    << ALIGN_VHF_OUTPUT_TO_PAGES;
                 self.last_tfb32 = next;
                 next_bytes = offset;
                 time_after_mmap_fetch = Instant::now();

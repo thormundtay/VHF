@@ -1,3 +1,4 @@
+use super::consts::MMAP_PAGE_LEN;
 use super::pages::*;
 use super::*;
 use crate::types::RawVHFWord;
