@@ -1,6 +1,6 @@
 //! Interface with VHF, with things such as starting the VHF, reading out from it, closing it.
 
-mod consts;
+mod board_ioctl_consts;
 mod mmap_reader;
 mod pages;
 
@@ -178,7 +178,7 @@ impl VHF {
             return Err(Error::EngineRunning);
         };
 
-        consts::ioctl_start(self.handle).map(|_| ())?;
+        board_ioctl_consts::ioctl_start(self.handle).map(|_| ())?;
         {
             let mut buf_write = BufWriter::new(self.raw_handle.try_clone().map_err(Error::Io)?);
             buf_write.write(b"clockinit; adcinit;").map_err(Error::Io)?;
@@ -218,7 +218,7 @@ impl VHF {
             .write(b"stop; config 0;")
             .map_err(Error::Io)?;
         // Stop hostside USB device.
-        let result = consts::ioctl_end(self.handle).map(|_| ());
+        let result = board_ioctl_consts::ioctl_end(self.handle).map(|_| ());
 
         self.engine_running.store(false, atomic::Ordering::Relaxed);
 
@@ -231,7 +231,7 @@ impl VHF {
     /// Gets the next index to read up to as given by ioctl
     #[inline(always)]
     pub fn ioctl_next(&self) -> Result<libc::c_int> {
-        consts::ioctl_read(self.handle)
+        board_ioctl_consts::ioctl_read(self.handle)
     }
 }
 

@@ -1,3 +1,4 @@
+//! All constants related to the starting and stopping of VHF board.
 use crate::{Error, Result};
 use nix;
 
@@ -25,7 +26,7 @@ nix::ioctl_read_bad! {
 #[inline(always)]
 pub fn ioctl_read(handle: libc::c_int) -> Result<libc::c_int> {
     // 1 is arbitrary
-    Ok(unsafe { usb_ioctl_read(handle, 0 as *mut i32) }.map_err(Error::Ioctl)?)
+    unsafe { usb_ioctl_read(handle, std::ptr::null_mut::<i32>()) }.map_err(Error::Ioctl)
 }
 
 nix::ioctl_write_int_bad! {

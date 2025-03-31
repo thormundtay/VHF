@@ -1,6 +1,6 @@
 //! Map mmap fetched items into Heap-allocated chunks.
 
-/// The individual elements as obtained from [super::consts::usb_ioctl_read].
+// The individual elements as obtained from [super::board_ioctl_consts::ioctl_read].
 use crate::types::RawVHFWord;
 use crate::{Error, Result};
 use std::sync::Arc;

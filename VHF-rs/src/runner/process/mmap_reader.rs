@@ -98,7 +98,7 @@ impl MMapReader {
     /// Gets the next index to read up to as given by ioctl
     #[inline(always)]
     pub fn ioctl_next(&self) -> Result<libc::c_int> {
-        super::consts::ioctl_read(self.handle)
+        super::board_ioctl_consts::ioctl_read(self.handle)
     }
 
     /// With the previous (rounded) bytes to current (rounded) byes, create a lazy iterator for
