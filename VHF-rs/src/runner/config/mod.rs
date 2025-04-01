@@ -33,6 +33,12 @@ pub struct Configs {
     /// The manner by which (I, Q, M) data is stored into the file.
     pub encode: Encode,
 
+    /// This is the dynamic gain (-g)
+    pub gain: Option<u8>,
+    /// This is the hardware filter (-F) used by the FPGA for low pass filtering.
+    pub filter_const: Option<u8>,
+    pub verbosity: u8,
+
     // base_dir // removed because we do not call into ./teststream.exec (or whatever)
     /// Location where files should be written to
     pub save_dir: PathBuf,
@@ -48,6 +54,10 @@ impl Default for Configs {
             skip_num: 0,
             speed: SamplingSpeed::High,
             encode: Encode::Binary,
+
+            gain: None,
+            filter_const: None,
+            verbosity: 0,
 
             save_dir: PathBuf::from("./Data"),
             board: PathBuf::from("/dev/usbhybrid0"),
@@ -104,6 +114,25 @@ impl Configs {
                 .unwrap_or(Configs::default().encode.to_string())
                 .as_str(),
         )?;
+
+        self.gain = utils::if_enabled_value(&config, "Board", "vga_num", |v| v <= 8)?;
+        self.filter_const = utils::if_enabled_value(&config, "Board", "filter_const", |v| v <= 15)?;
+
+        self.verbosity = match config
+            .getuint("Board", "v")
+            .map_err(|e| Error::IniParse(e))?
+        {
+            None => return Err(Error::ini_missing("Board", "v")),
+            Some(t) => {
+                if t <= 5 {
+                    t as u8
+                } else {
+                    return Err(Error::IniParse(
+                        "ini file 'Board - v' out of bounds.".to_string(),
+                    ));
+                }
+            }
+        };
 
         // Section: Paths
         match utils::get_with_ext_interp(&config, "Paths", "save_dir") {
