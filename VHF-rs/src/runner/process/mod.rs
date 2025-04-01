@@ -300,7 +300,7 @@ impl std::iter::Iterator for VHF {
                     .buffer_signal
                     .wait_timeout(mg.lock().unwrap(), time_between_pages)
                     .unwrap();
-                if timeout.1.timed_out() {
+                if !timeout.1.timed_out() {
                     continue 'get_page;
                 }
                 continue;
