@@ -69,7 +69,7 @@ impl VHF {
                 .clone()
                 .into_os_string()
                 .to_str()
-                .ok_or_else(|| Error::ParseEmpty)?,
+                .ok_or(Error::ParseEmpty)?,
         )?; // TODO: OsStr -> &str validation should be done by Config
 
         let time_between_pages: Span = pages::time_between_pages_in_ns(&config.speed)?;
@@ -144,12 +144,12 @@ impl VHF {
     /// For a path representing a device `dev`, such as `/dev/usbhybrid0`, returning the file
     /// handle.
     fn open_dev(dev: &str) -> Result<libc::c_int> {
-        Ok(fcntl::open(
+        fcntl::open(
             dev,
             fcntl::OFlag::O_RDWR,
             nix::sys::stat::Mode::S_IRUSR | nix::sys::stat::Mode::S_IWUSR,
         )
-        .map_err(|e| Error::CIo(e))?)
+        .map_err(Error::CIo)
     }
 
     // We do not want both the parent(main) thread and child thread to have to hold ownership of
@@ -253,8 +253,10 @@ impl std::iter::Iterator for VHF {
     // Transform generator and this VHF, or if should be passed as a parameter.
     //
     // This method should be responsible for only moving the window forward by one.
+    // ?: Anything that calls into VHF.next() should be using .step_by() before passing to the
+    // transformer.
     fn next(&mut self) -> Option<Self::Item> {
-        if self.windows_released as u64 >= self.total_to_read.try_into().unwrap() {
+        if self.windows_released as u64 >= self.total_to_read.into() {
             return None;
         }
 
@@ -314,7 +316,7 @@ impl std::iter::Iterator for VHF {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         // Account for window being slightly different from number of pages being collected.
-        let total: u64 = self.total_to_read.try_into().unwrap();
+        let total: u64 = self.total_to_read.into();
         let lb = total - (self.windows_released as u64);
         let lb = lb as usize;
         (lb, Some(lb + VHF_MMAP_WINDOW_LEN))

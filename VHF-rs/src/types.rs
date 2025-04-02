@@ -15,7 +15,7 @@ impl From<RawVHFWord> for IQMTriplet {
 impl From<&RawVHFWord> for IQMTriplet {
     #[inline(always)]
     fn from(value: &RawVHFWord) -> Self {
-        // Deref &u64 -> u64 is not const.
+        // Deref &u64 -> u64 is not const. Have to otherwise clone to use `raw_to_triplet`.
         let i = (value >> 24) & 0xFFFFFF;
         let i = (i.wrapping_sub((i >> 23) * (1 << 24))) as i32;
         let q = value & 0xFFFFFF;

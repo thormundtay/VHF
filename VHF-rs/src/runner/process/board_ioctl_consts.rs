@@ -15,7 +15,7 @@ nix::ioctl_write_int_bad! {
 
 #[inline]
 pub fn ioctl_start(handle: libc::c_int) -> Result<libc::c_int> {
-    Ok(unsafe { usb_ioctl_start(handle, 0) }.map_err(Error::Ioctl)?)
+    unsafe { usb_ioctl_start(handle, 0) }.map_err(Error::Ioctl)
 }
 
 nix::ioctl_read_bad! {
@@ -36,5 +36,5 @@ nix::ioctl_write_int_bad! {
 
 #[inline]
 pub fn ioctl_end(handle: libc::c_int) -> Result<libc::c_int> {
-    Ok(unsafe { usb_ioctl_end(handle, 0) }.map_err(|x| Error::Ioctl(x))?)
+    unsafe { usb_ioctl_end(handle, 0) }.map_err(Error::Ioctl)
 }

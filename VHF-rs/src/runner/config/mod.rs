@@ -118,10 +118,7 @@ impl Configs {
         self.gain = utils::if_enabled_value(&config, "Board", "vga_num", |v| v <= 8)?;
         self.filter_const = utils::if_enabled_value(&config, "Board", "filter_const", |v| v <= 15)?;
 
-        self.verbosity = match config
-            .getuint("Board", "v")
-            .map_err(|e| Error::IniParse(e))?
-        {
+        self.verbosity = match config.getuint("Board", "v").map_err(Error::IniParse)? {
             None => return Err(Error::ini_missing("Board", "v")),
             Some(t) => {
                 if t <= 5 {

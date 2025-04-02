@@ -101,7 +101,7 @@ impl MMapReader {
     /// With the previous (rounded) bytes to current (rounded) byes, create a lazy iterator for
     /// pushing onto buffer.  
     /// Rounding done must be in accordance with [MMAP_PAGE_LEN]. Note that each [crate::types::RawVHFWord] is 8 bytes.
-    fn get_mmap_iter<'a>(&'a self, prev: usize, next: usize) -> impl Iterator<Item = &'a u64> {
+    fn get_mmap_iter(&self, prev: usize, next: usize) -> impl Iterator<Item = &'_ u64> {
         use bytemuck::try_cast_slice;
         // Bytes rounded to page length should have
         debug_assert!(prev % (8 * MMAP_PAGE_LEN) == 0);

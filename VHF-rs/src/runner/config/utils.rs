@@ -11,7 +11,7 @@ pub trait PythonMath {
 }
 
 /// Regex to check for 2 followed by exponent with arbitrary whitespace.
-const HAS_POW_2_RE: Lazy<Regex> =
+static HAS_POW_2_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"2{1}\s*\*\*\s*(?<expo>\d+)\s*").unwrap());
 /// check if `s` contains any form of `2 ** ` expression.
 fn has_pow_2(s: &str) -> bool {
@@ -21,7 +21,7 @@ fn has_pow_2(s: &str) -> bool {
 impl PythonMath for String {
     fn eval(self) -> Result<evalexpr::Value> {
         log::debug!("[PythonMath::eval] called with self = {:?}", &self);
-        let mut context = HashMapContext::<DefaultNumericTypes>::new();
+        let context = HashMapContext::<DefaultNumericTypes>::new();
         // Replace any 2**n Python expressions as evalexpr crate would coerce into float.
         let to_eval: Result<String> = if has_pow_2(&self) {
             // Check if u32 parse error occurs
@@ -49,7 +49,7 @@ impl PythonMath for String {
         };
         // We let evalexpr handle everything except for powers of 2
         log::debug!("[PythonMath::eval] evaluating on {:?}", &to_eval);
-        let result = evalexpr::eval_with_context(&to_eval.unwrap(), &mut context)
+        let result = evalexpr::eval_with_context(&to_eval.unwrap(), &context)
             .map_err(crate::Error::EvalExpr)?;
         match result {
             Value::Boolean(_) => Err(crate::Error::IniParse(
@@ -87,16 +87,17 @@ where
     let key_enable = &format!("{}_enable", key);
     let map = config.get_map_ref();
 
-    if let None = map
+    if map
         .get(&section.to_ascii_lowercase())
-        .expect(&format!("ini file '{}' section not found.", section))
+        .unwrap_or_else(|| panic!("ini file '{}' section not found.", section))
         .get(key_enable)
+        .is_none()
     {
         return Err(crate::Error::ini_missing(section, key));
     }
     log::debug!("ini file '{section} - {key_enable}' found.");
     // Check if key_enable is boolean
-    if let None = config.getbool(section, key_enable).unwrap() {
+    if config.getbool(section, key_enable).unwrap().is_none() {
         return Err(crate::Error::IniParse(
             "ini file '{section} - {key_enable}' was not boolean.".to_string(),
         ));
@@ -145,7 +146,7 @@ where
 }
 
 // Account for the fact that ExtendedInterpolation is not provided by config
-const EXT_INTERP_RE: Lazy<Regex> =
+static EXT_INTERP_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"\$\{((?<section>\S+):)?(?<key>\S+)\}").unwrap());
 
 /// As [configparser] has yet to implement Basic/Extended Interpolation, we fetch a value and

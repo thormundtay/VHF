@@ -39,7 +39,7 @@ impl PageInner for MmapPage {
     fn inner(&self) -> &[RawVHFWord] {
         match self {
             MmapPage::Empty => &[],
-            MmapPage::Page(x) => (&x).inner(),
+            MmapPage::Page(x) => x.inner(),
         }
     }
 }
