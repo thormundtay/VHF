@@ -4,7 +4,7 @@ use super::consts::MMAP_PAGE_LEN;
 // The individual elements as obtained from [super::board_ioctl_consts::ioctl_read].
 use crate::types::RawVHFWord;
 use crate::{Error, Result};
-use std::sync::Arc;
+use std::{ops::Deref, sync::Arc};
 
 /// All possible pages placed in to the buffer of [super::VHF].
 #[derive(Clone)]
@@ -24,22 +24,12 @@ pub enum MmapPage {
 /// This is used to allocate from VHF Memmap raw bytes onto the Heap.
 pub type Page = Arc<[RawVHFWord; MMAP_PAGE_LEN]>;
 
-/// Convenience methods for reaching into [MMapPage] or [Page].
-pub(crate) trait PageInner {
-    fn inner(&self) -> &[RawVHFWord];
-}
-
-impl PageInner for Page {
-    fn inner(&self) -> &[RawVHFWord] {
-        self.as_ref()
-    }
-}
-
-impl PageInner for MmapPage {
-    fn inner(&self) -> &[RawVHFWord] {
+impl Deref for MmapPage {
+    type Target = [RawVHFWord];
+    fn deref(&self) -> &Self::Target {
         match self {
             MmapPage::Empty => &[],
-            MmapPage::Page(x) => x.inner(),
+            MmapPage::Page(x) => (*x).as_slice(),
         }
     }
 }

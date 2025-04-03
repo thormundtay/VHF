@@ -3,7 +3,7 @@ use super::pages::*;
 use super::*;
 use crate::types::RawVHFWord;
 
-use std::matches;
+use std::{matches, ops::Deref};
 use tempfile::{NamedTempFile, TempDir};
 use test_log::test;
 
@@ -96,7 +96,7 @@ fn vhf_drops_arc() {
         first_window.into_iter().for_each(|page| {
             assert!(matches!(page, MmapPage::Page(_)));
             match page {
-                MmapPage::Page(x) => assert_eq!(x.inner(), &[0; MMAP_PAGE_LEN]),
+                MmapPage::Page(x) => assert_eq!(x.deref(), &[0; MMAP_PAGE_LEN]),
                 _ => unreachable!(),
             };
         });
@@ -135,12 +135,12 @@ fn correct_window_linear() {
                 .try_into()
                 .unwrap();
             assert_eq!(
-                *window.first().unwrap().inner().first().unwrap(),
+                *window.first().unwrap().deref().first().unwrap(),
                 expected_first
             );
 
             assert_eq!(
-                *window.last().unwrap().inner().last().unwrap(),
+                *window.last().unwrap().deref().last().unwrap(),
                 expected_last,
             );
         } else {
@@ -152,8 +152,8 @@ fn correct_window_linear() {
     if let Some(x) = actual.clone() {
         log::warn!(
             "Got page from vhf where none was expected: page[0]/MMAP_PAGE_LEN = {}; page[-1] = {}",
-            x.1.first().unwrap().inner().first().unwrap() / (MMAP_PAGE_LEN as RawVHFWord),
-            x.1.last().unwrap().inner().last().unwrap()
+            x.1.first().unwrap().deref().first().unwrap() / (MMAP_PAGE_LEN as RawVHFWord),
+            x.1.last().unwrap().deref().last().unwrap()
         );
     }
     assert!(actual.is_none());
