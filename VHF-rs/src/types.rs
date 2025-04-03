@@ -44,9 +44,9 @@ impl From<&Polar> for IQMTriplet {
         let (m, rem_phase) = (value.phase / TWO_PI, value.phase % TWO_PI);
         let (i, q) = (
             // Despite the name, I(n-phase) acts as y-coordinate across all definitions.
-            (value.radius * rem_phase.sin()) as i32,
+            (value.radius * rem_phase.sin()).round() as i32,
             // Despite the name Q(uadrature-phase) act as x-coordinate across all definitions.
-            (value.radius * rem_phase.cos()) as i32,
+            (value.radius * rem_phase.cos()).round() as i32,
         );
 
         IQMTriplet(i, q, m.round() as i16)
@@ -93,7 +93,7 @@ impl From<&Polar> for RawVHFWord {
 impl From<Polar> for RawVHFWord {
     #[inline]
     fn from(value: Polar) -> Self {
-        value.into()
+        (&value).into()
     }
 }
 
@@ -207,6 +207,19 @@ mod tests {
                     polar.projected_phase(),
                     epsilon = 2. * (1. / radius).atan()
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn polar_to_from_triplet() {
+        for i in (0..(1 << 13)).into_iter().step_by(2000) {
+            for q in (0..(1 << 13)).into_iter().step_by(3000) {
+                for m in (0..(1 << 10)).into_iter().step_by(100) {
+                    let triplet = IQMTriplet(i, q, m);
+                    let polar: Polar = triplet.into();
+                    assert_eq!(triplet, polar.into());
+                }
             }
         }
     }
