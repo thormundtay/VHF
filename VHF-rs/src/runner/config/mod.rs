@@ -71,19 +71,19 @@ impl Configs {
         let mut result = Self::default();
         // Take the string parsed out of configparser to populate all the relevant properties.
         if file.is_some() {
-            Self::from_file(&mut result, file.unwrap().as_path())?;
+            Self::with_file(&mut result, file.unwrap().as_path())?;
         }
         Ok(result)
     }
 
-    pub fn from_file(&mut self, file: &Path) -> Result<()> {
+    pub fn with_file(&mut self, file: &Path) -> Result<()> {
         let mut config = ini::Ini::new();
         config.load(file).unwrap();
-        self.from_config(config)
+        self.with_config(config)
     }
 
     // Assumes ExtendedInterpolation from Python's ConfigParser
-    fn from_config(&mut self, config: ini::Ini) -> Result<()> {
+    fn with_config(&mut self, config: ini::Ini) -> Result<()> {
         // Section: Board
         if let evalexpr::Value::Int(num_samples) = config
             .get("Board", "num_samples")
