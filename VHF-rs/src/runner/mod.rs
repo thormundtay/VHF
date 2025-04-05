@@ -2,6 +2,11 @@
 mod config;
 pub use config::Configs as Config;
 
+/// Map and Reduce are subsets of Folds.  
+/// This provides all methods necessary for folding on ChunkedWindow Stream that is [VHF]'s
+/// Iterator.
+pub mod fold;
+
 /// Used to run the board
 mod process;
 pub use process::*;

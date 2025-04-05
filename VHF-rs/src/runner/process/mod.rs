@@ -1,9 +1,9 @@
 //! Interface with VHF, with things such as starting the VHF, reading out from it, closing it.
 
 mod board_ioctl_consts;
-pub(self) mod consts;
+pub(super) mod consts;
 mod mmap_reader;
-mod pages;
+pub(super) mod pages;
 
 use super::Config;
 use crate::{Error, Result};

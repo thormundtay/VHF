@@ -3,7 +3,7 @@
 /// This is the number of [crate::types::RawVHFWord] in one (kernel-sized) page emitted from the
 /// MMap onto the heap.  
 /// See [super::pages] in particular.
-pub(super) const MMAP_PAGE_LEN: usize = 512;
+pub(in crate::runner) const MMAP_PAGE_LEN: usize = 512;
 
 // NOTE: HARDCODED! Currently used to determine the size of window being passed out from VHF.next()
 // for mathematical transformation. This might need to increase if transforms really need to peer
@@ -11,4 +11,4 @@ pub(super) const MMAP_PAGE_LEN: usize = 512;
 /// The size of [item] in Iterator of [super::VHF].
 ///
 /// [item]: super::VHF#impl-Iterator-for-VHF
-pub(super) const VHF_MMAP_WINDOW_LEN: usize = 20;
+pub(in crate::runner) const VHF_MMAP_WINDOW_LEN: usize = 20;
