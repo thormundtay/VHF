@@ -256,7 +256,7 @@ impl std::iter::Iterator for VHF {
     // ?: Anything that calls into VHF.next() should be using .step_by() before passing to the
     // transformer.
     fn next(&mut self) -> Option<Self::Item> {
-        if self.windows_released as u64 >= self.total_to_read.into() {
+        if self.windows_released as u64 > self.total_to_read.into() {
             return None;
         }
 

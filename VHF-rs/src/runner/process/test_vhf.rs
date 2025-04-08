@@ -108,9 +108,9 @@ fn vhf_drops_arc() {
 
 /// We check that the VHF struct is yielding the correct windows with next.
 #[test]
-fn correct_window_linear() {
+fn next_window_linear() {
     let debug_vhf_total_len = 5;
-    let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
+    let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN - 1;
     let mut debug_vhf = debug_vhf_new(NonZeroU64::new(debug_vhf_total_len as u64).unwrap());
 
     // Define the signal that we are testing for. (Use linear so its easier to determine.)
