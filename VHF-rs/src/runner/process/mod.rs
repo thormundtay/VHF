@@ -317,7 +317,7 @@ impl std::iter::Iterator for VHF {
     fn size_hint(&self) -> (usize, Option<usize>) {
         // Account for window being slightly different from number of pages being collected.
         let total: u64 = self.total_to_read.into();
-        let lb = total - (self.windows_released as u64);
+        let lb = total.saturating_sub(self.windows_released as u64);
         let lb = lb as usize;
         (lb, Some(lb + VHF_MMAP_WINDOW_LEN))
     }
