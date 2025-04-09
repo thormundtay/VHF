@@ -13,9 +13,9 @@ use std::{cmp::Ordering, ops::Deref, rc::Rc};
 #[derive(Clone)]
 pub(super) struct StreamFoldParameters {
     /// This the function that has to be applied to every chunked window from [super::VHF].next.
-    func: Rc<dyn Fn(<super::VHF as Iterator>::Item) -> WriteBlock>,
+    pub func: Rc<dyn Fn(<super::VHF as Iterator>::Item) -> WriteBlock>,
     /// This is the number of windows to step by each time prior to par_iter.
-    step_by: usize,
+    pub step_by: usize,
 }
 
 /// Determines the mode of operation on [super::VHF].next.

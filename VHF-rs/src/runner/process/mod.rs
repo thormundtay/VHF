@@ -325,3 +325,5 @@ impl std::iter::Iterator for VHF {
 
 #[cfg(test)]
 mod test_vhf;
+#[cfg(test)]
+mod test_vhf_step_fold;

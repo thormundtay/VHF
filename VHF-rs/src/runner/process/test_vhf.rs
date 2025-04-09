@@ -8,7 +8,7 @@ use tempfile::{NamedTempFile, TempDir};
 use test_log::test;
 
 // Create a VHF struct with false child thread "map_reader".
-fn debug_vhf_new(total_to_read: NonZeroU64) -> VHF {
+pub(super) fn debug_vhf_new(total_to_read: NonZeroU64) -> VHF {
     let tmp_dir = TempDir::new().expect("Could not create temp_dir");
     let raw_tmp_file =
         NamedTempFile::new_in(tmp_dir.into_path()).expect("Could not create temp file");
@@ -47,7 +47,7 @@ fn debug_vhf_new(total_to_read: NonZeroU64) -> VHF {
 }
 
 /// Create [pages::Page]s from slice.
-fn create_arc_pages(data: &[RawVHFWord]) -> Vec<MmapPage> {
+pub(super) fn create_arc_pages(data: &[RawVHFWord]) -> Vec<MmapPage> {
     let data_len = data.len();
     if data_len % MMAP_PAGE_LEN != 0 {
         log::warn!("create_arc_pages did not receive an integer multiple of MMAP_PAGE_LEN");

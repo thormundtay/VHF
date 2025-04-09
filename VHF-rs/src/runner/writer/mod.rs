@@ -7,7 +7,7 @@ use crate::Result;
 
 /// This is the data that is passed into what will eventually be written into File.
 pub(super) struct WriteBlock {
-    data: Vec<RawVHFWord>,
+    pub data: Vec<RawVHFWord>,
     /// None type is for cases where writers aren't expected to check that m_overflow_idx exists.
     m_overflow_idx: Option<Vec<usize>>,
     /// None type is for cases where writers aren't expected to check that m_overflow_idx exists.

@@ -101,8 +101,8 @@ impl From<Polar> for RawVHFWord {
 /// Wrapped here denotes being bound within i16::MIN to i16::MAX for m.
 #[derive(Copy, Clone, Debug)]
 pub struct Polar {
-    radius: f64,
-    phase: f64,
+    pub radius: f64,
+    pub phase: f64,
 }
 
 impl Polar {
