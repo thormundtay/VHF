@@ -6,6 +6,7 @@ use super::super::types::RawVHFWord;
 use crate::Result;
 
 /// This is the data that is passed into what will eventually be written into File.
+#[derive(Clone)]
 pub(super) struct WriteBlock {
     pub data: Vec<RawVHFWord>,
     /// None type is for cases where writers aren't expected to check that m_overflow_idx exists.
@@ -63,5 +64,24 @@ impl WriteBlock {
                 .get_or_insert(Vec::with_capacity(512))
                 .push(val);
         });
+    }
+
+    /// Gets (idx, overflow-sign) of WriteBlock.
+    pub(super) fn overflow(self) -> impl Iterator<Item = (usize, i8)> {
+        if self.m_overflow_idx.is_none() {
+            return Vec::new().into_iter().zip(Vec::new().into_iter());
+        } else {
+            return self
+                .m_overflow_idx
+                // .clone()
+                .unwrap()
+                .into_iter()
+                .zip(
+                    self.m_overflow_value
+                        //.clone()
+                        .unwrap()
+                        .into_iter(),
+                );
+        }
     }
 }
