@@ -1,5 +1,4 @@
-use std::f64::consts::PI;
-const TWO_PI: f64 = 2. * PI;
+use std::f64::consts::{PI, TAU};
 
 /// This is one word of VHF data.
 pub type RawVHFWord = u64;
@@ -41,7 +40,10 @@ const fn raw_to_triplet(value: RawVHFWord) -> IQMTriplet {
 impl From<&Polar> for IQMTriplet {
     #[inline]
     fn from(value: &Polar) -> Self {
-        let (m, rem_phase) = (value.phase / TWO_PI, value.phase % TWO_PI);
+        let (m, rem_phase) = (
+            ((value.phase / TAU).round() as i64 & 0xFFFF) as i16,
+            value.phase % TAU,
+        );
         let (i, q) = (
             // Despite the name, I(n-phase) acts as y-coordinate across all definitions.
             (value.radius * rem_phase.sin()).round() as i32,
@@ -49,7 +51,7 @@ impl From<&Polar> for IQMTriplet {
             (value.radius * rem_phase.cos()).round() as i32,
         );
 
-        IQMTriplet(i, q, m.round() as i16)
+        IQMTriplet(i, q, m)
     }
 }
 
@@ -111,13 +113,13 @@ impl Polar {
     fn projected_phase(&self) -> f64 {
         let unwrapped = self.phase;
         if unwrapped >= PI {
-            let t = (unwrapped - PI) / TWO_PI;
+            let t = (unwrapped - PI) / TAU;
             let t = t.floor() + 1.;
-            -(t.mul_add(TWO_PI, -unwrapped))
+            -(t.mul_add(TAU, -unwrapped))
         } else if unwrapped < -PI {
-            let u = (unwrapped + PI) / TWO_PI;
+            let u = (unwrapped + PI) / TAU;
             let u = u.ceil();
-            u.mul_add(TWO_PI, unwrapped)
+            u.mul_add(TAU, unwrapped)
         } else {
             unwrapped
         }
@@ -144,7 +146,7 @@ impl From<&IQMTriplet> for Polar {
         let &IQMTriplet(i, q, m) = value;
         Polar {
             radius: (i as f64).hypot(q as f64),
-            phase: (m as f64).mul_add(2. * PI, (i as f64).atan2(q as f64)),
+            phase: (m as f64).mul_add(TAU, (i as f64).atan2(q as f64)),
         }
     }
 }
@@ -200,7 +202,7 @@ mod tests {
                 let triplet: IQMTriplet = (&polar).into();
                 let result: Polar = triplet.into();
 
-                assert!(triplet.2.abs_diff((phase / TWO_PI) as i16) <= 1);
+                assert!(triplet.2.abs_diff((phase / TAU) as i16) <= 1);
                 assert!((result.radius - polar.radius).abs() <= 1.5);
                 assert_relative_eq!(
                     result.projected_phase(),
