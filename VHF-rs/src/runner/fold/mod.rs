@@ -102,7 +102,7 @@ impl StreamFold {
                         Ordering::Equal => unreachable!(),
                     }
                 } else {
-                    Some((idx, 0))
+                    None
                 }
             }
 
