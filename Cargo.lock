@@ -19,7 +19,6 @@ dependencies = [
  "mmap-rs",
  "nix 0.29.0",
  "num-traits",
- "once_cell",
  "regex",
  "tempfile",
  "test-log",

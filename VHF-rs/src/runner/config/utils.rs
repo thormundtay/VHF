@@ -1,8 +1,8 @@
 use crate::Result;
 use configparser::ini;
 use evalexpr::{DefaultNumericTypes, HashMapContext, Value};
-use once_cell::sync::Lazy;
 use regex::{Captures, Regex};
+use std::sync::LazyLock;
 
 /// Used to run `eval` on Python strings, specific to getting only Math types
 pub trait PythonMath {
@@ -11,8 +11,8 @@ pub trait PythonMath {
 }
 
 /// Regex to check for 2 followed by exponent with arbitrary whitespace.
-static HAS_POW_2_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"2{1}\s*\*\*\s*(?<expo>\d+)\s*").unwrap());
+static HAS_POW_2_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"2{1}\s*\*\*\s*(?<expo>\d+)\s*").unwrap());
 /// check if `s` contains any form of `2 ** ` expression.
 fn has_pow_2(s: &str) -> bool {
     HAS_POW_2_RE.is_match(s)
@@ -146,8 +146,8 @@ where
 }
 
 // Account for the fact that ExtendedInterpolation is not provided by config
-static EXT_INTERP_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"\$\{((?<section>\S+):)?(?<key>\S+)\}").unwrap());
+static EXT_INTERP_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\$\{((?<section>\S+):)?(?<key>\S+)\}").unwrap());
 
 /// As [configparser] has yet to implement Basic/Extended Interpolation, we fetch a value and
 /// interpolate before storing in the struct.
