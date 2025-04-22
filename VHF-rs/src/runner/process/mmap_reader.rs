@@ -3,11 +3,11 @@
 //! The intended entry point for [super::VHF] is to spawn [MMapReader] into a child thread through
 //! the use of [mmap_thread].
 
-use super::{consts::MMAP_PAGE_LEN, pages::MmapPage, MMAP_BYTES_LEN};
+use super::{consts::MMAP_PAGE_LEN, pages::MmapPage, DEQUE_CAP, MMAP_BYTES_LEN};
 use crate::{Error, Result};
+use heapless::Deque;
 use jiff::Span;
 use mmap_rs::Mmap;
-use std::collections::VecDeque;
 use std::hint::spin_loop;
 use std::num::NonZeroU64;
 use std::sync::{
@@ -36,7 +36,7 @@ pub(super) struct MMapReader {
     /// iterator.
     // Strongly note that MMapPages are therefore fragmented with respect to each other, but we eat
     // this cost first.
-    transfer_buffer: Arc<Mutex<VecDeque<MmapPage>>>,
+    transfer_buffer: Arc<Mutex<Deque<MmapPage, DEQUE_CAP>>>,
     /// This is the tfb32 value from the last ioctl.
     last_tfb32: libc::c_int,
     /// This is the last index being read from.
@@ -60,7 +60,7 @@ impl MMapReader {
         mmap: Mmap,
         engine_running: Arc<AtomicBool>,
         transfer_buffer_signal: Arc<Condvar>,
-        transfer_buffer: Arc<Mutex<VecDeque<MmapPage>>>,
+        transfer_buffer: Arc<Mutex<Deque<MmapPage, DEQUE_CAP>>>,
         time_between_mmap_page: &Span,
         time_between_stream_resume: Duration,
         next_collect_time: Arc<RwLock<Instant>>,
@@ -168,7 +168,7 @@ impl MMapReader {
                             .map(MmapPage::Page)
                             .for_each(|x| {
                                 num_pages += 1;
-                                (*inner).push_back(x);
+                                (*inner).push_back(x).expect("Failed to push back.");
                             });
 
                         // Update counter
@@ -225,7 +225,7 @@ pub(super) fn mmap_thread(
     mmap: Mmap,
     engine: Arc<AtomicBool>,
     buffer_signal: Arc<Condvar>,
-    buffer: Arc<Mutex<VecDeque<MmapPage>>>,
+    buffer: Arc<Mutex<Deque<MmapPage, DEQUE_CAP>>>,
     time_between_mmap_page: &Span,
     time_between_stream_resume: Duration,
     next_collect_time: Arc<RwLock<Instant>>,

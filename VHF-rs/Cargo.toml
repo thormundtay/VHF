@@ -14,6 +14,7 @@ bytemuck = { version = "1.22.0" }
 byteorder = "1.5.0"
 configparser = { version = "3.1.0", default-features = false }
 evalexpr = { version = "12.0.2", features = ["regex",] }
+heapless = { version = "0.8.0" }
 itertools = { version = "0.14.0" }
 jiff = { version = "0.2.6", features = ["alloc", "serde",] }
 libc = { version = "0.2" }

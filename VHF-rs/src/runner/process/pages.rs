@@ -7,7 +7,7 @@ use crate::{Error, Result};
 use std::{ops::Deref, sync::Arc};
 
 /// All possible pages placed in to the buffer of [super::VHF].
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum MmapPage {
     /// For the very beginning of the stream being pulled out from the MMap, there is no "previous"
     /// page before the current page, and so, any function that works on the window from

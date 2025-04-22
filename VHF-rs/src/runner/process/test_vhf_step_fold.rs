@@ -48,7 +48,7 @@ fn stepped_nonoverlapping_identity_a() {
         );
         create_arc_pages(&tmp_signal)
             .into_iter()
-            .for_each(|x| buf.push_back(x));
+            .for_each(|x| buf.push_back(x).expect("Push back failed."));
     } else {
         log::error!("Could not get log in debug_vhf.buffer");
         panic!();
@@ -108,7 +108,7 @@ fn stepped_nonoverlapping_identity_b() {
         );
         create_arc_pages(&tmp_signal)
             .into_iter()
-            .for_each(|x| buf.push_back(x));
+            .for_each(|x| buf.push_back(x).expect("Push back failed."));
     } else {
         log::error!("Could not get log in debug_vhf.buffer");
         panic!();
@@ -161,7 +161,7 @@ fn stepped_overlapping_identity_a() {
     // Add signal into pages.
     // We now add data into the buffer.
     if let Ok(mut buf) = debug_vhf.buffer.lock() {
-        buf.push_back(MmapPage::Empty);
+        buf.push_back(MmapPage::Empty).expect("Push back failed.");
         let tmp_signal: Vec<_> = signal.clone().map(|x| x.into()).collect();
         log::info!(
             "Number of pages placed into buffer = {}",
@@ -169,7 +169,7 @@ fn stepped_overlapping_identity_a() {
         );
         create_arc_pages(&tmp_signal)
             .into_iter()
-            .for_each(|x| buf.push_back(x));
+            .for_each(|x| buf.push_back(x).expect("Push back failed."));
     } else {
         log::error!("Could not get log in debug_vhf.buffer");
         panic!();
@@ -234,7 +234,7 @@ fn stepped_overlapping_identity_b() {
     // Add signal into pages.
     // We now add data into the buffer.
     if let Ok(mut buf) = debug_vhf.buffer.lock() {
-        buf.push_back(MmapPage::Empty);
+        buf.push_back(MmapPage::Empty).expect("Push back failed.");
         let tmp_signal: Vec<_> = signal.clone().map(|x| x.into()).collect();
         log::info!(
             "Number of pages placed into buffer = {}",
@@ -242,7 +242,7 @@ fn stepped_overlapping_identity_b() {
         );
         create_arc_pages(&tmp_signal)
             .into_iter()
-            .for_each(|x| buf.push_back(x));
+            .for_each(|x| buf.push_back(x).expect("Push back failed."));
     } else {
         log::error!("Could not get log in debug_vhf.buffer");
         panic!();

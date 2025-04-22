@@ -3,6 +3,7 @@ use super::pages::*;
 use super::*;
 use crate::types::RawVHFWord;
 
+use heapless::Deque;
 use std::{matches, ops::Deref};
 use tempfile::{NamedTempFile, TempDir};
 use test_log::test;
@@ -27,7 +28,7 @@ pub(super) fn debug_vhf_new(total_to_read: NonZeroU64) -> VHF {
         .expect("map_reader could not be spawned.");
     let engine_running = Arc::new(AtomicBool::new(false));
     let buffer_signal = Arc::new(Condvar::new());
-    let buffer = Arc::new(Mutex::new(VecDeque::new()));
+    let buffer = Arc::new(Mutex::new(Deque::new()));
     let time_between_pages = Span::new();
     let wake_mmap = Arc::new(RwLock::new(Instant::now()));
 
@@ -79,11 +80,14 @@ fn vhf_drops_arc() {
 
     // We now add data into the buffer.
     if let Ok(mut buf) = debug_vhf.buffer.lock() {
-        buf.push_back(MmapPage::Page(testing_page));
+        buf.push_back(MmapPage::Page(testing_page))
+            .expect("Push back failed.");
         (1..total_window_len).for_each(|_| {
             create_arc_pages(&[0; MMAP_PAGE_LEN])
                 .into_iter()
-                .for_each(|x| buf.push_back(x))
+                .for_each(|x| {
+                    buf.push_back(x).expect("Push back failed");
+                })
         });
     } else {
         log::error!("Could not get log in debug_vhf.buffer");
@@ -122,7 +126,7 @@ fn next_window_linear() {
         let tmp_signal: Vec<_> = signal.clone().collect();
         create_arc_pages(&tmp_signal)
             .into_iter()
-            .for_each(|x| buf.push_back(x));
+            .for_each(|x| buf.push_back(x).expect("Push back failed."));
     } else {
         log::error!("Could not get log in debug_vhf.buffer");
         panic!();

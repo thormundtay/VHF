@@ -8,13 +8,13 @@ pub(super) mod pages;
 use super::Config;
 use crate::{Error, Result};
 use consts::VHF_MMAP_WINDOW_LEN;
+use heapless::Deque;
 use itertools::Itertools;
 use jiff::Span;
 use mmap_reader::mmap_thread;
 use mmap_rs::Mmap;
 use nix::fcntl;
 use pages::MmapPage;
-use std::collections::VecDeque;
 use std::io::{BufWriter, Write};
 use std::num::NonZeroU64;
 use std::sync::{
@@ -26,7 +26,7 @@ use std::time::Instant;
 
 /// This is the size in bytes of the Mmap that is backed by the VHF device.
 const MMAP_BYTES_LEN: usize = 1 << 22;
-/// The size of the first continuous ring buffer that is VecDeque.
+/// The size of the only continuous ring buffer that is [heapless::Deque].
 const DEQUE_CAP: usize = 256;
 
 /// Everything necessary to ensure the lifetime of pulling memory out from the VHF for its runtime
@@ -48,7 +48,7 @@ pub struct VHF {
     /// buffer is a local mirror of Mmap that is intended for the likes of SlidingWindow
     /// [itertools::tuple_windows] and par_map, which has more Rust Semantics than reading straight
     /// out of a Mmap.
-    buffer: Arc<Mutex<VecDeque<MmapPage>>>,
+    buffer: Arc<Mutex<Deque<MmapPage, DEQUE_CAP>>>,
     /// This is the amount of time between any two pages. Used for determining other timings.
     time_between_pages: Span,
     /// Expected time when to next wake up mmap_reader thread.
@@ -86,9 +86,11 @@ impl VHF {
             unsafe { std::fs::File::from_raw_fd(handle) }
         };
         let buffer = {
-            let mut buffer = VecDeque::with_capacity(DEQUE_CAP);
+            let mut buffer = Deque::new();
             // WARN: Number of Empty pages should be given by the transform. Currently hardcoded.
-            buffer.push_back(MmapPage::Empty);
+            buffer
+                .push_back(MmapPage::Empty)
+                .expect("Failed to push back.");
             Arc::new(Mutex::new(buffer))
         };
         let buffer_signal = Arc::new(Condvar::new()); // merge into buffer?
