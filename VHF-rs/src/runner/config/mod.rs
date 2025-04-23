@@ -158,4 +158,17 @@ impl Configs {
     pub fn sampling_frequency(&self) -> f64 {
         self.speed.base_sampling_freq() as f64 / (1. + self.skip_num as f64)
     }
+
+    /// This determines the time difference the first data point of multiple files.
+    pub fn file_timespan(&self) -> jiff::Span {
+        // In case there are drifts...
+        log::info!(
+            "Timespan of one file in nanoseconds = {}",
+            1e9 / self.sampling_frequency()
+        );
+        self.num_samples as i64
+            * jiff::Span::new()
+                .try_nanoseconds((1e9 / self.sampling_frequency()).round() as i64)
+                .unwrap()
+    }
 }
