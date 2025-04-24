@@ -5,7 +5,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug)]
 pub enum Error {
-    EvalExpr(evalexpr::EvalexprError),
+    EvalExpr(String),
     IniParse(String),
     IniMissing(String),
     ParseEmpty,
@@ -41,5 +41,11 @@ impl Error {
 
     pub fn ioctl_call(reason: &str) -> Self {
         Error::IoctlCall(format!("Calling ioctl had error: '{reason}'"))
+    }
+}
+
+impl Into<Error> for evalexpr::EvalexprError {
+    fn into(self) -> Error {
+        Error::EvalExpr(self.to_string())
     }
 }

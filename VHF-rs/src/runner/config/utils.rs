@@ -49,8 +49,8 @@ impl PythonMath for String {
         };
         // We let evalexpr handle everything except for powers of 2
         log::debug!("[PythonMath::eval] evaluating on {:?}", &to_eval);
-        let result = evalexpr::eval_with_context(&to_eval.unwrap(), &context)
-            .map_err(crate::Error::EvalExpr)?;
+        let result =
+            evalexpr::eval_with_context(&to_eval.unwrap(), &context).map_err(|e| e.into())?;
         match result {
             Value::Boolean(_) => Err(crate::Error::IniParse(
                 "Could not cast into numeric from Boolean".to_string(),
