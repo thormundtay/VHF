@@ -24,6 +24,9 @@ pub struct Configs {
     /// For a single continuous file, this is the number of samples expected to be at least within
     /// the file.
     pub num_samples: usize,
+    /// This is the number of continuous files is expected to run without calling USB_START_ENGINE
+    /// again.
+    pub num_files: usize,
     /// This value (known as "-s skipnum") is passed into the FPGA for decimation. Adding 1 to it
     /// yields the decimation factor by the FPGA. Valid in 0..=65535.
     pub skip_num: u16,
@@ -51,6 +54,7 @@ impl Default for Configs {
     fn default() -> Self {
         Self {
             num_samples: 0,
+            num_files: 1,
             skip_num: 0,
             speed: SamplingSpeed::High,
             encode: Encode::Binary,
@@ -93,6 +97,7 @@ impl Configs {
             self.num_samples = usize::try_from(num_samples)
                 .map_err(|_| Error::ini_coerce("Board", "num_samples", "usize"))?
         };
+        // num_files todo!
         if let evalexpr::Value::Int(skip_num) = config
             .get("Board", "skip_num")
             .unwrap_or("0".to_string())
