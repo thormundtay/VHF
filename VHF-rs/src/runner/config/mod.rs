@@ -7,6 +7,8 @@ pub(crate) mod typedef;
 use crate::{Error, Result};
 use configparser::ini;
 use std::{
+    collections::HashMap,
+    ffi::CString,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -42,6 +44,9 @@ pub struct Configs {
     pub filter_const: Option<u8>,
     pub verbosity: u8,
 
+    /// Other information about the phasemeter not related to the operation of the board.
+    pub phasemeter_kwargs: HashMap<CString, CString>,
+
     // base_dir // removed because we do not call into ./teststream.exec (or whatever)
     /// Location where files should be written to
     pub save_dir: PathBuf,
@@ -62,6 +67,8 @@ impl Default for Configs {
             gain: None,
             filter_const: None,
             verbosity: 0,
+
+            phasemeter_kwargs: HashMap::new(),
 
             save_dir: PathBuf::from("./Data"),
             board: PathBuf::from("/dev/usbhybrid0"),
@@ -135,6 +142,9 @@ impl Configs {
                 }
             }
         };
+
+        // Section: Phasemeter details
+        // TODO!
 
         // Section: Paths
         match utils::get_with_ext_interp(&config, "Paths", "save_dir") {
