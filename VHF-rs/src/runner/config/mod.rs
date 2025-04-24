@@ -186,4 +186,57 @@ impl Configs {
                 .try_nanoseconds((1e9 / self.sampling_frequency()).round() as i64)
                 .unwrap()
     }
+
+    /// This is a string representation of what the C variant would have received from the command
+    /// line. This primarily is used just to keep track of experiment properties.
+    pub fn details(&self) -> String {
+        let mut result = Vec::with_capacity(16);
+
+        result.push("-U".to_string());
+        result.push(self.board.clone().into_os_string().into_string().unwrap());
+
+        result.push("-q".to_string());
+        result.push(self.num_samples.to_string());
+
+        result.push("-s".to_string());
+        result.push(self.skip_num.to_string());
+
+        result.push("-".to_string() + &self.speed.to_string());
+        result.push("-".to_string() + &self.encode.to_string());
+
+        if let Some(filter_const) = self.filter_const {
+            result.push("-F".to_string());
+            result.push(filter_const.to_string());
+        }
+
+        if let Some(gain_const) = self.gain {
+            result.push("-G".to_string());
+            result.push(gain_const.to_string());
+        }
+
+        result.push("-v".to_string());
+        result.push(self.verbosity.to_string());
+
+        result.push("-o".to_string());
+        result.push(self.filename());
+
+        result.join(" ")
+    }
+
+    /// This is a string representation of the filename after the timestamp as in the filesystem.
+    pub fn filename(&self) -> String {
+        let s: Vec<String> = self
+            .phasemeter_kwargs
+            .iter()
+            .map(|(a, b)| {
+                [
+                    a.clone().into_string().unwrap(),
+                    b.clone().into_string().unwrap(),
+                ]
+                .join("_")
+                .to_string()
+            })
+            .collect();
+        s.join("_")
+    }
 }
