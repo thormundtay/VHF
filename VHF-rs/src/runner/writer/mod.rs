@@ -3,11 +3,11 @@
 // mod v2_writer;
 
 use super::super::types::RawVHFWord;
-use crate::Result;
+use crate::{runner::Config, Result};
 
 /// This is the data that is passed into what will eventually be written into File.
 #[derive(Clone)]
-pub(super) struct WriteBlock {
+pub struct WriteBlock {
     pub data: Vec<RawVHFWord>,
     /// None type is for cases where writers aren't expected to check that m_overflow_idx exists.
     m_overflow_idx: Option<Vec<usize>>,
@@ -84,4 +84,24 @@ impl WriteBlock {
                 );
         }
     }
+}
+
+/// Struct which implement the following trait will consume some &\[u8;8\] to be written into the
+/// file of desired type. The struct will transparently handle writing into a new file, with
+/// appropriate header information.
+pub trait VHFWriter {
+    /// Creates an object that allows for writing of data processed out of [super::process::VHF].
+    /// Whilst still working out if [crate::runner::Config] contains enough information about the
+    /// runtime, the `main()` function should instead be responsible for determining the time by
+    /// which the first data point is being written to file. This means that data points being
+    /// dropped in processing should be accounted for.
+    fn new(config: &Config, start_time: jiff::Zoned) -> Self;
+
+    /// Processed or otherwise, write to the intended file the data portion.
+    /// This method also silently handles dealing with any header manipulation that occurs from
+    /// writing data if relevant
+    fn write_data(&mut self, words: WriteBlock) -> Result<()>;
+
+    /// Flush.
+    fn close(&mut self) -> Result<()>;
 }
