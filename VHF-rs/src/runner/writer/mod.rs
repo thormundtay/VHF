@@ -1,9 +1,15 @@
 // mod netcdf_writer;
-// mod v1_writer;
+mod v1_writer;
 // mod v2_writer;
 
 use super::super::types::RawVHFWord;
 use crate::{runner::Config, Result};
+pub use v1_writer::V1Writer;
+
+/// In the event that the [VHFWriter] receives less than this amount of data, no file will be
+/// written. This is particularly necessary for when a trailing amount of data is created but just
+/// by a tiny bit more than the user specification.
+pub(super) const FILE_LAZY_LEN: usize = 1 << 13;
 
 /// This is the data that is passed into what will eventually be written into File.
 #[derive(Clone)]
