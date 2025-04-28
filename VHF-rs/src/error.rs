@@ -18,6 +18,7 @@ pub enum Error {
     EngineRunning,
     EngineStopped,
     Jiff(jiff::Error),
+    InternalInconsistency,
 }
 
 impl error::Error for Error {}

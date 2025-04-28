@@ -4,7 +4,7 @@ use super::{VHFWriter, FILE_LAZY_LEN};
 use crate::{runner::Config, types::RawVHFWord, Error, Result};
 use jiff::{Span, Zoned};
 use std::{
-    fs::File,
+    fs::{File, OpenOptions},
     io::BufWriter,
     path::PathBuf,
 };
@@ -56,5 +56,49 @@ impl VHFWriter for V1Writer {
 
     fn close(&mut self) -> Result<()> {
         todo!()
+    }
+}
+
+impl V1Writer {
+    /// Tries to open a file in the specified location with the required name. Fails if file
+    /// already exists.
+    fn open_file(&mut self) -> Result<BufWriter<File>> {
+        if self.current_file_handle.is_some() {
+            log::error!("A file is being requested to open when it has already been opened.");
+            return Err(Error::InternalInconsistency);
+        }
+
+        let path = {
+            let mut tmp = self.file_dir.clone();
+            // Since this function opens the file, we can take this as the offset.
+            let time = self
+                .start_time
+                .checked_add(self.num_files_so_far as i64 * self.time_between_files)
+                .map_err(Error::Jiff)?;
+            if self.filename_details.len() > 0 {
+                tmp.push(format!(
+                    "{}_{}.bin",
+                    time.strftime("%FT%T%z"),
+                    self.filename_details
+                ))
+            } else {
+                tmp.push(time.strftime("%FT%T%z").to_string() + ".bin")
+            };
+            tmp
+        };
+
+        if std::fs::File::open(path.clone()).is_ok() {
+            log::error!("Created file name found to already exist in location.");
+            return Err(Error::InternalInconsistency);
+        }
+
+        log::info!("Creating file with name {:?}", &path);
+        let f = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .open(path)
+            .map_err(Error::Io)?;
+        self.num_files_so_far += 1;
+        Ok(BufWriter::new(f))
     }
 }
