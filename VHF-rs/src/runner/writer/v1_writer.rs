@@ -55,7 +55,7 @@ impl VHFWriter for V1Writer {
     }
 
     fn close(&mut self) -> Result<()> {
-        todo!()
+        self.close_file()
     }
 }
 
@@ -100,5 +100,14 @@ impl V1Writer {
             .map_err(Error::Io)?;
         self.num_files_so_far += 1;
         Ok(BufWriter::new(f))
+    }
+
+    fn close_file(&mut self) -> Result<()> {
+        if let Some(file) = self.current_file_handle.as_mut() {
+            use std::io::Write;
+            file.flush().map_err(Error::Io)?;
+        }
+        self.current_file_handle = None;
+        Ok(())
     }
 }
