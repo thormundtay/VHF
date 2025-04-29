@@ -102,6 +102,62 @@ impl V1Writer {
         Ok(BufWriter::new(f))
     }
 
+    /// Writes the file headers. Call this only before the first amount of data is being written.
+    fn write_header(&mut self) -> Result<()> {
+        // Do not write into a file who has already had headers/data written.
+        if self.current_file_handle.is_none() || self.num_elements_written > 0 {
+            return Err(Error::InternalInconsistency);
+        }
+
+        // Early exit
+        if self.verbosity == 0 {
+            return Ok(());
+        }
+
+        let mut header = String::new();
+        if self.verbosity & 1 != 0 {
+            // Command Line
+            header.extend(["# command line: ", self.header_details.as_str(), "\n"]);
+        }
+
+        if self.verbosity & 2 != 0 {
+            // Time start
+            header.extend([
+                "# recording start: ".to_string(),
+                self.start_time
+                    .checked_add(
+                        self.time_between_files
+                            // Because the file has already been opened, we have to sub by 1.
+                            * self.num_files_so_far.checked_sub(1).unwrap() as i64,
+                    )
+                    .map_err(Error::Jiff)?
+                    .strftime("%FT%T%z")
+                    .to_string(),
+                "\n".to_string(),
+            ]);
+        }
+        let header_len = header.len().div_ceil(8);
+        if header_len > 0xffff {
+            log::error!("Too much data written into header!");
+            return Err(Error::ExcessData);
+        };
+
+        if let Some(buf_file) = self.current_file_handle.as_mut() {
+            use byteorder::{LittleEndian, WriteBytesExt};
+            use std::io::Write;
+            let header_first = V1_MAGIC_HEADER | (header_len as u64);
+            buf_file
+                .write_u64::<LittleEndian>(header_first)
+                .map_err(Error::Io)?;
+            buf_file.write(header.as_bytes()).map_err(Error::Io)?;
+            // Zero pad
+            let pad = header.len().div_ceil(8) * 8 - header.len();
+            buf_file.write(&vec![0u8; pad]).map_err(Error::Io)?;
+        }
+
+        Ok(())
+    }
+
     fn close_file(&mut self) -> Result<()> {
         if let Some(file) = self.current_file_handle.as_mut() {
             use std::io::Write;
