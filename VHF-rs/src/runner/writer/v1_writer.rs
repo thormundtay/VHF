@@ -51,7 +51,91 @@ impl VHFWriter for V1Writer {
 
     /// Push [super::WriteBlock] onto file.
     fn write_data(&mut self, mut words: super::WriteBlock) -> Result<()> {
-        todo!()
+        let data: &mut Vec<_> = &mut words.data;
+        'data_has_element: loop {
+            // If no elements have yet been written, we fill the internal buffer instead.
+            if self.num_elements_written == 0 {
+                if self.num_files_so_far > self.num_files {
+                    return Err(Error::ExcessData);
+                }
+
+                let buf_len = self.elements_to_write.len();
+                let words_len = data.len();
+                if buf_len + words_len < FILE_LAZY_LEN {
+                    // Fill into temporary buffer;
+                    self.elements_to_write.extend(data.drain(..));
+                    return Ok(());
+                } else {
+                    // Buffer is full.
+                    let file_handle = self.open_file()?;
+                    self.current_file_handle = Some(file_handle);
+                    self.write_header()?;
+
+                    // If buffer is full, we now open the file and write the header.
+                    use byteorder::{LittleEndian, WriteBytesExt};
+                    if let Some(file) = self.current_file_handle.as_mut() {
+                        if self.elements_to_write.len() > 0 {
+                            self.elements_to_write
+                                .drain(0..)
+                                .try_for_each(|word| file.write_u64::<LittleEndian>(word))
+                                .map_err(Error::Io)?;
+                            self.num_elements_written += buf_len;
+                        };
+                        // Note! This can be be zero if the internal buffer was just nice the size
+                        // of the file.
+                        data.drain(
+                            ..self
+                                .num_elements_per_file
+                                .saturating_sub(self.num_elements_written)
+                                .min(data.len()),
+                        )
+                        .try_for_each(|word| file.write_u64::<LittleEndian>(word))
+                        .map_err(Error::Io)?;
+
+                        self.num_elements_written += words_len;
+                    } else {
+                        // File should have been created.
+                        return Err(Error::InternalInconsistency);
+                    };
+                }
+            } else {
+                // Elements have been written, we instead just pass straight to the file.
+                let words_len = data.len();
+
+                use byteorder::{LittleEndian, WriteBytesExt};
+                if let Some(file) = self.current_file_handle.as_mut() {
+                    data.drain(
+                        0..self
+                            .num_elements_per_file
+                            .saturating_sub(self.num_elements_written)
+                            .min(data.len()),
+                    )
+                    .try_for_each(move |word| file.write_u64::<LittleEndian>(word))
+                    .map_err(Error::Io)?;
+
+                    self.num_elements_written += words_len;
+                } else {
+                    // File should have been created.
+                    return Err(Error::InternalInconsistency);
+                };
+            };
+            log::trace!(
+                "One round of drain occurred. Number of elements left = {}",
+                data.len()
+            );
+
+            // Check if to continue or break loop
+            if self.num_elements_written >= self.num_elements_per_file {
+                self.num_elements_written = 0;
+                self.close_file()?
+            }
+
+            if data.len() == 0 {
+                break 'data_has_element;
+            }
+            log::trace!("write_data loop continue");
+        }
+        Ok(())
     }
 
     fn close(&mut self) -> Result<()> {
