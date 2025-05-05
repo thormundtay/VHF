@@ -144,7 +144,22 @@ impl Configs {
         };
 
         // Section: Phasemeter details
-        // TODO!
+        self.phasemeter_kwargs = {
+            let tmp = config
+                .get_map()
+                .ok_or(Error::ini_missing("FILE", "VALUE"))?;
+            log::trace!("config.get_map = {:?}", &tmp);
+            let kv: &HashMap<_, _> = tmp
+                .get("Phasemeter Details".to_ascii_lowercase().as_str())
+                .ok_or(Error::ini_missing("FILE", "Phasemeter Details"))?;
+            HashMap::from_iter(kv.into_iter().map(|(k, v)| {
+                let v = v.clone();
+                (
+                    CString::new(k.as_str()).unwrap(),
+                    CString::new(v.unwrap_or_default()).unwrap(),
+                )
+            }))
+        };
 
         // Section: Paths
         match utils::get_with_ext_interp(&config, "Paths", "save_dir") {
