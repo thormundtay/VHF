@@ -10,7 +10,7 @@ use crate::{Error, Result};
 use consts::VHF_MMAP_WINDOW_LEN;
 use heapless::Deque;
 use itertools::Itertools;
-use jiff::Span;
+use jiff::{Span, Zoned};
 use mmap_reader::mmap_thread;
 use mmap_rs::Mmap;
 use nix::fcntl;
@@ -171,15 +171,16 @@ impl VHF {
     }
 
     /// Start USB Machine, with all the specified configuration.
+    /// Returns the time the VHF board has been signalled to start.
     // We spawn a thread here that reads off from the MmapMut into our own "buffer", which gets
     // sliding window overed before being passed to a transformer (in either a map or par_map).
-    pub fn start(&self) -> Result<()> {
+    pub fn start(&self) -> Result<Zoned> {
         if self.engine_running.load(atomic::Ordering::Acquire) {
             return Err(Error::EngineRunning);
         };
 
         board_ioctl_consts::ioctl_start(self.handle).map(|_| ())?;
-        {
+        let time_start: Zoned = {
             let mut buf_write = BufWriter::new(self.raw_handle.try_clone().map_err(Error::Io)?);
             buf_write.write(b"clockinit; adcinit;").map_err(Error::Io)?;
             buf_write.flush().map_err(Error::Io)?;
@@ -196,11 +197,12 @@ impl VHF {
                 .write(format!("cstream {};", 0x120).as_bytes())
                 .map_err(Error::Io)?;
             buf_write.flush().map_err(Error::Io)?;
-        }
+            Zoned::now()
+        };
         self.engine_running.store(true, atomic::Ordering::Release);
         self.map_reader.thread().unpark();
 
-        Ok(())
+        Ok(time_start)
     }
 
     /// Stops USB Machine and close FDs.
