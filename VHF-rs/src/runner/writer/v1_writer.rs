@@ -265,3 +265,12 @@ impl V1Writer {
         Ok(())
     }
 }
+
+impl Drop for V1Writer {
+    fn drop(&mut self) {
+        let tmp = self.close_file();
+        if tmp.is_err() {
+            log::warn!("Failed to close file during drop!");
+        }
+    }
+}
