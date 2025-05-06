@@ -8,19 +8,19 @@ use crate::{
     types::{IQMTriplet, RawVHFWord},
     Result,
 };
-use std::{cmp::Ordering, ops::Deref, rc::Rc};
+use std::{cmp::Ordering, ops::Deref, sync::Arc};
 
 #[derive(Clone)]
 pub(super) struct StreamFoldParameters {
     /// This the function that has to be applied to every chunked window from [super::VHF].next.
-    pub func: Rc<dyn Fn(<super::VHF as Iterator>::Item) -> WriteBlock>,
+    pub func: Arc<dyn Fn(<&mut super::VHF as Iterator>::Item) -> WriteBlock + Send + Sync>,
     /// This is the number of windows to step by each time prior to par_iter.
     pub step_by: usize,
 }
 
 /// Determines the mode of operation on [super::VHF].next.
 #[derive(Clone)]
-pub(super) enum StreamFold {
+pub enum StreamFold {
     /// Identity Transform on Stream without index checking
     None(StreamFoldParameters),
     // Reduce,
@@ -43,8 +43,8 @@ impl std::fmt::Debug for StreamFold {
 
 impl StreamFold {
     /// This is the Identity transform without any roll-over checking.
-    pub(in crate::runner) fn none_default() -> StreamFold {
-        let identity = |(_, pages): <super::VHF as Iterator>::Item| {
+    pub fn none_default() -> StreamFold {
+        let identity = |(_, pages): <&mut super::VHF as Iterator>::Item| {
             let data = {
                 let mut data = Vec::with_capacity(VHF_MMAP_WINDOW_LEN * MMAP_PAGE_LEN);
                 pages.into_iter().for_each(|p| data.extend(p.deref()));
@@ -55,13 +55,13 @@ impl StreamFold {
         };
 
         StreamFold::None(StreamFoldParameters {
-            func: Rc::new(identity),
+            func: Arc::new(identity),
             step_by: VHF_MMAP_WINDOW_LEN,
         })
     }
 
     //// This is the Identity transform with roll-over checking.
-    pub(in crate::runner) fn identity_default() -> StreamFold {
+    pub fn identity_default() -> StreamFold {
         /// Offset into each window in which all pages prior can be thought of as lookbacks into
         /// previous windows.
         const PAGES_START: usize = 1;
@@ -70,7 +70,7 @@ impl StreamFold {
         // word to determine if a rollover has occurred. As such, the 0th element has to be chosen
         // from the idx-1th page to ensure that the 0th window returns a sign of 0 change for the
         // 0th element in the stream.
-        fn overlapping_identity((idx, pages): <super::VHF as Iterator>::Item) -> WriteBlock {
+        fn overlapping_identity((idx, pages): <&mut super::VHF as Iterator>::Item) -> WriteBlock {
             if idx == 0 {
                 debug_assert!(matches!(pages[0], MmapPage::Empty));
                 debug_assert!(matches!(pages[1], MmapPage::Page(_)));
@@ -135,7 +135,7 @@ impl StreamFold {
         }
 
         StreamFold::Map(StreamFoldParameters {
-            func: Rc::new(overlapping_identity),
+            func: Arc::new(overlapping_identity),
             step_by: VHF_MMAP_WINDOW_LEN - PAGES_START,
         })
     }
