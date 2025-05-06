@@ -166,6 +166,19 @@ impl VHF {
         let mut result = mmap_options.map().map_err(Error::MMap)?;
         result.lock().map_err(Error::MMap)?; // Make RAM only
 
+        {
+            // Busy work to warm the MMap
+            let tmp = result
+                .iter()
+                .take((1 << 22) / 4)
+                .step_by(1024)
+                .fold(0u64, |mut acc, &x| {
+                    acc += x as u64;
+                    acc
+                });
+            log::debug!("Prepopulating mmap summed to: {}", tmp);
+        }
+
         Ok(result)
     }
 
