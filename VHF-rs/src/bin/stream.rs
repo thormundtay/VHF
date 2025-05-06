@@ -11,7 +11,7 @@ fn main() -> Result<()> {
     let vhf = VHF::new(conf)?;
     log::info!("VHF Struct created");
 
-    vhf.start()?;
+    todo!();
     log::info!("VHF started");
 
     // Open up file for writing into

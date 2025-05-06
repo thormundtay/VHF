@@ -76,9 +76,8 @@ impl VHF {
 
         let wake_mmap = Arc::new(RwLock::new(Instant::now()));
 
-        // WARN: Hardcoded for now.
-        // This is the number of heap-allocated pages being emitted from the [self::MMapReader].
-        let total_to_read = unsafe { NonZeroU64::new(1 << 23).unwrap_unchecked() };
+        let total_to_read =
+            unsafe { NonZeroU64::new(config.num_samples as u64).unwrap_unchecked() };
 
         let engine_running = Arc::new(AtomicBool::new(false));
         let raw_handle = {
@@ -180,15 +179,25 @@ impl VHF {
         };
 
         board_ioctl_consts::ioctl_start(self.handle).map(|_| ())?;
+        let config = &self.configuration;
         let time_start: Zoned = {
             let mut buf_write = BufWriter::new(self.raw_handle.try_clone().map_err(Error::Io)?);
             buf_write.write(b"clockinit; adcinit;").map_err(Error::Io)?;
             buf_write.flush().map_err(Error::Io)?;
             std::thread::sleep(std::time::Duration::from_nanos(2000)); // 1000 might be sufficient
 
-            buf_write.write(b"config 16; param 1;").map_err(Error::Io)?;
-            buf_write.write(b"config 1; param 9;").map_err(Error::Io)?; // skips 9 samples
-            buf_write.write(b"config 2; param 0;").map_err(Error::Io)?; // Gain parameter = 0
+            buf_write
+                .write(format!("config 16; param {};", config.filter_const.unwrap_or(0)).as_bytes())
+                .map_err(Error::Io)?; // filter_const
+            buf_write
+                .write(format!("config 1; param {};", config.skip_num).as_bytes())
+                .map_err(Error::Io)?; // skips samples
+            buf_write
+                .write(format!("config 2; param {};", config.gain.unwrap_or(0)).as_bytes())
+                .map_err(Error::Io)?; // Gain parameter
+            buf_write
+                .write(format!("config 3; param {};", config.gain.unwrap_or(0)).as_bytes())
+                .map_err(Error::Io)?; // Gain parameter
             buf_write.write(b"config 3; param 0;").map_err(Error::Io)?; // debug param = 0
             buf_write.write(b"skip; skip;").unwrap();
             buf_write.flush().map_err(Error::Io)?;
