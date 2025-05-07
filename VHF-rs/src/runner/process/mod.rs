@@ -86,10 +86,9 @@ impl VHF {
         };
         let buffer = {
             let mut buffer = Deque::new();
-            // WARN: Number of Empty pages should be given by the transform. Currently hardcoded.
-            buffer
-                .push_back(MmapPage::Empty)
-                .expect("Failed to push back.");
+            (0..config.stream_fold.pad())
+                .try_for_each(|_| buffer.push_back(MmapPage::Empty))
+                .expect("Failed to push_back onto buffer.");
             Arc::new(Mutex::new(buffer))
         };
         let buffer_signal = Arc::new(Condvar::new()); // merge into buffer?
