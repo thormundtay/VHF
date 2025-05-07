@@ -11,11 +11,13 @@ use crate::{
 use std::{cmp::Ordering, ops::Deref, sync::Arc};
 
 #[derive(Clone)]
-pub(super) struct StreamFoldParameters {
+pub struct StreamFoldParameters {
     /// This the function that has to be applied to every chunked window from [super::VHF].next.
     pub func: Arc<dyn Fn(<&mut super::VHF as Iterator>::Item) -> WriteBlock + Send + Sync>,
     /// This is the number of windows to step by each time prior to par_iter.
     pub step_by: usize,
+    /// This is the number of windows to pad to the start.
+    pub pad: usize,
 }
 
 /// Determines the mode of operation on [super::VHF].next.
@@ -42,6 +44,14 @@ impl std::fmt::Debug for StreamFold {
 }
 
 impl StreamFold {
+    /// Gets the number of windows to pad with at the start.
+    pub(in crate::runner) fn pad(&self) -> usize {
+        match self {
+            Self::None(x) => x.pad,
+            Self::Map(x) => x.pad,
+        }
+    }
+
     /// This is the Identity transform without any roll-over checking.
     pub fn none_default() -> StreamFold {
         let identity = |(_, pages): <&mut super::VHF as Iterator>::Item| {
@@ -57,6 +67,7 @@ impl StreamFold {
         StreamFold::None(StreamFoldParameters {
             func: Arc::new(identity),
             step_by: VHF_MMAP_WINDOW_LEN,
+            pad: 0,
         })
     }
 
@@ -137,6 +148,7 @@ impl StreamFold {
         StreamFold::Map(StreamFoldParameters {
             func: Arc::new(overlapping_identity),
             step_by: VHF_MMAP_WINDOW_LEN - PAGES_START,
+            pad: PAGES_START,
         })
     }
 }

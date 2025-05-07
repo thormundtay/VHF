@@ -4,6 +4,7 @@ mod utils;
 /// Convenience Type definitions associated with properties during the lifetime of the experiment.
 pub(crate) mod typedef;
 
+use super::fold::StreamFold;
 use crate::{Error, Result};
 use configparser::ini;
 use std::{
@@ -44,6 +45,9 @@ pub struct Configs {
     pub filter_const: Option<u8>,
     pub verbosity: u8,
 
+    /// Runtime processing method
+    pub stream_fold: StreamFold,
+
     /// Other information about the phasemeter not related to the operation of the board.
     pub phasemeter_kwargs: HashMap<CString, CString>,
 
@@ -67,6 +71,8 @@ impl Default for Configs {
             gain: None,
             filter_const: None,
             verbosity: 0,
+
+            stream_fold: StreamFold::none_default(),
 
             phasemeter_kwargs: HashMap::new(),
 
@@ -142,6 +148,16 @@ impl Configs {
                 }
             }
         };
+
+        // Section: Runtime processing
+        self.stream_fold =
+            match config.get("Software Processing".to_ascii_lowercase().as_str(), "type") {
+                None => Ok(StreamFold::identity_default()),
+                Some(mode) => match mode.as_str() {
+                    "None" => Ok(StreamFold::identity_default()),
+                    _ => Err(Error::ini_missing("Software Processing", "type")),
+                },
+            }?;
 
         // Section: Phasemeter details
         self.phasemeter_kwargs = {
