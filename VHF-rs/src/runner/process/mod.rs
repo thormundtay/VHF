@@ -310,10 +310,12 @@ impl std::iter::Iterator for VHF {
             }
 
             // Early break - Engine is not running anymore for any reason (Thread panic perhaps?)
-            if self
+            if !self
                 .engine_running
-                .fetch_not(std::sync::atomic::Ordering::Relaxed)
+                .load(std::sync::atomic::Ordering::Relaxed)
             {
+                log::info!("Running stop as engine has terminated. Manually calling stop will be necessary in the future when iter() as a method is properly implemented.");
+                // TODO: Pad as necessary with Empty end for par_map?
                 return None;
             };
 
