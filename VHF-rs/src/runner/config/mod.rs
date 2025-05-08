@@ -93,10 +93,15 @@ impl Configs {
         Ok(result)
     }
 
+    /// Builds configuration from file.
     pub fn with_file(&mut self, file: &Path) -> Result<()> {
         let mut config = ini::Ini::new();
         config.load(file).unwrap();
-        self.with_config(config)
+        let result = self.with_config(config);
+        if result.is_ok() {
+            let _ = self.validate_config();
+        }
+        result
     }
 
     // Assumes ExtendedInterpolation from Python's ConfigParser
@@ -195,6 +200,16 @@ impl Configs {
             Ok(None) => return Err(Error::ini_missing("Path", "save_to_file")),
             Ok(Some(t)) => t,
         };
+
+        Ok(())
+    }
+
+    /// Checks if configuration has tripped anything. Errors only if warnings have been emitted.
+    fn validate_config(&self) -> Result<()> {
+        if self.skip_num + 1 < 10 {
+            log::warn!("Received skip_num less than 10! byte alignment has known to break!");
+            return Err(Error::ini_coerce("Board", "skip_num", "less than 10"));
+        }
 
         Ok(())
     }
