@@ -8,7 +8,7 @@ fn main() -> Result<()> {
     let _ = log4rs::init_file("log4rs.yml", Default::default()).expect("log4rs.yml not found!"); // Logger init
     let conf = Config::new(Some(PathBuf::from("./VHF_board_params.ini")))?;
 
-    let vhf = VHF::new(conf)?;
+    let vhf = VHF::new(&conf)?;
     log::info!("VHF Struct created");
 
     todo!();

@@ -62,7 +62,7 @@ pub struct VHF {
 impl VHF {
     /// Create a new instance of VHF control. The goal of [VHF] is to create all necessary control
     /// flow to read out of Mmap and to stream in the `impl Iterator for VHF` trait.
-    pub fn new(config: Config) -> Result<Self> {
+    pub fn new(config: &Config) -> Result<Self> {
         let handle = Self::open_dev(
             config
                 .board
@@ -127,7 +127,7 @@ impl VHF {
 
 
         Ok(Self {
-            configuration: config,
+            configuration: config.clone(),
             handle,
             raw_handle,
             map_reader,
