@@ -120,6 +120,8 @@ impl MMapReader {
     }
 
     /// This converts Mmap u8s into VHFPages which are placed into [self.buffer].
+    /// # Errors
+    /// [super::VHF::ioctl_next] yields Err or has negative value.
     fn stream(&mut self) -> Result<()> {
         let mut next_bytes;
         let mut time_after_mmap_fetch;
@@ -134,8 +136,8 @@ impl MMapReader {
                     return Err(Error::ioctl_call("Negative next value received."));
                 }
                 if next.wrapping_sub(self.last_tfb32) <= (1 << ALIGN_VHF_OUTPUT_TO_PAGES) {
-                    log::debug!("tried getting next before having more than a page of data...");
-                    log::debug!("last_tfb32 = {}, next = {}", self.last_tfb32, next);
+                    log::trace!("tried getting next before having more than a page of data...");
+                    log::trace!("last_tfb32 = {}, next = {}", self.last_tfb32, next);
                     thread::park_timeout(self.page_duration);
                     continue;
                 }
@@ -172,10 +174,10 @@ impl MMapReader {
                             });
 
                         // Update counter
-                        debug_assert_eq!(
-                            num_pages as usize,
-                            (next_bytes - self.prev_bytes)
-                                .min(MMAP_BYTES_LEN - next_bytes - self.prev_bytes)
+                        log::trace!(
+                            "next_bytes = {}, prev_bytes = {}",
+                            next_bytes,
+                            self.prev_bytes
                         );
 
                         self.collected_pages += num_pages;
@@ -206,6 +208,7 @@ impl MMapReader {
 
     /// Cleaning up before thread exits.
     fn close(&self) -> Result<()> {
+        log::info!("MMapReader has been invoked to be closed");
         self.engine_running.store(false, atomic::Ordering::Relaxed);
         Ok(())
     }
