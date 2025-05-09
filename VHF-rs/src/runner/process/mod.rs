@@ -315,6 +315,7 @@ impl std::iter::Iterator for VHF {
                 .load(std::sync::atomic::Ordering::Relaxed)
             {
                 log::info!("Running stop as engine has terminated. Manually calling stop will be necessary in the future when iter() as a method is properly implemented.");
+                self.stop().unwrap();
                 // TODO: Pad as necessary with Empty end for par_map?
                 return None;
             };
