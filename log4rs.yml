@@ -1,0 +1,21 @@
+root:
+  level: info
+  appenders:
+    - stdout
+    - file
+
+appenders:
+  stdout:
+    kind: console
+    target: stdout
+    encoder:
+      kind: pattern
+      pattern: "{d(%Y%m%dT%H:%M:%S)} {h({l:.<5})} [{M}] {m}{n}"
+    tty_only: false
+  file:
+    kind: file
+    path: "Log/stream.log"
+    encoder:
+      kind: pattern
+      pattern: "{d(%Y%m%dT%H:%M:%S)} {h({l:.<5})} [{M}] {m}{n}"
+    append: true
