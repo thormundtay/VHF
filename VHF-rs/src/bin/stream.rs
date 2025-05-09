@@ -1,3 +1,4 @@
+use pariter::IteratorExt;
 use std::path::PathBuf;
 use vhf::runner::{
     fold::StreamFold,
@@ -23,7 +24,7 @@ fn main() -> Result<()> {
     // BufWriter.
     vhf.into_iter()
         .step_by(params.step_by)
-        .map(move |x| (*params.func)(x))
+        .parallel_map(move |x| (*params.func)(x))
         .try_for_each(|write_block| file_writer.write_data(write_block))?;
 
     log::info!("Run completed");
