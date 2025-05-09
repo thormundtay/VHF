@@ -9,7 +9,7 @@ use heapless::Deque;
 use jiff::Span;
 use mmap_rs::Mmap;
 use std::hint::spin_loop;
-use std::num::NonZeroU64;
+use std::num::NonZeroUsize;
 use std::sync::{
     atomic::{self, AtomicBool},
     Arc, Condvar, Mutex, RwLock,
@@ -50,9 +50,9 @@ pub(super) struct MMapReader {
     /// Time after this is when we expect to start collecting the next set of pages.
     next_collect_time: Arc<RwLock<Instant>>,
     /// Number of VHF Pages to read. 0 for an infinite amount.
-    total_pages: NonZeroU64,
+    total_pages: NonZeroUsize,
     /// Number of pages thus far.
-    collected_pages: u64,
+    collected_pages: usize,
 }
 
 impl MMapReader {
@@ -64,7 +64,7 @@ impl MMapReader {
         time_between_mmap_page: &Span,
         time_between_stream_resume: Duration,
         next_collect_time: Arc<RwLock<Instant>>,
-        total_pages: NonZeroU64,
+        total_pages: NonZeroUsize,
         handle: libc::c_int,
     ) -> Result<Self> {
         let loop_timeout: Duration = (*time_between_mmap_page
@@ -199,6 +199,7 @@ impl MMapReader {
 
             // If number of pages read has exceeded break
             if self.collected_pages >= self.total_pages.into() {
+                log::info!("MMapReader has collected pages >= total pages.");
                 break;
             }
         }
@@ -232,7 +233,7 @@ pub(super) fn mmap_thread(
     time_between_mmap_page: &Span,
     time_between_stream_resume: Duration,
     next_collect_time: Arc<RwLock<Instant>>,
-    total_pages: NonZeroU64,
+    total_pages: NonZeroUsize,
     handle: libc::c_int,
 ) -> Result<()> {
     let mut mmap_reader = MMapReader::new(

@@ -18,7 +18,7 @@ use test_log::test;
 fn stepped_nonoverlapping_identity_a() {
     let debug_vhf_total_len = 4 * VHF_MMAP_WINDOW_LEN;
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
-    let debug_vhf = debug_vhf_new(NonZeroU64::new(debug_vhf_total_len as u64).unwrap());
+    let debug_vhf = debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
     let StreamFold::None(params) = StreamFold::none_default() else {
@@ -78,7 +78,7 @@ fn stepped_nonoverlapping_identity_a() {
 fn stepped_nonoverlapping_identity_b() {
     let debug_vhf_total_len = 4 * VHF_MMAP_WINDOW_LEN;
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
-    let debug_vhf = debug_vhf_new(NonZeroU64::new(debug_vhf_total_len as u64).unwrap());
+    let debug_vhf = debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
     let StreamFold::None(params) = StreamFold::none_default() else {
@@ -143,7 +143,7 @@ fn stepped_overlapping_identity_a() {
 
     let debug_vhf_total_len = 4 * params.step_by;
     let total_window_len = debug_vhf_total_len + params.step_by;
-    let debug_vhf = debug_vhf_new(NonZeroU64::new(debug_vhf_total_len as u64).unwrap());
+    let debug_vhf = debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
     let total_elements = total_window_len * MMAP_PAGE_LEN;
 
     // Define the signal we are testing for.
@@ -215,7 +215,7 @@ fn stepped_overlapping_identity_b() {
     };
 
     let total_window_len = params.step_by;
-    let debug_vhf = debug_vhf_new(NonZeroU64::new(total_window_len as u64).unwrap());
+    let debug_vhf = debug_vhf_new(NonZeroUsize::new(total_window_len).unwrap());
     let total_elements = total_window_len * MMAP_PAGE_LEN;
     log::info!("total_elements = {}", total_elements);
 

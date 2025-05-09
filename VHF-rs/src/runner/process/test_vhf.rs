@@ -9,7 +9,7 @@ use tempfile::{NamedTempFile, TempDir};
 use test_log::test;
 
 // Create a VHF struct with false child thread "map_reader".
-pub(super) fn debug_vhf_new(total_to_read: NonZeroU64) -> VHF {
+pub(super) fn debug_vhf_new(total_to_read: NonZeroUsize) -> VHF {
     let tmp_dir = TempDir::new().expect("Could not create temp_dir");
     let raw_tmp_file =
         NamedTempFile::new_in(tmp_dir.into_path()).expect("Could not create temp file");
@@ -42,7 +42,7 @@ pub(super) fn debug_vhf_new(total_to_read: NonZeroU64) -> VHF {
         buffer,
         time_between_pages,
         wake_mmap,
-        total_to_read,
+        total_pages_to_read: total_to_read,
         windows_released: 0,
     }
 }
@@ -72,7 +72,7 @@ pub(super) fn create_arc_pages(data: &[RawVHFWord]) -> Vec<MmapPage> {
 fn vhf_drops_arc() {
     let debug_vhf_total_len = 1;
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
-    let mut debug_vhf = debug_vhf_new(NonZeroU64::new(debug_vhf_total_len as u64).unwrap());
+    let mut debug_vhf = debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
 
     // We now add a weakpointer to the first object.
     let testing_page = Arc::new([0; MMAP_PAGE_LEN]);
@@ -115,7 +115,7 @@ fn vhf_drops_arc() {
 fn next_window_linear() {
     let debug_vhf_total_len = 5;
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN - 1;
-    let mut debug_vhf = debug_vhf_new(NonZeroU64::new(debug_vhf_total_len as u64).unwrap());
+    let mut debug_vhf = debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
 
     // Define the signal that we are testing for. (Use linear so its easier to determine.)
     let signal = 0..((total_window_len * MMAP_PAGE_LEN) as RawVHFWord);

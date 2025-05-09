@@ -7,7 +7,7 @@ pub(super) mod pages;
 
 use super::Config;
 use crate::{Error, Result};
-use consts::VHF_MMAP_WINDOW_LEN;
+use consts::{MMAP_PAGE_LEN, VHF_MMAP_WINDOW_LEN};
 use heapless::Deque;
 use itertools::Itertools;
 use jiff::{Span, Zoned};
@@ -16,7 +16,7 @@ use mmap_rs::Mmap;
 use nix::fcntl;
 use pages::MmapPage;
 use std::io::{BufWriter, Write};
-use std::num::NonZeroU64;
+use std::num::NonZeroUsize;
 use std::sync::{
     atomic::{self, AtomicBool},
     Arc, Condvar, Mutex, RwLock,
@@ -54,7 +54,7 @@ pub struct VHF {
     /// Expected time when to next wake up mmap_reader thread.
     wake_mmap: Arc<RwLock<Instant>>,
     /// This is the total number of pages to be read by [self::MMapReader].
-    total_to_read: NonZeroU64,
+    total_pages_to_read: NonZeroUsize,
     /// Number of windows released to .iter() or par_iter() so far.
     windows_released: usize,
 }
@@ -76,8 +76,14 @@ impl VHF {
 
         let wake_mmap = Arc::new(RwLock::new(Instant::now()));
 
-        let total_to_read =
-            unsafe { NonZeroU64::new(config.num_samples as u64).unwrap_unchecked() };
+        // This will have to be changed as filtering etc means data points are not being passed to
+        // file writer.
+        let total_elements_to_read =
+            unsafe { NonZeroUsize::new(config.num_samples).unwrap_unchecked() };
+        let total_pages_to_read: NonZeroUsize = unsafe {
+            NonZeroUsize::new(usize::from(total_elements_to_read).div_ceil(MMAP_PAGE_LEN))
+                .unwrap_unchecked()
+        };
 
         let engine_running = Arc::new(AtomicBool::new(false));
         let raw_handle = {
@@ -116,7 +122,7 @@ impl VHF {
                         &time_between_pages,
                         time_between_stream_resume,
                         next_collect_time,
-                        total_to_read,
+                        total_pages_to_read,
                         handle,
                     )
                 })
@@ -136,7 +142,7 @@ impl VHF {
             buffer,
             time_between_pages,
             wake_mmap,
-            total_to_read,
+            total_pages_to_read,
             windows_released: 0,
         })
     }
@@ -281,7 +287,7 @@ impl std::iter::Iterator for VHF {
     // ?: Anything that calls into VHF.next() should be using .step_by() before passing to the
     // transformer.
     fn next(&mut self) -> Option<Self::Item> {
-        if self.windows_released as u64 > self.total_to_read.into() {
+        if self.windows_released > self.total_pages_to_read.into() {
             return None;
         }
 
@@ -344,8 +350,8 @@ impl std::iter::Iterator for VHF {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         // Account for window being slightly different from number of pages being collected.
-        let total: u64 = self.total_to_read.into();
-        let lb = total.saturating_sub(self.windows_released as u64);
+        let total: usize = self.total_pages_to_read.into();
+        let lb = total.saturating_sub(self.windows_released);
         let lb = lb as usize;
         (lb, Some(lb + VHF_MMAP_WINDOW_LEN))
     }

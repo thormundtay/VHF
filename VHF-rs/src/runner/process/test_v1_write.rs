@@ -21,7 +21,7 @@ use test_log::test;
 fn writes_correct_header() {
     let debug_vhf_total_len = 4 * VHF_MMAP_WINDOW_LEN;
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
-    let debug_vhf = debug_vhf_new(NonZeroU64::new(debug_vhf_total_len as u64).unwrap());
+    let debug_vhf = debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
     let StreamFold::None(params) = StreamFold::none_default() else {
@@ -89,7 +89,7 @@ fn creates_multiple_files() {
     let debug_vhf_total_len = VHF_MMAP_WINDOW_LEN * scale_elements;
     log::info!("debug_vhf_total_len = {}", &debug_vhf_total_len);
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
-    let debug_vhf = debug_vhf_new(NonZeroU64::new(debug_vhf_total_len as u64).unwrap());
+    let debug_vhf = debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
     let StreamFold::None(params) = StreamFold::none_default() else {
