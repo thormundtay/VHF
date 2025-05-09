@@ -42,6 +42,8 @@ pub struct VHF {
     map_reader: JoinHandle<Result<()>>,
     /// Used to signal to [self::mmap_reader::MMapReader] has started, and to determine that child has stopped.
     engine_running: Arc<AtomicBool>,
+    /// Stopped invoked
+    vhf_stop: bool,
     /// Used to receive signal from [self::mmap_reader::MMapReader] that new pages have been placed into
     /// [self.buffer].
     buffer_signal: Arc<Condvar>,
@@ -131,13 +133,13 @@ impl VHF {
 
         log::debug!("Readback buffer thread created");
 
-
         Ok(Self {
             configuration: config.clone(),
             handle,
             raw_handle,
             map_reader,
             engine_running,
+            vhf_stop: false,
             buffer_signal,
             buffer,
             time_between_pages,
@@ -232,12 +234,21 @@ impl VHF {
         Ok(time_start)
     }
 
-    /// Stops USB Machine and close FDs.
+    /// Closes FDs.
     // Might want to consider moving this routine as to being called from the MmapMut reader thread
     // instead of being called from the main() function.
-    pub fn stop(&self) -> Result<()> {
-        if !self.engine_running.load(atomic::Ordering::Acquire) {
+    pub fn stop(&mut self) -> Result<()> {
+        log::info!("VHF stop has been invoked.");
+        if self.vhf_stop {
+            log::warn!("Parent thread found engine to have already been stopped.");
             return Err(Error::EngineStopped);
+        }
+        self.vhf_stop = true;
+
+        if self.engine_running.load(atomic::Ordering::Acquire) {
+            log::warn!("Parent thread tried to close when engine has not shut down.");
+            self.vhf_stop = false;
+            return Err(Error::EngineRunning);
         };
 
         // Stop USB device.
@@ -248,8 +259,6 @@ impl VHF {
             .map_err(Error::Io)?;
         // Stop hostside USB device.
         let result = board_ioctl_consts::ioctl_end(self.handle).map(|_| ());
-
-        self.engine_running.store(false, atomic::Ordering::Relaxed);
 
         log::info!("VHF stopped!");
 
