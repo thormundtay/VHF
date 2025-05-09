@@ -285,4 +285,9 @@ impl Configs {
             .collect();
         s.join("_")
     }
+
+    /// Gets the parameters of StreamFold part of the configuration.
+    pub fn stream_fold_parameters(&self) -> &StreamFold {
+        &self.stream_fold
+    }
 }
