@@ -230,7 +230,7 @@ impl VHF {
             Zoned::now()
         };
         self.engine_running.store(true, atomic::Ordering::Release);
-        self.map_reader.thread().unpark();
+        self.unpark_child();
 
         Ok(time_start)
     }
@@ -271,6 +271,30 @@ impl VHF {
     #[inline(always)]
     pub fn ioctl_next(&self) -> Result<libc::c_int> {
         board_ioctl_consts::ioctl_read(self.handle)
+    }
+}
+
+trait WakeMapReader {
+    /// Wake MMapReader child thread.
+    fn unpark_child(&self);
+}
+
+impl WakeMapReader for VHF {
+    fn unpark_child(&self) {
+        self.map_reader.thread().unpark()
+    }
+}
+
+pub struct VHFIter {
+    /// This is for calling the parent struct [VHF] solely for intention of being able to tell the
+    /// child thread to park.
+    map_reader: Rc<JoinHandle<Result<()>>>,
+}
+
+impl WakeMapReader for VHFIter {
+    /// Wake MMapReader child thread.
+    fn unpark_child(&self) {
+        self.map_reader.thread().unpark()
     }
 }
 
@@ -353,7 +377,7 @@ impl std::iter::Iterator for VHF {
             }
 
             if Instant::now() >= *self.wake_mmap.read().unwrap() {
-                self.map_reader.thread().unpark();
+                self.unpark_child()
             }
         }
     }
