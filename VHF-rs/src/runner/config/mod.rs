@@ -115,7 +115,14 @@ impl Configs {
             self.num_samples = usize::try_from(num_samples)
                 .map_err(|_| Error::ini_coerce("Board", "num_samples", "usize"))?
         };
-        // num_files todo!
+        if let evalexpr::Value::Int(num_files) = config
+            .get("Extended Sampling", "num_runs")
+            .unwrap_or("0".to_string())
+            .eval()?
+        {
+            self.num_files = usize::try_from(num_files)
+                .map_err(|_| Error::ini_coerce("Extended Sampling", "num_runs", "usize"))?
+        };
         if let evalexpr::Value::Int(skip_num) = config
             .get("Board", "skip_num")
             .unwrap_or("0".to_string())

@@ -81,7 +81,7 @@ impl VHF {
         // This will have to be changed as filtering etc means data points are not being passed to
         // file writer.
         let total_elements_to_read =
-            unsafe { NonZeroUsize::new(config.num_samples).unwrap_unchecked() };
+            unsafe { NonZeroUsize::new(config.num_files * config.num_samples).unwrap_unchecked() };
         let total_pages_to_read: NonZeroUsize = unsafe {
             NonZeroUsize::new(usize::from(total_elements_to_read).div_ceil(MMAP_PAGE_LEN))
                 .unwrap_unchecked()
