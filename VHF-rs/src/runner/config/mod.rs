@@ -230,8 +230,8 @@ impl Configs {
     /// This determines the time difference the first data point of multiple files.
     pub fn file_timespan(&self) -> jiff::Span {
         // In case there are drifts...
-        log::info!(
-            "Timespan of one file in nanoseconds = {}",
+        log::debug!(
+            "Timespan of one sample point in nanoseconds = {}",
             1e9 / self.sampling_frequency()
         );
         self.num_samples as i64
