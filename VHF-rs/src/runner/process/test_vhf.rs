@@ -36,7 +36,7 @@ pub(super) fn debug_vhf_new(total_to_read: NonZeroUsize) -> VHF {
         configuration,
         handle,
         raw_handle,
-        map_reader,
+        map_reader: Rc::new(map_reader),
         engine_running,
         vhf_stop: false,
         buffer_signal,

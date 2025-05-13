@@ -17,6 +17,7 @@ use nix::fcntl;
 use pages::MmapPage;
 use std::io::{BufWriter, Write};
 use std::num::NonZeroUsize;
+use std::rc::Rc;
 use std::sync::{
     atomic::{self, AtomicBool},
     Arc, Condvar, Mutex, RwLock,
@@ -39,7 +40,7 @@ pub struct VHF {
     /// map_reader contains the thread that is responsible for pulling elements out of the MMap
     /// into a [buffer].
     /// More details is as given in [self::mmap_reader].
-    map_reader: JoinHandle<Result<()>>,
+    map_reader: Rc<JoinHandle<Result<()>>>,
     /// Used to signal to [self::mmap_reader::MMapReader] has started, and to determine that child has stopped.
     engine_running: Arc<AtomicBool>,
     /// Stopped invoked
@@ -137,7 +138,7 @@ impl VHF {
             configuration: config.clone(),
             handle,
             raw_handle,
-            map_reader,
+            map_reader: Rc::new(map_reader),
             engine_running,
             vhf_stop: false,
             buffer_signal,
