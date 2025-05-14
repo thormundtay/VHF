@@ -44,7 +44,6 @@ pub(super) fn debug_vhf_new(total_to_read: NonZeroUsize) -> VHF {
         time_between_pages,
         wake_mmap,
         total_pages_to_read: total_to_read,
-        windows_released: 0,
     }
 }
 
@@ -73,7 +72,7 @@ pub(super) fn create_arc_pages(data: &[RawVHFWord]) -> Vec<MmapPage> {
 fn vhf_drops_arc() {
     let debug_vhf_total_len = 1;
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
-    let mut debug_vhf = debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
+    let debug_vhf = debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
 
     // We now add a weakpointer to the first object.
     let testing_page = Arc::new([0; MMAP_PAGE_LEN]);
@@ -97,7 +96,7 @@ fn vhf_drops_arc() {
 
     // Pull out the first window, and check that content of the window is as expected.
     {
-        let (_, first_window) = debug_vhf.next().unwrap();
+        let (_, first_window) = debug_vhf.iter().next().unwrap();
         first_window.into_iter().for_each(|page| {
             assert!(matches!(page, MmapPage::Page(_)));
             match page {
@@ -116,7 +115,7 @@ fn vhf_drops_arc() {
 fn next_window_linear() {
     let debug_vhf_total_len = 5;
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN - 1;
-    let mut debug_vhf = debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
+    let debug_vhf = debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
 
     // Define the signal that we are testing for. (Use linear so its easier to determine.)
     let signal = 0..((total_window_len * MMAP_PAGE_LEN) as RawVHFWord);
@@ -134,7 +133,7 @@ fn next_window_linear() {
     };
 
     for _ in 0..debug_vhf_total_len {
-        if let Some((idx, window)) = debug_vhf.next() {
+        if let Some((idx, window)) = debug_vhf.iter().next() {
             let expected_first: RawVHFWord = (idx * MMAP_PAGE_LEN).try_into().unwrap();
             let expected_last: RawVHFWord = ((idx + VHF_MMAP_WINDOW_LEN) * MMAP_PAGE_LEN - 1)
                 .try_into()
@@ -153,7 +152,7 @@ fn next_window_linear() {
         }
     }
 
-    let actual = debug_vhf.next();
+    let actual = debug_vhf.iter().next();
     if let Some(x) = actual.clone() {
         log::warn!(
             "Got page from vhf where none was expected: page[0]/MMAP_PAGE_LEN = {}; page[-1] = {}",

@@ -67,7 +67,7 @@ fn writes_correct_header() {
 
     let mut writer = V1Writer::new(&config, time_start);
     debug_vhf
-        .into_iter()
+        .iter()
         .step_by(params.step_by)
         .map(|x| (*params.func)(x))
         .try_for_each(|write_block| writer.write_data(write_block))
@@ -144,7 +144,7 @@ fn creates_multiple_files() {
 
     let mut writer = V1Writer::new(&config, time_start);
     debug_vhf
-        .into_iter()
+        .iter()
         .step_by(params.step_by)
         .map(|x| (*params.func)(x))
         .try_for_each(|write_block| writer.write_data(write_block))

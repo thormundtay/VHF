@@ -58,8 +58,6 @@ pub struct VHF {
     wake_mmap: Arc<RwLock<Instant>>,
     /// This is the total number of pages to be read by [self::MMapReader].
     total_pages_to_read: NonZeroUsize,
-    /// Number of windows released to .iter() or par_iter() so far.
-    windows_released: usize,
 }
 
 impl VHF {
@@ -146,7 +144,6 @@ impl VHF {
             time_between_pages,
             wake_mmap,
             total_pages_to_read,
-            windows_released: 0,
         })
     }
 
@@ -272,6 +269,20 @@ impl VHF {
     pub fn ioctl_next(&self) -> Result<libc::c_int> {
         board_ioctl_consts::ioctl_read(self.handle)
     }
+
+    /// Returns an iterable over VHF's buffer.
+    pub fn iter<'a>(&'a self) -> VHFIter<'a> {
+        VHFIter {
+            map_reader: Rc::clone(&self.map_reader),
+            engine_running: &self.engine_running,
+            buffer_signal: &self.buffer_signal,
+            buffer: &self.buffer,
+            time_between_pages: self.time_between_pages,
+            wake_mmap: &self.wake_mmap,
+            total_pages_to_read: self.total_pages_to_read,
+            windows_released: 0,
+        }
+    }
 }
 
 trait WakeMapReader {
@@ -285,20 +296,37 @@ impl WakeMapReader for VHF {
     }
 }
 
-pub struct VHFIter {
+pub struct VHFIter<'a> {
     /// This is for calling the parent struct [VHF] solely for intention of being able to tell the
     /// child thread to park.
     map_reader: Rc<JoinHandle<Result<()>>>,
+    /// Used to signal to [self::mmap_reader::MMapReader] has started, and to determine that child has stopped.
+    engine_running: &'a Arc<AtomicBool>,
+    /// Used to receive signal from [self::mmap_reader::MMapReader] that new pages have been placed into
+    /// [self.buffer].
+    buffer_signal: &'a Arc<Condvar>,
+    /// buffer is a local mirror of Mmap that is intended for the likes of SlidingWindow
+    /// [itertools::tuple_windows] and par_map, which has more Rust Semantics than reading straight
+    /// out of a Mmap.
+    buffer: &'a Arc<Mutex<Deque<MmapPage, DEQUE_CAP>>>,
+    /// This is the amount of time between any two pages. Used for determining other timings.
+    time_between_pages: Span,
+    /// Expected time when to next wake up mmap_reader thread.
+    wake_mmap: &'a Arc<RwLock<Instant>>,
+    /// This is the total number of pages to be read by [self::MMapReader].
+    total_pages_to_read: NonZeroUsize,
+    /// Number of windows released to .iter() or par_iter() so far.
+    windows_released: usize,
 }
 
-impl WakeMapReader for VHFIter {
+impl<'a> WakeMapReader for VHFIter<'a> {
     /// Wake MMapReader child thread.
     fn unpark_child(&self) {
         self.map_reader.thread().unpark()
     }
 }
 
-impl std::iter::Iterator for VHF {
+impl<'a> std::iter::Iterator for VHFIter<'a> {
     type Item = (usize, [MmapPage; VHF_MMAP_WINDOW_LEN]);
 
     // The idea: To ensure not having to manually drop any lifetimes (which could probably be
@@ -354,8 +382,6 @@ impl std::iter::Iterator for VHF {
                 .engine_running
                 .load(std::sync::atomic::Ordering::Relaxed)
             {
-                log::info!("Running stop as engine has terminated. Manually calling stop will be necessary in the future when iter() as a method is properly implemented.");
-                self.stop().unwrap();
                 // TODO: Pad as necessary with Empty end for par_map?
                 return None;
             };

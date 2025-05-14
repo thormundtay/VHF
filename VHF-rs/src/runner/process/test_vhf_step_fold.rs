@@ -55,7 +55,7 @@ fn stepped_nonoverlapping_identity_a() {
     };
 
     let result: Vec<RawVHFWord> = debug_vhf
-        .into_iter()
+        .iter()
         .step_by(params.step_by)
         .map(|x| (*params.func)(x))
         .flat_map(|x| x.data.into_iter())
@@ -115,7 +115,7 @@ fn stepped_nonoverlapping_identity_b() {
     };
 
     let result: Vec<RawVHFWord> = debug_vhf
-        .into_iter()
+        .iter()
         .step_by(params.step_by)
         .map(|x| (*params.func)(x))
         .flat_map(|x| x.data.into_iter())
@@ -177,7 +177,7 @@ fn stepped_overlapping_identity_a() {
 
     // We also need to test for sign overflow.
     let results: Vec<_> = debug_vhf
-        .into_iter()
+        .iter()
         .step_by(params.step_by)
         .map(|x| (*params.func)(x))
         .collect();
@@ -250,7 +250,7 @@ fn stepped_overlapping_identity_b() {
 
     // We also need to test for sign overflow.
     let results: Vec<_> = debug_vhf
-        .into_iter()
+        .iter()
         .step_by(params.step_by)
         .map(|x| (*params.func)(x))
         .collect();

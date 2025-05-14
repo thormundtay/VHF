@@ -13,7 +13,7 @@ use std::{cmp::Ordering, ops::Deref, sync::Arc};
 #[derive(Clone)]
 pub struct StreamFoldParameters {
     /// This the function that has to be applied to every chunked window from [super::VHF].next.
-    pub func: Arc<dyn Fn(<&mut super::VHF as Iterator>::Item) -> WriteBlock + Send + Sync>,
+    pub func: Arc<dyn Fn(<super::VHFIter as Iterator>::Item) -> WriteBlock + Send + Sync>,
     /// This is the number of windows to step by each time prior to par_iter.
     pub step_by: usize,
     /// This is the number of windows to pad to the start.
@@ -54,7 +54,7 @@ impl StreamFold {
 
     /// This is the Identity transform without any roll-over checking.
     pub fn none_default() -> StreamFold {
-        let identity = |(_, pages): <&mut super::VHF as Iterator>::Item| {
+        let identity = |(_, pages): <super::VHFIter as Iterator>::Item| {
             let data = {
                 let mut data = Vec::with_capacity(VHF_MMAP_WINDOW_LEN * MMAP_PAGE_LEN);
                 pages.into_iter().for_each(|p| data.extend(p.deref()));
@@ -81,7 +81,7 @@ impl StreamFold {
         // word to determine if a rollover has occurred. As such, the 0th element has to be chosen
         // from the idx-1th page to ensure that the 0th window returns a sign of 0 change for the
         // 0th element in the stream.
-        fn overlapping_identity((idx, pages): <&mut super::VHF as Iterator>::Item) -> WriteBlock {
+        fn overlapping_identity((idx, pages): <super::VHFIter as Iterator>::Item) -> WriteBlock {
             if idx == 0 {
                 debug_assert!(matches!(pages[0], MmapPage::Empty));
                 debug_assert!(matches!(pages[1], MmapPage::Page(_)));
