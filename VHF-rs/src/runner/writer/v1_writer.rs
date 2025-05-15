@@ -162,7 +162,8 @@ impl V1Writer {
                 "\n".to_string(),
             ]);
         }
-        let header_len = header.len().div_ceil(8);
+        // + 1 to include the magic mask length
+        let header_len = header.len().div_ceil(8) + 1;
         if header_len > 0xffff {
             log::error!("Too much data written into header!");
             return Err(Error::ExcessData);
