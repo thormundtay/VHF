@@ -741,7 +741,7 @@ class VHFparser:
         self._bytes_per_word = BinaryVHFTrace.bytes_per_word
         header_count = (header_count_b+1) * self._bytes_per_word
         self._num_head_bytes += header_count  # this is the claimed headersize
-        self.headerraw: bytes = buffer.read(header_count)
+        self.headerraw: bytes = buffer.read(header_count-8)  # read continues stream position
         self.headerraw = self.headerraw.rstrip(b"\x00")
         self.parse_header(self.headerraw)
 
