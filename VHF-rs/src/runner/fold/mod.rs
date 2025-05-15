@@ -6,7 +6,6 @@ use super::writer::WriteBlock;
 use crate::{
     parser::consts::M_OVERFLOW,
     types::{IQMTriplet, RawVHFWord},
-    Result,
 };
 use std::{cmp::Ordering, ops::Deref, sync::Arc};
 
@@ -20,8 +19,18 @@ pub struct StreamFoldParameters {
     pub pad: usize,
 }
 
+impl PartialEq for StreamFoldParameters {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::addr_eq(Arc::as_ptr(&self.func), Arc::as_ptr(&other.func))
+            && self.step_by == other.step_by
+            && self.pad == other.pad
+    }
+}
+
+impl Eq for StreamFoldParameters {}
+
 /// Determines the mode of operation on [super::VHF].next.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum StreamFold {
     /// Identity Transform on Stream without index checking
     None(StreamFoldParameters),
@@ -49,6 +58,14 @@ impl StreamFold {
         match self {
             Self::None(x) => x.pad,
             Self::Map(x) => x.pad,
+        }
+    }
+
+    /// Gets the number of windows to step_by each time.
+    pub(in crate::runner) fn step_by(&self) -> usize {
+        match self {
+            Self::None(x) => x.step_by,
+            Self::Map(x) => x.step_by,
         }
     }
 
@@ -150,5 +167,19 @@ impl StreamFold {
             step_by: VHF_MMAP_WINDOW_LEN - PAGES_START,
             pad: PAGES_START,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn similarities() {
+        let first = StreamFold::none_default();
+        let second = StreamFold::identity_default();
+        assert!(first == first);
+        assert!(second == second);
+        assert!(first != second);
     }
 }
