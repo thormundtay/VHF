@@ -132,8 +132,9 @@ fn next_window_linear() {
         panic!();
     };
 
+    let mut debug_vhf_iter = debug_vhf.iter();
     for _ in 0..debug_vhf_total_len {
-        if let Some((idx, window)) = debug_vhf.iter().next() {
+        if let Some((idx, window)) = debug_vhf_iter.next() {
             let expected_first: RawVHFWord = (idx * MMAP_PAGE_LEN).try_into().unwrap();
             let expected_last: RawVHFWord = ((idx + VHF_MMAP_WINDOW_LEN) * MMAP_PAGE_LEN - 1)
                 .try_into()
@@ -152,7 +153,7 @@ fn next_window_linear() {
         }
     }
 
-    let actual = debug_vhf.iter().next();
+    let actual = debug_vhf_iter.next();
     if let Some(x) = actual.clone() {
         log::warn!(
             "Got page from vhf where none was expected: page[0]/MMAP_PAGE_LEN = {}; page[-1] = {}",
