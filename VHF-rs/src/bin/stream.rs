@@ -1,3 +1,4 @@
+use pariter::IteratorExt;
 use std::path::PathBuf;
 use vhf::runner::{
     fold::StreamFold,
@@ -19,14 +20,19 @@ fn main() -> Result<()> {
         panic!()
     };
 
-    // TODO: Use iterator method on VHF to get stream of data, and transform down before passing to
-    // BufWriter.
-    vhf.iter()
-        .step_by(params.step_by)
-        .map(|x| (*params.func)(x))
-        .try_for_each(|write_block| file_writer.write_data(write_block))?;
+    let vhf_iter = vhf.iter();
+    let body = pariter::scope(|scope| {
+        vhf_iter
+            .step_by(params.step_by)
+            .parallel_map_scoped(scope, |x| (*params.func)(x))
+            .try_for_each(|write_block| file_writer.write_data(write_block))
+            .expect("Failed to write data");
+    });
 
-    log::info!("Run completed");
+    match body {
+        Ok(_) => log::info!("Run completed"),
+        Err(e) => log::error!("Main loop occurred with error = {:?}", e),
+    };
 
     // VHF cleanup
     vhf.stop()?;
