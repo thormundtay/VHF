@@ -119,6 +119,7 @@ pub struct Polar {
 
 impl Polar {
     /// This gives the wrapped phase in [-Pi, Pi).
+    #[allow(dead_code)]
     #[inline]
     fn projected_phase(&self) -> f64 {
         let unwrapped = self.phase;
