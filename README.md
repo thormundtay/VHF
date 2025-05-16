@@ -19,6 +19,27 @@ to `VHF/init_board/`, but the information still remains relevant for triage.
 ---
 ### Setup
 
+Run the Makefile by typing
+```bash
+  make init
+```
+
+The board can then save files to one's desired locations as specified by
+`VHF_board_params.ini`. Any more granularity in logging information can be done
+by changing `log4s.yml`. It is strongly recommended to choose the board via
+symblink instead of the configuration file, unless you are certain in what
+you're doing.
+
+The board, along with running for however many files as one wishes, is invoked either by
+```bash
+  ./run_vhf
+```
+or
+```bash
+  cargo run --release --bin stream
+```
+
+Legacy runners are as follows:  
 `set_device_mode.cpp` is compiled by the GCC to become the executable
 `set_device_mode`. For it to function properly, it is necessary that this
 executable has the necessary permissions. Ideally, `ls -la` would show
@@ -27,6 +48,8 @@ executable has the necessary permissions. Ideally, `ls -la` would show
 ```
 
 This can be done by `chown root` and `chmod u+x` on the file.
+
+### Symbolic Links
 
 Currently, several files utilise symbolic links to the board and streaming
 exec, namely, `/dev/usbhybrid0` and `~/programs/usbhybrid/apps/teststream`.
@@ -49,6 +72,9 @@ The VHF board has a red light used to indicate the FIFO being overflowed.
 
 For the most part, this script is run to reset the VHF board into a state ready
 for collecting 'stream' data.
+
+`run_vhf` will very likely hit a overflow error if the FIFO was not cleared
+prior to invoking `run_vhf`.
 
 ### Collecting Data
 

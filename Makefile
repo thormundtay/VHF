@@ -7,3 +7,5 @@ init:
 	ln -sf /home/qitlab/programs/usbhybrid/apps/teststream teststream.exec
 	mkdir Log
 	mkdir Data
+	cargo build --release --bin stream
+	ln -sf target/release/stream run_vhf

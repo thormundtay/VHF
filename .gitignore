@@ -6,6 +6,7 @@ FYPLibrary
 .vscode
 vhf_func_gen/*.npz
 test/usbhybrid-reference/*
+run_vhf
 
 # Compiled outputs
 VHF/board_init/set_device_mode
