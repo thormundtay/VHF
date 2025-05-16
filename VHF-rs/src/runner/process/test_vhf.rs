@@ -11,8 +11,7 @@ use test_log::test;
 // Create a VHF struct with false child thread "map_reader".
 pub(super) fn debug_vhf_new(total_to_read: NonZeroUsize) -> VHF {
     let tmp_dir = TempDir::new().expect("Could not create temp_dir");
-    let raw_tmp_file =
-        NamedTempFile::new_in(tmp_dir.into_path()).expect("Could not create temp file");
+    let raw_tmp_file = NamedTempFile::new_in(tmp_dir).expect("Could not create temp file");
 
     let configuration = Config::default();
     let handle = {
