@@ -5,6 +5,7 @@ pub(super) mod consts;
 mod mmap_reader;
 pub(super) mod pages;
 
+use super::fold::StreamFold;
 use super::Config;
 use crate::{Error, Result};
 use consts::{MMAP_PAGE_LEN, VHF_MMAP_WINDOW_LEN};
@@ -63,7 +64,12 @@ pub struct VHF {
 impl VHF {
     /// Create a new instance of VHF control. The goal of [VHF] is to create all necessary control
     /// flow to read out of Mmap and to stream in the `impl Iterator for VHF` trait.
-    pub fn new(config: &Config) -> Result<Self> {
+    /// # Arguments
+    /// - config: [Config]
+    ///   Configuration for running VHF.
+    /// - params: [StreamFold]
+    ///   This is to ensure that the same parameters are being used by the driving body and [VHF].
+    pub fn new(config: &Config, params: &StreamFold) -> Result<Self> {
         let handle = Self::open_dev(
             config
                 .board
@@ -72,6 +78,8 @@ impl VHF {
                 .to_str()
                 .ok_or(Error::ParseEmpty)?,
         )?; // TODO: OsStr -> &str validation should be done by Config
+
+        assert_eq!(config.stream_fold_parameters(), params);
 
         let time_between_pages: Span = pages::time_between_pages_in_ns(&config.speed)?;
 
@@ -93,6 +101,8 @@ impl VHF {
         };
         let buffer = {
             let mut buffer = Deque::new();
+            // Left padding is initialisation, and is thus handled in the parent.
+            // Right-padding is termination, and therefore has to be handled by the child thread.
             (0..config.stream_fold.pad())
                 .try_for_each(|_| buffer.push_back(MmapPage::Empty))
                 .expect("Failed to push_back onto buffer.");
@@ -112,6 +122,7 @@ impl VHF {
                     .try_into()
                     .map_err(Error::Jiff)?;
             let next_collect_time = wake_mmap.clone();
+            let streamfold = params.clone();
             thread::Builder::new()
                 .name("mmap_reader".to_string())
                 .spawn(move || {
@@ -125,6 +136,7 @@ impl VHF {
                         next_collect_time,
                         total_pages_to_read,
                         handle,
+                        &streamfold,
                     )
                 })
                 .map_err(Error::Io)

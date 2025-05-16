@@ -11,11 +11,12 @@ fn main() -> Result<()> {
     let _ = log4rs::init_file("log4rs.yml", Default::default()).expect("log4rs.yml not found!"); // Logger init
     let conf = Config::new(Some(PathBuf::from("./VHF_board_params.ini")))?;
 
-    let mut vhf = VHF::new(&conf)?;
+    let params = conf.stream_fold_parameters().clone();
+    let mut vhf = VHF::new(&conf, &params)?;
     let time_start = vhf.start()?;
 
     let file_writer = &mut V1Writer::new(&conf, time_start);
-    let StreamFold::Map(params) = conf.stream_fold_parameters().clone() else {
+    let StreamFold::Map(params) = params else {
         log::error!("Overlapping windows are not StreamFold::Map variant.");
         panic!()
     };

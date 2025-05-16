@@ -3,6 +3,7 @@
 //! The intended entry point for [super::VHF] is to spawn [MMapReader] into a child thread through
 //! the use of [mmap_thread].
 
+use super::super::fold::StreamFold;
 use super::{consts::MMAP_PAGE_LEN, pages::MmapPage, DEQUE_CAP, MMAP_BYTES_LEN};
 use crate::{Error, Result};
 use heapless::Deque;
@@ -53,6 +54,10 @@ pub(super) struct MMapReader {
     total_pages: NonZeroUsize,
     /// Number of pages thus far.
     collected_pages: usize,
+    /// StreamFold specified parameter
+    step_by: usize,
+    /// StreamFold specified parameter
+    stream_pad: usize,
 }
 
 impl MMapReader {
@@ -66,6 +71,7 @@ impl MMapReader {
         next_collect_time: Arc<RwLock<Instant>>,
         total_pages: NonZeroUsize,
         handle: libc::c_int,
+        streamfold: &StreamFold,
     ) -> Result<Self> {
         let loop_timeout: Duration = (*time_between_mmap_page
             * (4 * super::VHF_MMAP_WINDOW_LEN)
@@ -88,6 +94,8 @@ impl MMapReader {
             next_collect_time,
             total_pages,
             collected_pages: 0,
+            step_by: streamfold.step_by(),
+            stream_pad: streamfold.pad(),
         })
     }
 
@@ -235,6 +243,7 @@ pub(super) fn mmap_thread(
     next_collect_time: Arc<RwLock<Instant>>,
     total_pages: NonZeroUsize,
     handle: libc::c_int,
+    streamfold: &StreamFold,
 ) -> Result<()> {
     let mut mmap_reader = MMapReader::new(
         mmap,
@@ -246,6 +255,7 @@ pub(super) fn mmap_thread(
         next_collect_time,
         total_pages,
         handle,
+        streamfold,
     )?;
 
     // Block until parent has started.
