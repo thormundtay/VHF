@@ -10,6 +10,7 @@ use vhf::Result;
 fn main() -> Result<()> {
     let _ = log4rs::init_file("log4rs.yml", Default::default()).expect("log4rs.yml not found!"); // Logger init
     let conf = Config::new(Some(PathBuf::from("./VHF_board_params.ini")))?;
+    conf.inform_params();
 
     let params = conf.stream_fold_parameters().clone();
     let mut vhf = VHF::new(&conf, &params)?;

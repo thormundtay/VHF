@@ -303,4 +303,60 @@ impl Configs {
     pub fn stream_fold_parameters(&self) -> &StreamFold {
         &self.stream_fold
     }
+
+    /// Prints user-friendly string as to the configuration being used to run.
+    pub fn inform_params(&self) {
+        const BLUE: &str = "\x1B[34m";
+        const REDBOLD: &str = "\x1B[31;1m";
+        const RESET: &str = "\x1B[0m";
+
+        let sf = self.sampling_frequency();
+        if sf < 1e3 {
+            println!("Sampling at {:.4} Hz.", sf);
+        } else if sf < 1e6 {
+            println!("Sampling at {:.4} kHz.", sf / 1e3);
+        } else if sf < 1e9 {
+            println!("Sampling at {:.4} MHz.", sf / 1e6);
+        } else {
+            println!("Sampling at {sf} Hz.");
+        }
+
+        if let Some(filter_const) = self.filter_const {
+            println!(
+                "Filter constant has been set to: {BLUE}{}{RESET}",
+                filter_const
+            );
+        }
+
+        if let Some(gain_const) = self.gain {
+            println!("Onboard gain has been set to: {BLUE}{}{RESET}", gain_const);
+        }
+
+        println!(
+            "Phasemeter details used: {BLUE}{:?}{RESET}",
+            self.phasemeter_kwargs
+        );
+
+        if self.save_to_file {
+            println!(
+                "Output will be written to {BLUE}{:?}{RESET}.",
+                self.save_dir
+            );
+        } else {
+            println!("Output will be captured from {BLUE}STDIN{RESET}.");
+        }
+
+        let total_time = self.num_files as i64 * self.file_timespan();
+        println!(
+            "Sampling is expected to take {REDBOLD}{}{RESET}.",
+            total_time
+                .round(
+                    jiff::SpanRound::new()
+                        .smallest(jiff::Unit::Second)
+                        .largest(jiff::Unit::Day)
+                        .relative(jiff::SpanRelativeTo::days_are_24_hours())
+                )
+                .unwrap_or(jiff::Span::new())
+        )
+    }
 }
