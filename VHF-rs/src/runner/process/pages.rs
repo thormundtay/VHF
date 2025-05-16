@@ -17,6 +17,9 @@ pub enum MmapPage {
     // NOTE: The allocation between pages can be considered as being fragmented; in contrast to the
     // VecDeque.
     Page(Page),
+    /// Denotes the MMapReader has reached the final page. Iterator trait for [super::VHF::next]
+    /// should exit.
+    End,
 }
 
 /// One heap-allocated kernel page of 4KiB.  
@@ -30,6 +33,7 @@ impl Deref for MmapPage {
         match self {
             MmapPage::Empty => &[],
             MmapPage::Page(x) => (*x).as_slice(),
+            MmapPage::End => &[],
         }
     }
 }

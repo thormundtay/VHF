@@ -208,10 +208,47 @@ impl MMapReader {
             // If number of pages read has exceeded break
             if self.collected_pages >= self.total_pages.into() {
                 log::info!("MMapReader has collected pages >= total pages.");
+                // Empty pad so that iterator can pull out final window.
+                self.pad_end()?;
                 break;
             }
         }
 
+        Ok(())
+    }
+
+    /// Knowing the number of pages being stepped by, left-padded and number of pages collected
+    /// thus far, one can determine the number of [pages::MMapPage::Empty] one needs to pad on the
+    /// right by. This function then determines how many of such empty pages one requires.
+    #[inline(always)]
+    fn pad_end_remaining(&self) -> usize {
+        // (a-2b) - (x mod (a-b)); where
+        // a = VHF_MMAP_WINDOW_LEN
+        // b = overlap
+        let a = super::VHF_MMAP_WINDOW_LEN;
+        let b = self.stream_pad;
+        debug_assert!(a >= 2 * b);
+
+        (a - 2 * b)
+            .checked_sub(self.collected_pages.rem_euclid(self.step_by))
+            .unwrap()
+    }
+
+    /// Because of .take_every(), we need to put in an appropriate number of blank pages at the end
+    /// so that the final next() method can pull out all empty windows.
+    fn pad_end(&self) -> Result<()> {
+        let pad = self.pad_end_remaining();
+        log::debug!("pad_end called with {} MMapPage::End to pad with", pad);
+        'push_back: loop {
+            match self.transfer_buffer.try_lock() {
+                Err(_) => spin_loop(),
+                Ok(mut inner) => {
+                    (0..pad)
+                        .for_each(|_| inner.push_back(MmapPage::End).expect("Failed to push_back"));
+                    break 'push_back;
+                }
+            };
+        }
         Ok(())
     }
 
