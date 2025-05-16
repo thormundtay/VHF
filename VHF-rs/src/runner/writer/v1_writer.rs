@@ -43,7 +43,7 @@ impl VHFWriter for V1Writer {
             verbosity: config.verbosity,
             header_details: config.details(),
             filename_details: config.filename(),
-            elements_to_write: Vec::with_capacity(FILE_LAZY_LEN),
+            elements_to_write: Vec::with_capacity(FILE_LAZY_LEN.min(config.num_samples)),
             file_dir: config.save_dir.clone(),
             current_file_handle: None,
         }
@@ -190,7 +190,7 @@ impl V1Writer {
         let buf_len = self.elements_to_write.len();
         let words_len = data.len();
 
-        if buf_len + words_len < FILE_LAZY_LEN {
+        if buf_len + words_len < FILE_LAZY_LEN.min(self.num_elements_per_file) {
             // Fill into temporary buffer;
             self.elements_to_write.extend(data.drain(..));
             return Ok(());
