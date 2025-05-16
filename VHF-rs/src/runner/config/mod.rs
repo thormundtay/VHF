@@ -227,6 +227,12 @@ impl Configs {
         self.speed.base_sampling_freq() as f64 / (1. + self.skip_num as f64)
     }
 
+    /// Number of elements to read from VHF board, after board-decimation factor, before any
+    /// processing by us.
+    pub fn total_elements_to_read(&self) -> usize {
+        self.num_files * self.num_samples
+    }
+
     /// This determines the time difference the first data point of multiple files.
     pub fn file_timespan(&self) -> jiff::Span {
         // In case there are drifts...
