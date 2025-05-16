@@ -4,8 +4,18 @@ use std::f64::consts::{PI, TAU};
 pub type RawVHFWord = u64;
 
 /// Unpacking a [RawVHFWord].
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct IQMTriplet(pub i32, pub i32, pub i16); // (I, Q, M)
+
+impl std::fmt::Debug for IQMTriplet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("IQM")
+            .field(&self.0)
+            .field(&self.1)
+            .field(&self.2)
+            .finish()
+    }
+}
 
 impl From<RawVHFWord> for IQMTriplet {
     #[inline(always)]

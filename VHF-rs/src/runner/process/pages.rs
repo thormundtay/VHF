@@ -2,12 +2,12 @@
 
 use super::consts::MMAP_PAGE_LEN;
 // The individual elements as obtained from [super::board_ioctl_consts::ioctl_read].
-use crate::types::RawVHFWord;
+use crate::types::{IQMTriplet, RawVHFWord};
 use crate::{Error, Result};
-use std::{ops::Deref, sync::Arc};
+use std::{fmt::Debug, ops::Deref, sync::Arc};
 
 /// All possible pages placed in to the buffer of [super::VHF].
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum MmapPage {
     /// For the very beginning of the stream being pulled out from the MMap, there is no "previous"
     /// page before the current page, and so, any function that works on the window from
@@ -35,6 +35,30 @@ impl Deref for MmapPage {
             MmapPage::Page(x) => (*x).as_slice(),
             MmapPage::End => &[],
         }
+    }
+}
+
+impl Debug for MmapPage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                MmapPage::Empty => "MmapPage::Empty".to_string(),
+                MmapPage::Page(x) => {
+                    let mut front = x.iter().take(2).map(IQMTriplet::from);
+                    let mut back = x.iter().rev().take(2).map(IQMTriplet::from).rev();
+                    format!(
+                        "MmapPage::Page({:?}, {:?}, ..., {:?}, {:?})",
+                        front.next().unwrap(),
+                        front.next().unwrap(),
+                        back.next().unwrap(),
+                        back.next().unwrap()
+                    )
+                }
+                MmapPage::End => "MmapPage::End".to_string(),
+            }
+        )
     }
 }
 
