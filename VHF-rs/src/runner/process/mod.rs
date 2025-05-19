@@ -82,6 +82,7 @@ impl VHF {
         assert_eq!(config.stream_fold_parameters(), params);
 
         let time_between_pages: Span = pages::time_between_pages_in_ns(&config.speed)?;
+        log::debug!("Time between pages = {}", time_between_pages);
 
         let wake_mmap = Arc::new(RwLock::new(Instant::now()));
 
@@ -115,12 +116,16 @@ impl VHF {
             let engine_running = engine_running.clone();
             let buffer_signal = buffer_signal.clone();
             let buffer = buffer.clone();
-            let time_between_stream_resume =
-                ((TryInto::<i64>::try_into(VHF_MMAP_WINDOW_LEN).unwrap() - 4)
-                // Hardcoded for now... should be determined by config
+            let number_of_pages_between_stream_resume = (VHF_MMAP_WINDOW_LEN as i64 - 4) * 3;
+            let time_between_stream_resume = (number_of_pages_between_stream_resume
                 * time_between_pages)
-                    .try_into()
-                    .map_err(Error::Jiff)?;
+                .try_into()
+                .map_err(Error::Jiff)?;
+            debug_assert!(number_of_pages_between_stream_resume < DEQUE_CAP as i64 / 2);
+            log::debug!(
+                "MMapReader time_between_stream_resume = {:?}",
+                time_between_stream_resume
+            );
             let next_collect_time = wake_mmap.clone();
             let streamfold = params.clone();
             thread::Builder::new()
@@ -334,6 +339,7 @@ pub struct VHFIter<'a> {
 impl<'a> WakeMapReader for VHFIter<'a> {
     /// Wake MMapReader child thread.
     fn unpark_child(&self) {
+        log::trace!("Unparking MmapReader thread");
         self.map_reader.thread().unpark()
     }
 }
@@ -356,6 +362,10 @@ impl<'a> std::iter::Iterator for VHFIter<'a> {
     // context).
     // The body page's index in the window has yet to be decided as being coordinated between the
     // Transform generator and this VHF, or if should be passed as a parameter.
+    //
+    // Note!: Buffer cannot be wrapped in a condvar, as it would block the next method. Condvar
+    // wrapping is acceptable only if condvar notify occurs on average at least once per page
+    // pushed onto the buffer.
     //
     // This method should be responsible for only moving the window forward by one.
     // ?: Anything that calls into VHF.next() should be using .step_by() before passing to the
@@ -394,7 +404,6 @@ impl<'a> std::iter::Iterator for VHFIter<'a> {
                 .engine_running
                 .load(std::sync::atomic::Ordering::Relaxed)
             {
-                // TODO: Pad as necessary with Empty end for par_map?
                 return None;
             };
 
@@ -403,19 +412,33 @@ impl<'a> std::iter::Iterator for VHFIter<'a> {
             // 1. Condvar activated or
             // 2. We self check that the current instant exceeds the time as a last measure.
 
-            while Instant::now() < *self.wake_mmap.read().unwrap() {
-                let timeout = self
-                    .buffer_signal
-                    .wait_timeout(mg.lock().unwrap(), time_between_pages)
-                    .unwrap();
-                if !timeout.1.timed_out() {
-                    continue 'get_page;
-                }
-                continue;
-            }
+            'get_wake: loop {
+                if let Ok(target_wakeup) = self.wake_mmap.read() {
+                    let target_wakeup = *target_wakeup;
 
-            if Instant::now() >= *self.wake_mmap.read().unwrap() {
-                self.unpark_child()
+                    let now = Instant::now();
+                    if now < target_wakeup {
+                        let sleep_for = target_wakeup.saturating_duration_since(now);
+                        thread::sleep(sleep_for);
+
+                        // Wait 1 page of time for condvar
+                        let timeout = self
+                            .buffer_signal
+                            .wait_timeout(mg.lock().unwrap(), time_between_pages)
+                            .unwrap();
+                        if !timeout.1.timed_out() {
+                            // Forcibly try to get a page
+                            log::trace!("Cond_var timedout");
+                            continue 'get_page;
+                        }
+                        // The intended amount of thread::sleep has been performed.
+                        // Fall through as if now > target_wakeup
+                    }
+                    self.unpark_child();
+                    break 'get_wake;
+                } else {
+                    continue 'get_wake;
+                }
             }
         }
     }

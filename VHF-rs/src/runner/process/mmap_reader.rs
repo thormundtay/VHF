@@ -44,7 +44,7 @@ pub(super) struct MMapReader {
     prev_bytes: usize,
     /// Time for a single page.
     page_duration: Duration,
-    /// Time between stream wakeups
+    /// Time between stream ([<super::VHFIter>::next] method) wakeups
     stream_pause: Duration,
     /// Maximal amount of time alloweable waiting for parent thread to unpark before self unpark.
     loop_timeout: Duration,
@@ -80,6 +80,8 @@ impl MMapReader {
                 .unwrap())
         .try_into()
         .map_err(Error::Jiff)?;
+        log::debug!("mmap_reader thread loop_timeout = {:?}", loop_timeout);
+
         Ok(Self {
             handle,
             mmap,
@@ -132,10 +134,11 @@ impl MMapReader {
     /// [super::VHF::ioctl_next] yields Err or has negative value.
     fn stream(&mut self) -> Result<()> {
         let mut next_bytes;
-        let mut time_after_mmap_fetch;
         loop {
             // If the current time has exceed the next expected fetch time, then proceed, else sleep.
+            log::trace!("mmap_reader thread park");
             thread::park_timeout(self.loop_timeout); // May apparently spuriously wake.
+            log::trace!("mmap_reader thread unpark");
 
             // Pull out from Mmap and place into heap
             'next_mmap: loop {
@@ -144,18 +147,23 @@ impl MMapReader {
                     return Err(Error::ioctl_call("Negative next value received."));
                 }
                 if next.wrapping_sub(self.last_tfb32) <= (1 << ALIGN_VHF_OUTPUT_TO_PAGES) {
-                    log::trace!("tried getting next before having more than a page of data...");
-                    log::trace!("last_tfb32 = {}, next = {}", self.last_tfb32, next);
                     thread::park_timeout(self.page_duration);
-                    continue;
-                }
+                    continue 'next_mmap;
+                };
 
                 // Enough pages have accumulated.
                 let offset = (next as usize % MMAP_BYTES_LEN) >> ALIGN_VHF_OUTPUT_TO_PAGES
                     << ALIGN_VHF_OUTPUT_TO_PAGES;
                 self.last_tfb32 = next;
                 next_bytes = offset;
-                time_after_mmap_fetch = Instant::now();
+                let time_after_mmap_fetch = Instant::now();
+
+                // Set next wake time, because pushing onto buffer does take a while.
+                {
+                    let mut to_write = self.next_collect_time.write().unwrap();
+                    *to_write = time_after_mmap_fetch + self.stream_pause;
+                }
+
                 break 'next_mmap;
             }
 
@@ -164,7 +172,10 @@ impl MMapReader {
             // long.)
             'push_back: loop {
                 match self.transfer_buffer.try_lock() {
-                    Err(_) => spin_loop(),
+                    Err(_) => {
+                        log::trace!("could not get buffer for pushing onto page");
+                        spin_loop(); // This is a no-op on x86;
+                    }
                     Ok(mut inner) => {
                         use itertools::Itertools;
 
@@ -182,22 +193,16 @@ impl MMapReader {
                             });
 
                         // Update counter
-                        log::trace!(
-                            "next_bytes = {}, prev_bytes = {}",
-                            next_bytes,
-                            self.prev_bytes
-                        );
-
                         self.collected_pages += num_pages;
                         self.prev_bytes = next_bytes;
 
                         // Signal back to parent thread that pages have been placed in.
                         self.transfer_buffer_signal.notify_all();
 
-                        // Set next wake time
+                        // Set next wake time again
                         {
                             let mut to_write = self.next_collect_time.write().unwrap();
-                            *to_write = time_after_mmap_fetch + self.stream_pause;
+                            *to_write = Instant::now() + self.stream_pause;
                         }
 
                         break 'push_back;
