@@ -415,6 +415,7 @@ impl<'a> std::iter::Iterator for VHFIter<'a> {
             // 1. Condvar activated or
             // 2. We self check that the current instant exceeds the time as a last measure.
 
+            thread::sleep(time_between_pages);
             'get_wake: loop {
                 if let Ok(target_wakeup) = self.wake_mmap.read() {
                     let target_wakeup = *target_wakeup;
@@ -422,6 +423,7 @@ impl<'a> std::iter::Iterator for VHFIter<'a> {
                     let now = Instant::now();
                     if now < target_wakeup {
                         let sleep_for = target_wakeup.saturating_duration_since(now);
+                        log::trace!("Sleeping within 'get_wake for {:?}", sleep_for);
                         thread::sleep(sleep_for);
 
                         // Wait 1 page of time for condvar
