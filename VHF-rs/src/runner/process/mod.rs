@@ -397,7 +397,10 @@ impl<'a> std::iter::Iterator for VHFIter<'a> {
                     let _ = buf.pop_front();
                     return Some((idx, arr));
                 }
-            }
+            } else if self.buffer.is_poisoned() {
+                panic!("MMapReader thread has panicked");
+            }; // We do nothing even if buffer was not locked: Child thread might still be pushing
+               // into it.
 
             // Early break - Engine is not running anymore for any reason (Thread panic perhaps?)
             if !self
