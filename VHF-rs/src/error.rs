@@ -46,6 +46,7 @@ impl Error {
     }
 }
 
+#[allow(clippy::from_over_into)] // Multiple implementations for .into() otherwise found
 impl Into<Error> for evalexpr::EvalexprError {
     fn into(self) -> Error {
         Error::EvalExpr(self.to_string())

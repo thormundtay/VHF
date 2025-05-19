@@ -3,7 +3,7 @@ mod v1_writer;
 // mod v2_writer;
 
 use super::super::types::RawVHFWord;
-use crate::{runner::Config, Result};
+use crate::{Result, runner::Config};
 pub use v1_writer::V1Writer;
 
 /// In the event that the [VHFWriter] receives less than this amount of data, no file will be
@@ -77,14 +77,13 @@ impl WriteBlock {
     #[allow(dead_code)]
     pub(super) fn overflow(self) -> impl Iterator<Item = (usize, i8)> {
         if self.m_overflow_idx.is_none() {
-            return Vec::new().into_iter().zip(Vec::new().into_iter());
+            Vec::new().into_iter().zip(Vec::new())
         } else {
-            return self
-                .m_overflow_idx
+            self.m_overflow_idx
                 // .clone()
                 .unwrap()
                 .into_iter()
-                .zip(self.m_overflow_value.unwrap().into_iter());
+                .zip(self.m_overflow_value.unwrap())
         }
     }
 }

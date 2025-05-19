@@ -8,6 +8,9 @@ appenders:
   stdout:
     kind: console
     target: stdout
+    filters:
+      - kind: threshold
+        level: info
     encoder:
       kind: pattern
       pattern: "{d(%Y%m%dT%H:%M:%S)} {h({l:.<5})} [{M}] {m}{n}"
@@ -15,6 +18,9 @@ appenders:
   file:
     kind: file
     path: "Log/stream.log"
+    filters:
+      - kind: threshold
+        level: debug
     encoder:
       kind: pattern
       pattern: "{d(%Y%m%dT%H:%M:%S)} {h({l:.<5})} [{M}] {m}{n}"

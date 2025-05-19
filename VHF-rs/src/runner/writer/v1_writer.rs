@@ -1,7 +1,7 @@
 //! Writer method meant to be as identical as possible to the original C file writer.
 
-use super::{VHFWriter, FILE_LAZY_LEN};
-use crate::{runner::Config, types::RawVHFWord, Error, Result};
+use super::{FILE_LAZY_LEN, VHFWriter};
+use crate::{Error, Result, runner::Config, types::RawVHFWord};
 use jiff::{Span, Zoned};
 use std::{
     fs::{File, OpenOptions},
@@ -58,14 +58,12 @@ impl VHFWriter for V1Writer {
             }
 
             // If no elements have yet been written, we fill the internal buffer instead.
-            let res = if self.num_elements_written == 0 {
+            if self.num_elements_written == 0 {
                 self.write_data_maybe_buffer(data)
             } else {
                 self.write_data_passed_buffer(data)
-            };
-            if res.is_err() {
-                return res;
-            }
+            }?;
+
             log::trace!(
                 "One round of drain occurred. Number of elements left = {}",
                 data.len()
@@ -77,7 +75,7 @@ impl VHFWriter for V1Writer {
                 self.close_file()?
             }
 
-            if data.len() == 0 {
+            if data.is_empty() {
                 break 'data_has_element;
             }
             log::trace!("write_data loop continue");
@@ -122,6 +120,7 @@ impl V1Writer {
         let f = OpenOptions::new()
             .create(true)
             .write(true)
+            .truncate(true)
             .open(path)
             .map_err(Error::Io)?;
         self.num_files_so_far += 1;
@@ -192,7 +191,7 @@ impl V1Writer {
 
         if buf_len + words_len < FILE_LAZY_LEN.min(self.num_elements_per_file) {
             // Fill into temporary buffer;
-            self.elements_to_write.extend(data.drain(..));
+            self.elements_to_write.append(data);
             return Ok(());
         }
 
@@ -205,7 +204,7 @@ impl V1Writer {
         // Write the data
         use byteorder::{LittleEndian, WriteBytesExt};
         if let Some(file) = self.current_file_handle.as_mut() {
-            if self.elements_to_write.len() > 0 {
+            if !self.elements_to_write.is_empty() {
                 self.elements_to_write
                     .drain(0..)
                     .try_for_each(|word| file.write_u64::<LittleEndian>(word))

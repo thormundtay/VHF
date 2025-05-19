@@ -180,7 +180,7 @@ impl Configs {
             let kv: &HashMap<_, _> = tmp
                 .get("Phasemeter Details".to_ascii_lowercase().as_str())
                 .ok_or(Error::ini_missing("FILE", "Phasemeter Details"))?;
-            HashMap::from_iter(kv.into_iter().map(|(k, v)| {
+            HashMap::from_iter(kv.iter().map(|(k, v)| {
                 let v = v.clone();
                 (
                     CString::new(k.as_str()).unwrap(),
@@ -202,7 +202,7 @@ impl Configs {
             Err(e) => {
                 return Err(Error::IniParse(format!(
                     "ini file 'Path - save_to_file' parse failed: {e}"
-                )))
+                )));
             }
             Ok(None) => return Err(Error::ini_missing("Path", "save_to_file")),
             Ok(Some(t)) => t,
@@ -356,7 +356,7 @@ impl Configs {
                         .largest(jiff::Unit::Day)
                         .relative(jiff::SpanRelativeTo::days_are_24_hours())
                 )
-                .unwrap_or(jiff::Span::new())
+                .unwrap_or_default()
         )
     }
 }

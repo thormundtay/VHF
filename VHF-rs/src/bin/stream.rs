@@ -1,11 +1,11 @@
 use pariter::IteratorExt;
 use std::path::PathBuf;
+use vhf::Result;
 use vhf::runner::{
+    Config, VHF,
     fold::StreamFold,
     writer::{V1Writer, VHFWriter},
-    Config, VHF,
 };
-use vhf::Result;
 
 fn main() -> Result<()> {
     let _ = log4rs::init_file("log4rs.yml", Default::default()).expect("log4rs.yml not found!"); // Logger init

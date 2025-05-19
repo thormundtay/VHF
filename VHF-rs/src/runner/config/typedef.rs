@@ -8,6 +8,7 @@ pub enum SamplingSpeed {
     High,
 }
 
+#[allow(clippy::to_string_trait_impl)]
 impl ToString for SamplingSpeed {
     fn to_string(&self) -> String {
         match self {
@@ -60,6 +61,7 @@ pub enum Encode {
     ASCII,
 }
 
+#[allow(clippy::to_string_trait_impl)]
 impl ToString for Encode {
     fn to_string(&self) -> String {
         match self {

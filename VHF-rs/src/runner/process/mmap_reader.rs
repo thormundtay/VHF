@@ -4,7 +4,7 @@
 //! the use of [mmap_thread].
 
 use super::super::fold::StreamFold;
-use super::{consts::MMAP_PAGE_LEN, pages::MmapPage, DEQUE_CAP, MMAP_BYTES_LEN};
+use super::{DEQUE_CAP, MMAP_BYTES_LEN, consts::MMAP_PAGE_LEN, pages::MmapPage};
 use crate::{Error, Result};
 use heapless::Deque;
 use jiff::Span;
@@ -12,8 +12,8 @@ use mmap_rs::Mmap;
 use std::hint::spin_loop;
 use std::num::NonZeroUsize;
 use std::sync::{
-    atomic::{self, AtomicBool},
     Arc, Condvar, Mutex, RwLock,
+    atomic::{self, AtomicBool},
 };
 use std::thread;
 use std::time::{Duration, Instant};
@@ -119,12 +119,12 @@ impl MMapReader {
         if prev < next {
             try_cast_slice(&self.mmap[prev..next])
                 .unwrap()
-                .into_iter()
+                .iter()
                 .chain(try_cast_slice(&self.mmap[..0]).unwrap())
         } else {
             try_cast_slice(&self.mmap[prev..MMAP_BYTES_LEN])
                 .unwrap()
-                .into_iter()
+                .iter()
                 .chain(try_cast_slice(&self.mmap[..next]).unwrap())
         }
     }
@@ -144,6 +144,7 @@ impl MMapReader {
             'next_mmap: loop {
                 let next = self.ioctl_next()?;
                 if next < 0 {
+                    log::error!("Received negative next value.");
                     return Err(Error::ioctl_call("Negative next value received."));
                 }
                 if next.wrapping_sub(self.last_tfb32) <= (1 << ALIGN_VHF_OUTPUT_TO_PAGES) {
@@ -268,7 +269,10 @@ impl MMapReader {
 impl core::ops::Drop for MMapReader {
     fn drop(&mut self) {
         match thread::panicking() {
-            true => log::error!("MmapReader panicking!"),
+            true => log::error!(
+                "MmapReader panicking! Had pushed {} pages.",
+                self.collected_pages
+            ),
             false => log::info!("MMapReader has been dropped."),
         }
     }

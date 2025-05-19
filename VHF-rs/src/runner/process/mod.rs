@@ -5,8 +5,8 @@ pub(super) mod consts;
 mod mmap_reader;
 pub(super) mod pages;
 
-use super::fold::StreamFold;
 use super::Config;
+use super::fold::StreamFold;
 use crate::{Error, Result};
 use consts::{MMAP_PAGE_LEN, VHF_MMAP_WINDOW_LEN};
 use heapless::Deque;
@@ -20,8 +20,8 @@ use std::io::{BufWriter, Write};
 use std::num::NonZeroUsize;
 use std::rc::Rc;
 use std::sync::{
-    atomic::{self, AtomicBool},
     Arc, Condvar, Mutex, RwLock,
+    atomic::{self, AtomicBool},
 };
 use std::thread::{self, JoinHandle};
 use std::time::Instant;
@@ -234,7 +234,7 @@ impl VHF {
                 .write(format!("config 3; param {};", config.gain.unwrap_or(0)).as_bytes())
                 .map_err(Error::Io)?; // Gain parameter
             buf_write.write(b"config 3; param 0;").map_err(Error::Io)?; // debug param = 0
-            buf_write.write(b"skip; skip;").unwrap();
+            buf_write.write(b"skip; skip;").map_err(Error::Io).unwrap();
             buf_write.flush().map_err(Error::Io)?;
 
             buf_write
@@ -288,7 +288,7 @@ impl VHF {
     }
 
     /// Returns an iterable over VHF's buffer.
-    pub fn iter<'a>(&'a self) -> VHFIter<'a> {
+    pub fn iter(&self) -> VHFIter<'_> {
         VHFIter {
             map_reader: Rc::clone(&self.map_reader),
             engine_running: &self.engine_running,
@@ -336,7 +336,7 @@ pub struct VHFIter<'a> {
     windows_released: usize,
 }
 
-impl<'a> WakeMapReader for VHFIter<'a> {
+impl WakeMapReader for VHFIter<'_> {
     /// Wake MMapReader child thread.
     fn unpark_child(&self) {
         log::trace!("Unparking MmapReader thread");
@@ -344,7 +344,7 @@ impl<'a> WakeMapReader for VHFIter<'a> {
     }
 }
 
-impl<'a> std::iter::Iterator for VHFIter<'a> {
+impl std::iter::Iterator for VHFIter<'_> {
     type Item = (usize, [MmapPage; VHF_MMAP_WINDOW_LEN]);
 
     // The idea: To ensure not having to manually drop any lifetimes (which could probably be
@@ -400,7 +400,7 @@ impl<'a> std::iter::Iterator for VHFIter<'a> {
             } else if self.buffer.is_poisoned() {
                 panic!("MMapReader thread has panicked");
             }; // We do nothing even if buffer was not locked: Child thread might still be pushing
-               // into it.
+            // into it.
 
             // Early break - Engine is not running anymore for any reason (Thread panic perhaps?)
             if !self
@@ -452,7 +452,6 @@ impl<'a> std::iter::Iterator for VHFIter<'a> {
         // Account for window being slightly different from number of pages being collected.
         let total: usize = self.total_pages_to_read.into();
         let lb = total.saturating_sub(self.windows_released);
-        let lb = lb as usize;
         (lb, Some(lb + VHF_MMAP_WINDOW_LEN))
     }
 }
