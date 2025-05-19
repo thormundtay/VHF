@@ -7,6 +7,10 @@ use std::{
     fs::{File, OpenOptions},
     io::BufWriter,
     path::PathBuf,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 
 const V1_MAGIC_HEADER: u64 = 0x123456ABCDEF0000;
@@ -17,18 +21,18 @@ pub struct V1Writer {
     /// Total number of files expected.
     num_files: usize,
     /// Number of files that have been opened so far.
-    num_files_so_far: usize,
+    num_files_so_far: AtomicUsize,
     time_between_files: Span,
     /// This is the number of [crate::runner::Config::num_samples] to be eventually be written to file.
     num_elements_per_file: usize,
-    num_elements_written: usize,
+    num_elements_written: AtomicUsize,
     verbosity: u8,
     header_details: String,
     filename_details: String,
     /// Avoid writing to a file until we exceed some amount.
-    elements_to_write: Vec<RawVHFWord>,
+    elements_to_write: Arc<Mutex<Vec<RawVHFWord>>>,
     file_dir: PathBuf,
-    current_file_handle: Option<BufWriter<File>>,
+    current_file_handle: Arc<Mutex<Option<BufWriter<File>>>>,
 }
 
 impl VHFWriter for V1Writer {
@@ -36,16 +40,18 @@ impl VHFWriter for V1Writer {
         Self {
             start_time,
             num_files: config.num_files,
-            num_files_so_far: 0,
+            num_files_so_far: AtomicUsize::new(0),
             time_between_files: config.file_timespan(),
             num_elements_per_file: config.num_samples,
-            num_elements_written: 0,
+            num_elements_written: AtomicUsize::new(0),
             verbosity: config.verbosity,
             header_details: config.details(),
             filename_details: config.filename(),
-            elements_to_write: Vec::with_capacity(FILE_LAZY_LEN.min(config.num_samples)),
+            elements_to_write: Arc::new(Mutex::new(Vec::with_capacity(
+                FILE_LAZY_LEN.min(config.num_samples),
+            ))),
             file_dir: config.save_dir.clone(),
-            current_file_handle: None,
+            current_file_handle: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -53,12 +59,12 @@ impl VHFWriter for V1Writer {
     fn write_data(&mut self, mut words: super::WriteBlock) -> Result<()> {
         let data: &mut Vec<_> = &mut words.data;
         'data_has_element: loop {
-            if self.num_files_so_far > self.num_files {
+            if self.num_files_so_far.load(Ordering::Acquire) > self.num_files {
                 return Err(Error::ExcessData);
             }
 
             // If no elements have yet been written, we fill the internal buffer instead.
-            if self.num_elements_written == 0 {
+            if self.num_elements_written.load(Ordering::Acquire) == 0 {
                 self.write_data_maybe_buffer(data)
             } else {
                 self.write_data_passed_buffer(data)
@@ -70,8 +76,8 @@ impl VHFWriter for V1Writer {
             );
 
             // Check if to continue or break loop
-            if self.num_elements_written >= self.num_elements_per_file {
-                self.num_elements_written = 0;
+            if self.num_elements_written.load(Ordering::Acquire) >= self.num_elements_per_file {
+                self.num_elements_written.fetch_min(0, Ordering::AcqRel);
                 self.close_file()?
             }
 
@@ -92,7 +98,7 @@ impl V1Writer {
     /// Tries to open a file in the specified location with the required name. Fails if file
     /// already exists.
     fn open_file(&mut self) -> Result<BufWriter<File>> {
-        if self.current_file_handle.is_some() {
+        if self.current_file_handle.lock().unwrap().is_some() {
             log::error!("A file is being requested to open when it has already been opened.");
             return Err(Error::InternalInconsistency);
         }
@@ -102,17 +108,32 @@ impl V1Writer {
             // Since this function opens the file, we can take this as the offset.
             let time = self
                 .start_time
-                .checked_add(self.num_files_so_far as i64 * self.time_between_files)
+                .checked_add(
+                    self.num_files_so_far.load(Ordering::Acquire) as i64 * self.time_between_files,
+                )
                 .map_err(Error::Jiff)?;
             tmp.push(match self.filename_details.len() {
-                0 => time.strftime("%FT%T%z").to_string() + ".bin",
-                _ => format!("{}_{}.bin", time.strftime("%FT%T%z"), self.filename_details),
+                0 => time.strftime("%FT%T%.f%z").to_string() + ".bin",
+                _ => format!(
+                    "{}_{}.bin",
+                    time.strftime("%FT%T%.f%z"),
+                    self.filename_details
+                ),
             });
             tmp
         };
 
         if std::fs::exists(path.clone()).unwrap() {
-            log::error!("Created file name found to already exist in location.");
+            log::error!(
+                "Created file name found to already exist in location, path = {:?}",
+                path
+            );
+            log::error!(
+                "self.start_time = {}, self.time_between_files = {}, num_files_so_far = {}",
+                self.start_time,
+                self.time_between_files,
+                self.num_files_so_far.load(Ordering::Acquire)
+            );
             return Err(Error::InternalInconsistency);
         }
 
@@ -123,14 +144,16 @@ impl V1Writer {
             .truncate(true)
             .open(path)
             .map_err(Error::Io)?;
-        self.num_files_so_far += 1;
+        self.num_files_so_far.fetch_add(1, Ordering::AcqRel);
         Ok(BufWriter::new(f))
     }
 
     /// Writes the file headers. Call this only before the first amount of data is being written.
     fn write_header(&mut self) -> Result<()> {
         // Do not write into a file who has already had headers/data written.
-        if self.current_file_handle.is_none() || self.num_elements_written > 0 {
+        if self.current_file_handle.lock().unwrap().is_none()
+            || self.num_elements_written.load(Ordering::Acquire) > 0
+        {
             return Err(Error::InternalInconsistency);
         }
 
@@ -153,7 +176,7 @@ impl V1Writer {
                     .checked_add(
                         self.time_between_files
                             // Because the file has already been opened, we have to sub by 1.
-                            * self.num_files_so_far.checked_sub(1).unwrap() as i64,
+                            * self.num_files_so_far.load(Ordering::Acquire).checked_sub(1).unwrap() as i64,
                     )
                     .map_err(Error::Jiff)?
                     .strftime("%FT%T%z")
@@ -168,7 +191,7 @@ impl V1Writer {
             return Err(Error::ExcessData);
         };
 
-        if let Some(buf_file) = self.current_file_handle.as_mut() {
+        if let Some(buf_file) = self.current_file_handle.lock().unwrap().as_mut() {
             use byteorder::{LittleEndian, WriteBytesExt};
             use std::io::Write;
             let header_first = V1_MAGIC_HEADER | (header_len as u64);
@@ -186,43 +209,47 @@ impl V1Writer {
 
     /// In the case where the buffer has not yet been filled.
     fn write_data_maybe_buffer(&mut self, data: &mut Vec<RawVHFWord>) -> Result<()> {
-        let buf_len = self.elements_to_write.len();
+        let buf_len = self.elements_to_write.lock().unwrap().len();
         let words_len = data.len();
 
         if buf_len + words_len < FILE_LAZY_LEN.min(self.num_elements_per_file) {
             // Fill into temporary buffer;
-            self.elements_to_write.append(data);
+            self.elements_to_write.lock().unwrap().append(data);
             return Ok(());
         }
 
         // Temporary buffer [self.elements_to_write] is full.
         // We now open the file and write the header.
         let file_handle = self.open_file()?;
-        self.current_file_handle = Some(file_handle);
+        *self.current_file_handle.lock().unwrap() = Some(file_handle);
         self.write_header()?;
 
         // Write the data
         use byteorder::{LittleEndian, WriteBytesExt};
-        if let Some(file) = self.current_file_handle.as_mut() {
-            if !self.elements_to_write.is_empty() {
+        if let Some(file) = self.current_file_handle.lock().unwrap().as_mut() {
+            if !self.elements_to_write.lock().unwrap().is_empty() {
                 self.elements_to_write
+                    .lock()
+                    .unwrap()
                     .drain(0..)
                     .try_for_each(|word| file.write_u64::<LittleEndian>(word))
                     .map_err(Error::Io)?;
-                self.num_elements_written += buf_len;
+                self.num_elements_written
+                    .fetch_add(buf_len, Ordering::Relaxed);
             };
             // Note! This can be be zero if the internal buffer was just nice the size
             // of the file.
             data.drain(
                 ..self
                     .num_elements_per_file
-                    .saturating_sub(self.num_elements_written)
+                    .saturating_sub(self.num_elements_written.load(Ordering::Acquire))
                     .min(data.len()),
             )
             .try_for_each(|word| file.write_u64::<LittleEndian>(word))
             .map_err(Error::Io)?;
 
-            self.num_elements_written += words_len;
+            self.num_elements_written
+                .fetch_add(words_len, Ordering::Release);
         } else {
             // File should have been created.
             log::error!("File should have been created!");
@@ -237,17 +264,18 @@ impl V1Writer {
         let words_len = data.len();
 
         use byteorder::{LittleEndian, WriteBytesExt};
-        if let Some(file) = self.current_file_handle.as_mut() {
+        if let Some(file) = self.current_file_handle.lock().unwrap().as_mut() {
             data.drain(
                 0..self
                     .num_elements_per_file
-                    .saturating_sub(self.num_elements_written)
+                    .saturating_sub(self.num_elements_written.load(Ordering::Acquire))
                     .min(data.len()),
             )
             .try_for_each(move |word| file.write_u64::<LittleEndian>(word))
             .map_err(Error::Io)?;
 
-            self.num_elements_written += words_len;
+            self.num_elements_written
+                .fetch_add(words_len, Ordering::Release);
             Ok(())
         } else {
             // File should have been created.
@@ -257,11 +285,11 @@ impl V1Writer {
     }
 
     fn close_file(&mut self) -> Result<()> {
-        if let Some(file) = self.current_file_handle.as_mut() {
+        if let Some(file) = self.current_file_handle.lock().unwrap().as_mut() {
             use std::io::Write;
             file.flush().map_err(Error::Io)?;
         }
-        self.current_file_handle = None;
+        *self.current_file_handle.lock().unwrap() = None;
         Ok(())
     }
 }
