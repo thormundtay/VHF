@@ -284,18 +284,20 @@ impl Configs {
 
     /// This is a string representation of the filename after the timestamp as in the filesystem.
     pub fn filename(&self) -> String {
-        let s: Vec<String> = self
-            .phasemeter_kwargs
-            .iter()
-            .map(|(a, b)| {
-                [
-                    a.clone().into_string().unwrap(),
-                    b.clone().into_string().unwrap(),
-                ]
-                .join("_")
-                .to_string()
-            })
-            .collect();
+        let s: Vec<String> = {
+            let mut tmp: Vec<_> = self.phasemeter_kwargs.iter().collect();
+            tmp.sort();
+            tmp.into_iter()
+                .map(|(a, b)| {
+                    [
+                        a.clone().into_string().unwrap(),
+                        b.clone().into_string().unwrap(),
+                    ]
+                    .join("_")
+                    .to_string()
+                })
+                .collect()
+        };
         s.join("_")
     }
 
