@@ -18,7 +18,6 @@ use nix::fcntl;
 use pages::MmapPage;
 use std::io::{BufWriter, Write};
 use std::num::NonZeroUsize;
-use std::rc::Rc;
 use std::sync::{
     Arc, Condvar, Mutex, RwLock,
     atomic::{self, AtomicBool},
@@ -39,7 +38,7 @@ pub struct VHF {
     /// map_reader contains the thread that is responsible for pulling elements out of the MMap
     /// into a [Self::buffer].
     /// More details is as given in [self::mmap_reader].
-    map_reader: Rc<JoinHandle<Result<()>>>,
+    map_reader: JoinHandle<Result<()>>,
     /// Used to signal to [self::mmap_reader::MMapReader] has started, and to determine that child has stopped.
     engine_running: Arc<AtomicBool>,
     /// Stopped invoked
@@ -151,7 +150,7 @@ impl VHF {
             configuration: Box::new(config.clone()),
             handle,
             raw_handle,
-            map_reader: Rc::new(map_reader),
+            map_reader,
             engine_running,
             vhf_stop: false,
             buffer_signal,
@@ -288,7 +287,7 @@ impl VHF {
     /// Returns an iterable over VHF's buffer.
     pub fn iter(&self) -> VHFIter<'_> {
         VHFIter {
-            map_reader: Rc::clone(&self.map_reader),
+            vhf_parent: self,
             engine_running: &self.engine_running,
             buffer_signal: &self.buffer_signal,
             buffer: &self.buffer,
@@ -298,23 +297,17 @@ impl VHF {
             windows_released: 0,
         }
     }
-}
 
-trait WakeMapReader {
-    /// Wake MMapReader child thread.
-    fn unpark_child(&self);
-}
-
-impl WakeMapReader for VHF {
+    /// Unpark MMapReader thread
+    #[inline]
     fn unpark_child(&self) {
         self.map_reader.thread().unpark()
     }
 }
 
 pub struct VHFIter<'a> {
-    /// This is for calling the parent struct [VHF] solely for intention of being able to tell the
-    /// child thread to park.
-    map_reader: Rc<JoinHandle<Result<()>>>,
+    /// non-iter parent
+    vhf_parent: &'a VHF,
     /// Used to signal to [self::mmap_reader::MMapReader] has started, and to determine that child has stopped.
     engine_running: &'a Arc<AtomicBool>,
     /// Used to receive signal from [self::mmap_reader::MMapReader] that new pages have been placed into
@@ -332,14 +325,6 @@ pub struct VHFIter<'a> {
     total_pages_to_read: NonZeroUsize,
     /// Number of windows released to .iter() or par_iter() so far.
     windows_released: usize,
-}
-
-impl WakeMapReader for VHFIter<'_> {
-    /// Wake MMapReader child thread.
-    fn unpark_child(&self) {
-        log::trace!("Unparking MmapReader thread from iter");
-        self.map_reader.thread().unpark()
-    }
 }
 
 impl std::iter::Iterator for VHFIter<'_> {
@@ -437,7 +422,7 @@ impl std::iter::Iterator for VHFIter<'_> {
                         // The intended amount of thread::sleep has been performed.
                         // Fall through as if now > target_wakeup
                     }
-                    self.unpark_child();
+                    self.vhf_parent.unpark_child();
                     break 'get_wake;
                 } else {
                     continue 'get_wake;
