@@ -11,14 +11,13 @@ use std::{fmt::Debug, ops::Deref, sync::Arc};
 pub enum MmapPage {
     /// For the very beginning of the stream being pulled out from the MMap, there is no "previous"
     /// page before the current page, and so, any function that works on the window from
-    /// [super::VHF::next] will have to be different.
+    /// <[super::VHFIter] as Iterator>::next will have to be different.
     Empty,
     /// One kernel page worth of MMap data.
     // NOTE: The allocation between pages can be considered as being fragmented; in contrast to the
     // VecDeque.
     Page(Page),
-    /// Denotes the MMapReader has reached the final page. Iterator trait for [super::VHF::next]
-    /// should exit.
+    /// Denotes the MMapReader has reached the final page. [stream][super::VHFIter] should then exit.
     End,
 }
 

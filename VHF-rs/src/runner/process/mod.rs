@@ -35,11 +35,9 @@ const DEQUE_CAP: usize = 256;
 pub struct VHF {
     configuration: Config,
     handle: libc::c_int,
-    // It might be possible that File as created by Handle in mmap_thread might lead to a double
-    // close. (remove comment after test. remove pub after test.)
     raw_handle: std::fs::File,
     /// map_reader contains the thread that is responsible for pulling elements out of the MMap
-    /// into a [buffer].
+    /// into a [Self::buffer].
     /// More details is as given in [self::mmap_reader].
     map_reader: Rc<JoinHandle<Result<()>>>,
     /// Used to signal to [self::mmap_reader::MMapReader] has started, and to determine that child has stopped.
@@ -47,17 +45,17 @@ pub struct VHF {
     /// Stopped invoked
     vhf_stop: bool,
     /// Used to receive signal from [self::mmap_reader::MMapReader] that new pages have been placed into
-    /// [self.buffer].
+    /// [Self::buffer].
     buffer_signal: Arc<Condvar>,
     /// buffer is a local mirror of Mmap that is intended for the likes of SlidingWindow
-    /// [itertools::tuple_windows] and par_map, which has more Rust Semantics than reading straight
+    /// [itertools::Itertools::tuple_windows] and par_map, which has more Rust Semantics than reading straight
     /// out of a Mmap.
     buffer: Arc<Mutex<Deque<MmapPage, DEQUE_CAP>>>,
     /// This is the amount of time between any two pages. Used for determining other timings.
     time_between_pages: Span,
     /// Expected time when to next wake up mmap_reader thread.
     wake_mmap: Arc<RwLock<Instant>>,
-    /// This is the total number of pages to be read by [self::MMapReader].
+    /// This is the total number of pages to be read by [Self::map_reader].
     total_pages_to_read: NonZeroUsize,
 }
 
@@ -323,14 +321,14 @@ pub struct VHFIter<'a> {
     /// [self.buffer].
     buffer_signal: &'a Arc<Condvar>,
     /// buffer is a local mirror of Mmap that is intended for the likes of SlidingWindow
-    /// [itertools::tuple_windows] and par_map, which has more Rust Semantics than reading straight
+    /// [itertools::Itertools::tuple_windows] and par_map, which has more Rust Semantics than reading straight
     /// out of a Mmap.
     buffer: &'a Arc<Mutex<Deque<MmapPage, DEQUE_CAP>>>,
     /// This is the amount of time between any two pages. Used for determining other timings.
     time_between_pages: Span,
     /// Expected time when to next wake up mmap_reader thread.
     wake_mmap: &'a Arc<RwLock<Instant>>,
-    /// This is the total number of pages to be read by [self::MMapReader].
+    /// This is the total number of pages to be read by [mmap_reader::MMapReader].
     total_pages_to_read: NonZeroUsize,
     /// Number of windows released to .iter() or par_iter() so far.
     windows_released: usize,
@@ -339,7 +337,7 @@ pub struct VHFIter<'a> {
 impl WakeMapReader for VHFIter<'_> {
     /// Wake MMapReader child thread.
     fn unpark_child(&self) {
-        log::trace!("Unparking MmapReader thread");
+        log::trace!("Unparking MmapReader thread from iter");
         self.map_reader.thread().unpark()
     }
 }

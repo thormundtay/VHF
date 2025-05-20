@@ -1,5 +1,5 @@
 //! [MMapReader] aims to act as a "child class" for [super::VHF], but with the sole responsibility
-//! of [mmap_rs::MMap] + ioctl management.
+//! of [mmap_rs::Mmap] + ioctl management.
 //! The intended entry point for [super::VHF] is to spawn [MMapReader] into a child thread through
 //! the use of [mmap_thread].
 
@@ -18,13 +18,13 @@ use std::sync::{
 use std::thread;
 use std::time::{Duration, Instant};
 
-/// Bottom 12 bytes of [super::board_ioctl_consts::ioctl_read] should be zero'd to align to [MMapPage::Page].
+/// Bottom 12 bytes of [super::board_ioctl_consts::ioctl_read] should be zero'd to align to [MmapPage::Page].
 pub const ALIGN_VHF_OUTPUT_TO_PAGES: usize = 9 + 3;
 
 pub(super) struct MMapReader {
     // FileHandle associated to mmap is needed to ioctl_next;
     handle: libc::c_int,
-    // Ownership of [Mmap] throughout the lifetime of the entire program should be limited to this
+    // Ownership of [self::Mmap] throughout the lifetime of the entire program should be limited to this
     // struct.
     mmap: Mmap,
     // Used to determine that parents has started, and to signal back to parent thread that stop
@@ -33,7 +33,7 @@ pub(super) struct MMapReader {
     engine_running: Arc<AtomicBool>, // Suboptimal
     /// Used to signal back to parent that a page hasbeen placedinto [self.transfer_buffer].
     transfer_buffer_signal: Arc<Condvar>,
-    /// This is the means by which MMapReader passes pages back to [VHF] for VHF to act as an
+    /// This is the means by which MMapReader passes pages back to [super::VHF] for VHF to act as an
     /// iterator.
     // Strongly note that MMapPages are therefore fragmented with respect to each other, but we eat
     // this cost first.
@@ -44,7 +44,7 @@ pub(super) struct MMapReader {
     prev_bytes: usize,
     /// Time for a single page.
     page_duration: Duration,
-    /// Time between stream ([<super::VHFIter>::next] method) wakeups
+    /// Time between [stream][super::VHFIter] [`next`](../../struct.VHFIter.html#impl-Iterator-for-VHFIter<'_>) method wakeups
     stream_pause: Duration,
     /// Maximal amount of time alloweable waiting for parent thread to unpark before self unpark.
     loop_timeout: Duration,
@@ -224,8 +224,8 @@ impl MMapReader {
     }
 
     /// Knowing the number of pages being stepped by, left-padded and number of pages collected
-    /// thus far, one can determine the number of [pages::MMapPage::Empty] one needs to pad on the
-    /// right by. This function then determines how many of such empty pages one requires.
+    /// thus far, one can determine the number of [super::pages::MmapPage::Empty] one needs to pad
+    /// on the right by. This function then determines how many of such empty pages one requires.
     #[inline(always)]
     fn pad_end_remaining(&self) -> usize {
         // (a-2b) - (x mod (a-b)); where
