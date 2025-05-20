@@ -32,7 +32,7 @@ pub(super) fn debug_vhf_new(total_to_read: NonZeroUsize) -> VHF {
     let wake_mmap = Arc::new(RwLock::new(Instant::now()));
 
     VHF {
-        configuration,
+        configuration: Box::new(configuration),
         handle,
         raw_handle,
         map_reader: Rc::new(map_reader),

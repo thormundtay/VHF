@@ -33,7 +33,7 @@ const DEQUE_CAP: usize = 256;
 
 /// Everything necessary to ensure the lifetime of pulling memory out from the VHF for its runtime
 pub struct VHF {
-    configuration: Config,
+    configuration: Box<Config>,
     handle: libc::c_int,
     raw_handle: std::fs::File,
     /// map_reader contains the thread that is responsible for pulling elements out of the MMap
@@ -148,7 +148,7 @@ impl VHF {
         log::debug!("Readback buffer thread created");
 
         Ok(Self {
-            configuration: config.clone(),
+            configuration: Box::new(config.clone()),
             handle,
             raw_handle,
             map_reader: Rc::new(map_reader),
