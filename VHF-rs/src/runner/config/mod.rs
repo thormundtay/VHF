@@ -132,19 +132,23 @@ impl Configs {
             self.skip_num = u16::try_from(skip_num)
                 .map_err(|_| Error::ini_coerce("Board", "skip_num", "u16"))?
         };
-        self.speed = SamplingSpeed::from_str(
-            config
-                .get("Board", "speed")
-                .unwrap_or(Configs::default().speed.to_string())
-                .as_str(),
-        )?;
+        self.speed = config
+            .get("Board", "speed")
+            .ok_or_else(|| {
+                log::warn!("Board speed not found in config; Using default.");
+                Error::ParseEmpty
+            })
+            .and_then(|e| SamplingSpeed::from_str(e.as_str()))
+            .unwrap_or(Self::default().speed);
 
-        self.encode = Encode::from_str(
-            config
-                .get("Board", "encode")
-                .unwrap_or(Configs::default().encode.to_string())
-                .as_str(),
-        )?;
+        self.encode = config
+            .get("Board", "encode")
+            .ok_or_else(|| {
+                log::warn!("Board encode not found in config; Using default.");
+                Error::ParseEmpty
+            })
+            .and_then(|e| Encode::from_str(e.as_str()))
+            .unwrap_or(Self::default().encode);
 
         self.gain = utils::if_enabled_value(&config, "Board", "vga_num", |v| v <= 8)?;
         self.filter_const = utils::if_enabled_value(&config, "Board", "filter_const", |v| v <= 15)?;
@@ -191,14 +195,18 @@ impl Configs {
         };
 
         // Section: Paths
-        match utils::get_with_ext_interp(&config, "Paths", "save_dir") {
-            Ok(save_dir) => self.save_dir = PathBuf::from(save_dir),
-            Err(_) => log::warn!("No save directory provided by INI file. Using default."),
-        };
-        match utils::get_with_ext_interp(&config, "Paths", "board") {
-            Ok(board) => self.board = PathBuf::from(board),
-            Err(_) => log::warn!("No board provided by INI file. Using default."),
-        };
+        self.save_dir = utils::get_with_ext_interp(&config, "Paths", "save_dir")
+            .and_then(|dir| Ok(PathBuf::from(dir)))
+            .unwrap_or_else(|e| {
+                log::warn!("No save directory provided by INI file. Using default. Error: {e}");
+                Self::default().save_dir
+            });
+        self.board = utils::get_with_ext_interp(&config, "Paths", "board")
+            .and_then(|p| PathBuf::from(p).canonicalize().map_err(Error::Io))
+            .unwrap_or_else(|e| {
+                log::warn!("No board provided by INI file. Using default. Error: {e}");
+                Self::default().board
+            });
         self.save_to_file = match config.getbool("Paths", "save_to_file") {
             Err(e) => {
                 return Err(Error::IniParse(format!(
