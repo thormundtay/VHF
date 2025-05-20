@@ -94,6 +94,7 @@ impl Configs {
     }
 
     /// Builds configuration from file.
+    /// This is destructive on the existing state of Configuration.
     pub fn with_file(&mut self, file: &Path) -> Result<()> {
         let mut config = ini::Ini::new();
         config.load(file).unwrap();
@@ -360,5 +361,60 @@ impl Configs {
                 )
                 .unwrap_or_default()
         )
+    }
+}
+
+#[cfg(test)]
+mod configurations {
+    use super::*;
+
+    #[test]
+    fn intended_case() {
+        let ini_config = {
+            let mut config = ini::Ini::new();
+            config
+                .read(
+                    "[Board]
+                    num_samples = 1
+                    skip_num = 10 - 1
+                    speed: low
+                    encode: binary
+                    vga_num = 0
+                    vga_num_enable = False
+                    filter_const = 0
+                    filter_const_enable = False
+                    v = 3
+
+                    [Paths]
+                    base_dir: .
+                    save_dir: Data
+                    # This should just yield the default
+                    board: ${base_dir}/vhf_board
+                    save_to_file = True
+
+                    [Phasemeter Details]"
+                        .to_string(),
+                )
+                .expect("Ini lib parse error.");
+            config
+        };
+
+        let mut config = Configs::new(None).expect("Unable to create Config from empty");
+
+        // There are no missing fields, and therefore should not raise errors.
+        let p = config.with_config(ini_config);
+        assert!(p.is_ok());
+
+        assert_eq!(config.num_samples, 1);
+        assert_eq!(config.skip_num, 10 - 1);
+        matches!(config.speed, SamplingSpeed::Low);
+        matches!(config.encode, Encode::Binary);
+        assert_eq!(config.gain, None);
+        assert_eq!(config.filter_const, None);
+        assert_eq!(config.verbosity, 3);
+
+        assert_eq!(config.save_dir, PathBuf::from("Data"));
+        // Ignore due to canonicalization
+        assert_eq!(config.board, Configs::default().board);
     }
 }
