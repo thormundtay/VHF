@@ -11,7 +11,78 @@ use super::*;
 use crate::types::{IQMTriplet, Polar, RawVHFWord};
 
 use std::f64::consts::{PI, TAU};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use test_log::test;
+
+pub(super) struct SineArr {
+    total_len: AtomicUsize,
+    current_idx: AtomicUsize,
+    engine_running: Arc<AtomicBool>,
+    phase_ampl: f64,
+    phase_angular_frequency: f64,
+    phase_offset: f64,
+    signal_ampl: f64,
+    phase_y_offset: f64,
+}
+
+impl Iterator for SineArr {
+    type Item = RawVHFWord;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_idx.load(Ordering::Acquire) >= self.total_len.load(Ordering::Acquire) {
+            self.engine_running.fetch_and(false, Ordering::AcqRel);
+            None
+        } else {
+            let i = self.current_idx.fetch_add(1, Ordering::Acquire);
+            let p = Polar {
+                radius: self.signal_ampl,
+                phase: (i as f64)
+                    .mul_add(self.phase_angular_frequency, self.phase_offset)
+                    .sin()
+                    .mul_add(self.phase_ampl, self.phase_y_offset),
+            };
+            Some(p.into())
+        }
+    }
+}
+
+impl SineArr {
+    /// Create a new iterator that generates a sine function.
+    /// Parameters:
+    /// * `total_len`: How many elements the iterator should yield.
+    /// * `engine_running`: For this iterator to stop the VHF engine when the thread spawned by
+    ///   this function ends.
+    /// * `params`: (phase_ampl, phase_angular_frequency, phase_offset, signal_ampl, y-offset)
+    pub(super) fn new(
+        total_len: usize,
+        engine_running: Arc<AtomicBool>,
+        params: (f64, f64, f64, f64, f64),
+    ) -> Self {
+        if total_len % MMAP_PAGE_LEN != 0 {
+            log::warn!("ZeroArr did not receive an integer multiple of MMAP_PAGE_LEN");
+        }
+        Self {
+            total_len: AtomicUsize::new(total_len),
+            current_idx: AtomicUsize::new(0),
+            engine_running,
+            phase_ampl: params.0,
+            phase_angular_frequency: params.1,
+            phase_offset: params.2,
+            signal_ampl: params.3,
+            phase_y_offset: params.4,
+        }
+    }
+}
+
+impl Clone for SineArr {
+    fn clone(&self) -> Self {
+        Self {
+            total_len: AtomicUsize::new(self.total_len.load(Ordering::Acquire)),
+            current_idx: AtomicUsize::new(self.current_idx.load(Ordering::Acquire)),
+            engine_running: Arc::new(AtomicBool::new(false)),
+            ..*self
+        }
+    }
+}
 
 /// Check that without any m-overflow, StreamFold behaves to expectation.
 #[test]
