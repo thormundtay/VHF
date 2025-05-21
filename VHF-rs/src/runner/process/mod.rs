@@ -305,6 +305,19 @@ impl VHF {
     }
 }
 
+impl Drop for VHF {
+    fn drop(&mut self) {
+        if !self.vhf_stop {
+            log::debug!("VHF cleanup on drop has been invoked for us.");
+
+            let stop_result = self.stop();
+            if stop_result.is_err() {
+                log::error!("VHF.stop had error during drop: {stop_result:?}");
+            }
+        }
+    }
+}
+
 pub struct VHFIter<'a> {
     /// non-iter parent
     vhf_parent: &'a VHF,
