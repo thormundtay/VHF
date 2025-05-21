@@ -4,7 +4,11 @@ use super::*;
 use crate::types::RawVHFWord;
 
 use heapless::Deque;
-use std::{matches, ops::Deref};
+use std::{
+    matches,
+    ops::Deref,
+    sync::atomic::{AtomicU64, Ordering},
+};
 use tempfile::{NamedTempFile, TempDir};
 use test_log::test;
 
@@ -43,6 +47,39 @@ pub(super) fn debug_vhf_new(total_to_read: NonZeroUsize) -> VHF {
         time_between_pages,
         wake_mmap,
         total_pages_to_read: total_to_read,
+    }
+}
+
+// Generate the zero-constant iterator on demand.
+struct ZeroArr {
+    total_len: AtomicU64,
+    current_idx: AtomicU64,
+    engine_running: Arc<AtomicBool>,
+}
+
+impl Iterator for ZeroArr {
+    type Item = RawVHFWord;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_idx.load(Ordering::Acquire) >= self.total_len.load(Ordering::Acquire) {
+            self.engine_running.fetch_and(false, Ordering::AcqRel);
+            None
+        } else {
+            self.current_idx.fetch_add(1, Ordering::Relaxed);
+            Some(0)
+        }
+    }
+}
+
+impl ZeroArr {
+    fn new(total_len: usize, engine_running: Arc<AtomicBool>) -> Self {
+        if total_len % MMAP_PAGE_LEN != 0 {
+            log::warn!("ZeroArr did not receive an integer multiple of MMAP_PAGE_LEN");
+        }
+        Self {
+            total_len: AtomicU64::new(total_len as u64),
+            current_idx: AtomicU64::new(0),
+            engine_running,
+        }
     }
 }
 
@@ -107,6 +144,37 @@ fn vhf_drops_arc() {
 
     // Check that content has been dropped.
     assert_eq!(to_drop.strong_count(), 0);
+}
+
+struct LinearArr {
+    total_len: AtomicU64,
+    current_idx: AtomicU64,
+    engine_running: Arc<AtomicBool>,
+}
+
+impl Iterator for LinearArr {
+    type Item = RawVHFWord;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_idx.load(Ordering::Acquire) >= self.total_len.load(Ordering::Acquire) {
+            self.engine_running.fetch_and(false, Ordering::AcqRel);
+            None
+        } else {
+            Some(self.current_idx.fetch_add(1, Ordering::AcqRel))
+        }
+    }
+}
+
+impl LinearArr {
+    fn new(total_len: usize, engine_running: Arc<AtomicBool>) -> Self {
+        if total_len % MMAP_PAGE_LEN != 0 {
+            log::warn!("LinearArr did not receive an integer multiple of MMAP_PAGE_LEN");
+        }
+        Self {
+            total_len: AtomicU64::new(total_len as u64),
+            current_idx: AtomicU64::new(0),
+            engine_running,
+        }
+    }
 }
 
 /// We check that the VHF struct is yielding the correct windows with next.
