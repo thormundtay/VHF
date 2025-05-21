@@ -1,3 +1,7 @@
+/// Used in determining the running of a board, such as getting Major and Minor ID, fuser etc.
+#[cfg(feature = "clear-fifo")]
+pub mod board;
+
 /// Used in taking CLI and file configuration.
 mod config;
 pub use config::Configs as Config;

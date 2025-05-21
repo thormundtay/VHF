@@ -6,8 +6,16 @@ edition = "2024"
 [[bin]]
 name = "stream"
 
+[[bin]]
+name = "clear-fifo"
+required-features = ["clear-fifo",]
+
 [lib]
 name = "vhf"
+
+[features]
+default = []
+clear-fifo = ["nix/user",]
 
 [dependencies]
 bytemuck = { version = "1.23.0" }
