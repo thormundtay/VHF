@@ -16,7 +16,7 @@ use std::time::Duration;
 use test_log::test;
 
 pub(super) struct SineArr {
-    total_len: AtomicUsize,
+    total_len: usize,
     current_idx: AtomicUsize,
     engine_running: Arc<AtomicBool>,
     phase_ampl: f64,
@@ -29,7 +29,7 @@ pub(super) struct SineArr {
 impl Iterator for SineArr {
     type Item = RawVHFWord;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_idx.load(Ordering::Acquire) >= self.total_len.load(Ordering::Acquire) {
+        if self.current_idx.load(Ordering::Acquire) >= self.total_len {
             self.engine_running.fetch_and(false, Ordering::AcqRel);
             None
         } else {
@@ -62,7 +62,7 @@ impl SineArr {
             log::warn!("ZeroArr did not receive an integer multiple of MMAP_PAGE_LEN");
         }
         Self {
-            total_len: AtomicUsize::new(total_len),
+            total_len,
             current_idx: AtomicUsize::new(0),
             engine_running,
             phase_ampl: params.0,
@@ -75,9 +75,9 @@ impl SineArr {
 }
 
 impl Clone for SineArr {
+    /// XXX: This will detach from the [`engine_running`].
     fn clone(&self) -> Self {
         Self {
-            total_len: AtomicUsize::new(self.total_len.load(Ordering::Acquire)),
             current_idx: AtomicUsize::new(self.current_idx.load(Ordering::Acquire)),
             engine_running: Arc::new(AtomicBool::new(false)),
             ..*self

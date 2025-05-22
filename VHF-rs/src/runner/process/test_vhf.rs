@@ -7,7 +7,7 @@ use heapless::Deque;
 use std::{
     matches,
     ops::Deref,
-    sync::atomic::{AtomicU64, Ordering},
+    sync::atomic::{AtomicU64, AtomicUsize, Ordering},
     time::Duration,
 };
 use tempfile::{NamedTempFile, TempDir};
@@ -98,15 +98,15 @@ pub(super) fn push_arc_pages(
 
 // Generate the zero-constant iterator on demand.
 struct ZeroArr {
-    total_len: AtomicU64,
-    current_idx: AtomicU64,
+    total_len: usize,
+    current_idx: AtomicUsize,
     engine_running: Arc<AtomicBool>,
 }
 
 impl Iterator for ZeroArr {
     type Item = RawVHFWord;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_idx.load(Ordering::Acquire) >= self.total_len.load(Ordering::Acquire) {
+        if self.current_idx.load(Ordering::Acquire) >= self.total_len {
             self.engine_running.fetch_and(false, Ordering::AcqRel);
             None
         } else {
@@ -122,8 +122,8 @@ impl ZeroArr {
             log::warn!("ZeroArr did not receive an integer multiple of MMAP_PAGE_LEN");
         }
         Self {
-            total_len: AtomicU64::new(total_len as u64),
-            current_idx: AtomicU64::new(0),
+            total_len,
+            current_idx: AtomicUsize::new(0),
             engine_running,
         }
     }
@@ -174,7 +174,7 @@ fn vhf_drops_arc() {
 }
 
 struct LinearArr {
-    total_len: AtomicU64,
+    total_len: u64,
     current_idx: AtomicU64,
     engine_running: Arc<AtomicBool>,
 }
@@ -182,7 +182,7 @@ struct LinearArr {
 impl Iterator for LinearArr {
     type Item = RawVHFWord;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_idx.load(Ordering::Acquire) >= self.total_len.load(Ordering::Acquire) {
+        if self.current_idx.load(Ordering::Acquire) >= self.total_len {
             self.engine_running.fetch_and(false, Ordering::AcqRel);
             None
         } else {
@@ -197,7 +197,7 @@ impl LinearArr {
             log::warn!("LinearArr did not receive an integer multiple of MMAP_PAGE_LEN");
         }
         Self {
-            total_len: AtomicU64::new(total_len as u64),
+            total_len: total_len.try_into().unwrap(),
             current_idx: AtomicU64::new(0),
             engine_running,
         }
