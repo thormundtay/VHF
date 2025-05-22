@@ -4,6 +4,7 @@ use super::{FILE_LAZY_LEN, VHFWriter};
 use crate::{Error, Result, runner::Config, types::RawVHFWord};
 use jiff::{Span, Zoned};
 use std::{
+    fmt::Debug,
     fs::{File, OpenOptions},
     io::BufWriter,
     path::PathBuf,
@@ -11,6 +12,7 @@ use std::{
         Arc, Mutex,
         atomic::{AtomicUsize, Ordering},
     },
+    thread,
 };
 
 const V1_MAGIC_HEADER: u64 = 0x123456ABCDEF0000;
@@ -70,10 +72,12 @@ impl VHFWriter for V1Writer {
                 self.write_data_passed_buffer(data)
             }?;
 
-            log::trace!(
-                "One round of drain occurred. Number of elements left = {}",
-                data.len()
-            );
+            if !data.is_empty() {
+                log::trace!(
+                    "One round of drain occurred with elements left = {}",
+                    data.len()
+                )
+            }
 
             // Check if to continue or break loop
             if self.num_elements_written.load(Ordering::Acquire) >= self.num_elements_per_file {
@@ -296,9 +300,33 @@ impl V1Writer {
 
 impl Drop for V1Writer {
     fn drop(&mut self) {
+        if thread::panicking() {
+            log::warn!("V1Writer in panic. self = {:?}", self);
+        }
+
         let tmp = self.close_file();
         if tmp.is_err() {
             log::warn!("Failed to close file during drop!");
         }
+    }
+}
+
+impl Debug for V1Writer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_map()
+            .entry(&"files", &self.num_files_so_far)
+            .entry(&"files_tot", &self.num_files)
+            .entry(&"elements_written", &self.num_elements_written)
+            .entry(&"elements_tot", &self.num_elements_per_file)
+            .entry(
+                &"internal_buf_len",
+                &self
+                    .elements_to_write
+                    .try_lock()
+                    .and_then(|x| Ok((*x).len())),
+            )
+            .entry(&"file_dir", &self.file_dir)
+            // Don't really care for the internal headers etc as they are const
+            .finish()
     }
 }
