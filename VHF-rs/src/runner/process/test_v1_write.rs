@@ -4,24 +4,26 @@ use super::super::config::Configs;
 use super::super::fold::StreamFold;
 use super::super::writer::{V1Writer, VHFWriter};
 use super::consts::MMAP_PAGE_LEN;
-use super::test_vhf::{create_arc_pages, debug_vhf_new};
+use super::test_vhf::{debug_vhf_new, push_arc_pages};
+use super::test_vhf_step_fold::SineArr;
 use super::*;
-use crate::types::Polar;
 
 use jiff::Zoned;
 use std::collections::HashMap;
 use std::f64::consts::TAU;
 use std::ffi::CString;
+use std::time::Duration;
 use tempfile::TempDir;
 use test_log::test;
 
 /// Write a file that has data with m-overflow.
-/// This test will fail if [super::test_vhf_step_fold::stepped_overlapping_identity_b] fails.
+/// This test will fail if [super::test_vhf_step_fold::stepped_nonoverlapping_identity_b] fails.
 #[test]
 fn writes_correct_header() {
     let debug_vhf_total_len = 4 * VHF_MMAP_WINDOW_LEN;
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
-    let debug_vhf = debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
+    let (debug_vhf, dbg_vhf_buffer, eng) =
+        debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
     let StreamFold::None(params) = StreamFold::none_default() else {
@@ -33,29 +35,24 @@ fn writes_correct_header() {
     let ampl = 5000f64;
     let ang_freq = TAU / (MMAP_PAGE_LEN as f64 / 2. + 1.);
     let phase_offset = 1.2f64;
-    let signal_phase =
-        (0..total_elements).map(|i| ampl * (i as f64).mul_add(ang_freq, phase_offset).sin());
     let signal_radius = 5000f64;
-    let signal = signal_phase.map(|x| Polar {
-        radius: signal_radius,
-        phase: x + (TAU * 0x7FFF as f64),
-    });
 
-    // Add signal into pages.
-    // We now add data into the buffer.
-    if let Ok(mut buf) = debug_vhf.buffer.lock() {
-        let tmp_signal: Vec<_> = signal.clone().map(|x| x.into()).collect();
-        log::info!(
-            "Number of pages placed into buffer = {}",
-            create_arc_pages(&tmp_signal).len()
-        );
-        create_arc_pages(&tmp_signal)
-            .into_iter()
-            .for_each(|x| buf.push_back(x).expect("Push back failed."));
-    } else {
-        log::error!("Could not get log in debug_vhf.buffer");
-        panic!();
-    };
+    let signal = SineArr::new(
+        total_elements,
+        eng.clone(),
+        (
+            ampl,
+            ang_freq,
+            phase_offset,
+            signal_radius,
+            TAU * 0x7FFF as f64,
+        ),
+    );
+    let _signal_expected = signal.clone(); // This will lose the engine
+
+    // Add signal into pages. We now add data into the buffer.
+    let push_arc_pages_thread = push_arc_pages(dbg_vhf_buffer, signal, Duration::new(0, 100), eng)
+        .expect("push_arc_pages failed");
 
     let time_start = Zoned::now();
     let mut config = Configs::new(None).expect("Config struct could not be made");
@@ -76,6 +73,7 @@ fn writes_correct_header() {
     // TODO: Check for correctness of written data.
 
     tmp_dir.close().expect("Could not close temp_dir.");
+    push_arc_pages_thread.join().expect("Failed to join");
 }
 
 #[test]
@@ -89,7 +87,8 @@ fn creates_multiple_files() {
     let debug_vhf_total_len = VHF_MMAP_WINDOW_LEN * scale_elements;
     log::info!("debug_vhf_total_len = {}", &debug_vhf_total_len);
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
-    let debug_vhf = debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
+    let (debug_vhf, dbg_vhf_buffer, eng) =
+        debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
     let StreamFold::None(params) = StreamFold::none_default() else {
@@ -101,29 +100,25 @@ fn creates_multiple_files() {
     let ampl = 5000f64;
     let ang_freq = TAU / (MMAP_PAGE_LEN as f64 / 2. + 1.);
     let phase_offset = 1.2f64;
-    let signal_phase =
-        (0..total_elements).map(|i| ampl * (i as f64).mul_add(ang_freq, phase_offset).sin());
     let signal_radius = 5000f64;
-    let signal = signal_phase.map(|x| Polar {
-        radius: signal_radius,
-        phase: x + (TAU * 0x7FFF as f64),
-    });
 
-    // Add signal into pages.
-    // We now add data into the buffer.
-    if let Ok(mut buf) = debug_vhf.buffer.lock() {
-        let tmp_signal: Vec<_> = signal.clone().map(|x| x.into()).collect();
-        log::info!(
-            "Number of pages placed into buffer = {}",
-            create_arc_pages(&tmp_signal).len()
-        );
-        create_arc_pages(&tmp_signal)
-            .into_iter()
-            .for_each(|x| buf.push_back(x).expect("Push back failed."));
-    } else {
-        log::error!("Could not get log in debug_vhf.buffer");
-        panic!();
-    };
+    let signal = SineArr::new(
+        total_elements,
+        eng.clone(),
+        (
+            ampl,
+            ang_freq,
+            phase_offset,
+            signal_radius,
+            TAU * 0x7FFF as f64,
+        ),
+    );
+    let _signal_expected = signal.clone(); // This will lose the engine
+
+    // Add signal into pages. We now add data into the buffer.
+    let push_arc_pages_thread =
+        push_arc_pages(dbg_vhf_buffer, signal, Duration::new(0, 10_000), eng)
+            .expect("push_arc_pages failed");
 
     let time_start = Zoned::now();
     let mut config = Configs::new(None).expect("Config struct could not be made");
@@ -155,4 +150,5 @@ fn creates_multiple_files() {
         num_file
     );
     tmp_dir.close().expect("Could not close temp_dir.");
+    push_arc_pages_thread.join().expect("Failed to join");
 }
