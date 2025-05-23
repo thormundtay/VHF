@@ -147,9 +147,14 @@ impl MMapReader {
                     log::error!("Received negative next value.");
                     return Err(Error::ioctl_call("Negative next value received."));
                 }
-                if next.wrapping_sub(self.last_tfb32) <= (1 << ALIGN_VHF_OUTPUT_TO_PAGES) {
+                if next.wrapping_sub(self.last_tfb32) & i32::MAX <= (1 << ALIGN_VHF_OUTPUT_TO_PAGES)
+                {
                     thread::park_timeout(self.page_duration);
                     continue 'next_mmap;
+                };
+                if next.wrapping_sub(self.last_tfb32) & i32::MAX > (MMAP_BYTES_LEN as i32) {
+                    log::error!("Circular buffer has already been overwritten!");
+                    return Err(Error::InternalInconsistency);
                 };
 
                 // Enough pages have accumulated.
