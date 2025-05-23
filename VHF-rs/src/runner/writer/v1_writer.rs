@@ -239,7 +239,7 @@ impl V1Writer {
                     .try_for_each(|word| file.write_u64::<LittleEndian>(word))
                     .map_err(Error::Io)?;
                 self.num_elements_written
-                    .fetch_add(buf_len, Ordering::Relaxed);
+                    .fetch_add(buf_len, Ordering::Release);
             };
             // Note! This can be be zero if the internal buffer was just nice the size
             // of the file.
