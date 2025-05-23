@@ -6,6 +6,7 @@ mod mmap_reader;
 pub(super) mod pages;
 
 use super::Config;
+use super::config::typedef::SamplingSpeed;
 use super::fold::StreamFold;
 use crate::{Error, Result};
 use consts::{MMAP_PAGE_LEN, VHF_MMAP_WINDOW_LEN};
@@ -219,8 +220,18 @@ impl VHF {
             std::thread::sleep(std::time::Duration::from_nanos(2000)); // 1000 might be sufficient
 
             buf_write
-                .write(format!("config 16; param {};", config.filter_const.unwrap_or(0)).as_bytes())
-                .map_err(Error::Io)?; // filter_const
+                .write(
+                    format!("config 16; param {};", {
+                        // Default is 0
+                        let fc = config.filter_const.unwrap_or(0);
+                        match config.speed {
+                            SamplingSpeed::Low => (fc << 1) | 1,
+                            SamplingSpeed::High => (fc << 1) & !1,
+                        }
+                    })
+                    .as_bytes(),
+                )
+                .map_err(Error::Io)?; // filter_const + fast/slow
             buf_write
                 .write(format!("config 1; param {};", config.skip_num).as_bytes())
                 .map_err(Error::Io)?; // skips samples
