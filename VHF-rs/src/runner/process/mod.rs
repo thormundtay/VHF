@@ -365,6 +365,7 @@ impl std::iter::Iterator for VHFIter<'_> {
     // transformer.
     fn next(&mut self) -> Option<Self::Item> {
         if self.windows_released > self.total_pages_to_read.into() {
+            log::debug!("next yielding none: Released enough windows.");
             return None;
         }
 
@@ -400,6 +401,7 @@ impl std::iter::Iterator for VHFIter<'_> {
                 .engine_running
                 .load(std::sync::atomic::Ordering::Relaxed)
             {
+                log::debug!("next yielding none: engine stopped running.");
                 return None;
             };
 
