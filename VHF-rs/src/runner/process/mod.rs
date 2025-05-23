@@ -227,9 +227,6 @@ impl VHF {
             buf_write
                 .write(format!("config 2; param {};", config.gain.unwrap_or(0)).as_bytes())
                 .map_err(Error::Io)?; // Gain parameter
-            buf_write
-                .write(format!("config 3; param {};", config.gain.unwrap_or(0)).as_bytes())
-                .map_err(Error::Io)?; // Gain parameter
             buf_write.write(b"config 3; param 0;").map_err(Error::Io)?; // debug param = 0
             buf_write.write(b"skip; skip;").map_err(Error::Io).unwrap();
             buf_write.flush().map_err(Error::Io)?;
