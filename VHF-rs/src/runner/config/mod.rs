@@ -260,8 +260,8 @@ impl Configs {
         result.push("-s".to_string());
         result.push(self.skip_num.to_string());
 
-        result.push("-".to_string() + &self.speed.to_string());
-        result.push("-".to_string() + &self.encode.to_string());
+        result.push("-".to_string() + &self.speed.to_char());
+        result.push("-".to_string() + &self.encode.to_char());
 
         if let Some(filter_const) = self.filter_const {
             result.push("-F".to_string());

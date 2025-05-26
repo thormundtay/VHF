@@ -51,6 +51,14 @@ impl SamplingSpeed {
             SamplingSpeed::Low => jiff::Span::new().nanoseconds(100),
         }
     }
+
+    /// This is for being in the header
+    pub(crate) fn to_char(&self) -> &str {
+        match self {
+            SamplingSpeed::High => &"h",
+            SamplingSpeed::Low => &"l",
+        }
+    }
 }
 
 /// The structure of the file saved.
@@ -85,6 +93,16 @@ impl FromStr for Encode {
             v => Err(Error::ParseUnrecognised(format!(
                 "Encode::try_from got value: {v}"
             ))),
+        }
+    }
+}
+
+impl Encode {
+    pub(crate) fn to_char(&self) -> &str {
+        match self {
+            Self::Binary => &"b",
+            Self::Hexadecimal => &"x",
+            Self::ASCII => &"t",
         }
     }
 }
