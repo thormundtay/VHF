@@ -21,6 +21,7 @@ use std::time::{Duration, Instant};
 /// Bottom 12 bytes of [super::board_ioctl_consts::ioctl_read] should be zero'd to align to [MmapPage::Page].
 pub const ALIGN_VHF_OUTPUT_TO_PAGES: usize = 9 + 3;
 
+#[derive(Debug)]
 pub(super) struct MMapReader {
     // FileHandle associated to mmap is needed to ioctl_next;
     handle: libc::c_int,
@@ -274,10 +275,13 @@ impl MMapReader {
 impl core::ops::Drop for MMapReader {
     fn drop(&mut self) {
         match thread::panicking() {
-            true => log::error!(
-                "MmapReader panicking! Had pushed {} pages.",
-                self.collected_pages
-            ),
+            true => {
+                log::error!(
+                    "MMapReader panicking! Had pushed {} pages.",
+                    self.collected_pages
+                );
+                log::error!("MMapReader = {self:?}");
+            }
             false => log::info!("MMapReader has been dropped."),
         }
     }
