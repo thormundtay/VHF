@@ -2,6 +2,8 @@
 
 use super::{FILE_LAZY_LEN, VHFWriter};
 use crate::{Error, Result, runner::Config, types::RawVHFWord};
+#[cfg(not(test))]
+use jiff::SignedDuration;
 use jiff::{Span, Zoned};
 use std::{
     fmt::Debug,
@@ -107,26 +109,36 @@ impl V1Writer {
             return Err(Error::InternalInconsistency);
         }
 
+        let file_time = self
+            .start_time
+            .checked_add(
+                self.num_files_so_far.load(Ordering::Acquire) as i64 * self.time_between_files,
+            )
+            .map_err(Error::Jiff)?;
         let path = {
             let mut tmp = self.file_dir.clone();
             // Since this function opens the file, we can take this as the offset.
-            let time = self
-                .start_time
-                .checked_add(
-                    self.num_files_so_far.load(Ordering::Acquire) as i64 * self.time_between_files,
-                )
-                .map_err(Error::Jiff)?;
             tmp.push(match self.filename_details.len() {
-                0 => time.strftime("%FT%T%.f%z").to_string() + ".bin",
+                0 => file_time.strftime("%FT%T%.f%z").to_string() + ".bin",
                 _ => format!(
                     "{}_{}.bin",
-                    time.strftime("%FT%T%.f%z"),
+                    file_time.strftime("%FT%T%.f%z"),
                     self.filename_details
                 ),
             });
             tmp
         };
 
+        #[cfg(not(test))]
+        {
+            let now = Zoned::now();
+            if file_time.duration_since(&now) > SignedDuration::new(10, 0)
+                || now.duration_since(&file_time) > SignedDuration::new(10, 0)
+            {
+                log::error!("Created file time differs significantly from current time!");
+                return Err(Error::InternalInconsistency);
+            }
+        }
         if std::fs::exists(path.clone()).unwrap() {
             log::error!(
                 "Created file name found to already exist in location, path = {:?}",
