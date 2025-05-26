@@ -213,7 +213,7 @@ impl Configs {
 
     /// Checks if configuration has tripped anything. Errors only if warnings have been emitted.
     fn validate_config(&self) -> Result<()> {
-        if self.skip_num + 1 < 10 {
+        if self.skip_num + 1 < 5 {
             log::warn!("Received skip_num less than 10! byte alignment has known to break!");
             return Err(Error::ini_coerce("Board", "skip_num", "less than 10"));
         }
