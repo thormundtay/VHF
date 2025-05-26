@@ -281,6 +281,8 @@ impl core::ops::Drop for MMapReader {
                     self.collected_pages
                 );
                 log::error!("MMapReader = {self:?}");
+                log::error!("Forcing cleanup.");
+                let _ = self.close();
             }
             false => log::info!("MMapReader has been dropped."),
         }
