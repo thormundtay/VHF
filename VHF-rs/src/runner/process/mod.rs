@@ -17,11 +17,15 @@ use mmap_reader::mmap_thread;
 use mmap_rs::Mmap;
 use nix::fcntl;
 use pages::MmapPage;
+use std::cell::RefCell;
 use std::io::{BufWriter, Write};
 use std::num::NonZeroUsize;
+use std::rc::Rc;
+use std::sync::mpsc::TryRecvError;
 use std::sync::{
     Arc, Condvar, Mutex, RwLock,
     atomic::{self, AtomicBool},
+    mpsc::{Receiver, sync_channel},
 };
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
@@ -47,10 +51,12 @@ pub struct VHF {
     /// Used to receive signal from [self::mmap_reader::MMapReader] that new pages have been placed into
     /// [Self::buffer].
     buffer_signal: Arc<Condvar>,
+    /// This is the channel used to receive from the child thread.
+    buffer_receive: Receiver<MmapPage>,
     /// buffer is a local mirror of Mmap that is intended for the likes of SlidingWindow
     /// [itertools::Itertools::tuple_windows] and par_map, which has more Rust Semantics than reading straight
     /// out of a Mmap.
-    buffer: Arc<Mutex<Deque<MmapPage, DEQUE_CAP>>>,
+    buffer: Rc<RefCell<Deque<MmapPage, DEQUE_CAP>>>,
     /// This is the amount of time between any two pages. Used for determining other timings.
     time_between_pages: Span,
     /// Expected time when to next wake up mmap_reader thread.
@@ -105,15 +111,15 @@ impl VHF {
             (0..config.stream_fold.pad())
                 .try_for_each(|_| buffer.push_back(MmapPage::Empty))
                 .expect("Failed to push_back onto buffer.");
-            Arc::new(Mutex::new(buffer))
+            Rc::new(RefCell::new(buffer))
         };
         let buffer_signal = Arc::new(Condvar::new()); // merge into buffer?
+        let (buffer_producer, buffer_consumer) = sync_channel(DEQUE_CAP);
 
         let map_reader: JoinHandle<Result<()>> = {
             let readback = Self::readback_buffer(&raw_handle)?;
             let engine_running = engine_running.clone();
             let buffer_signal = buffer_signal.clone();
-            let buffer = buffer.clone();
             let number_of_pages_between_stream_resume = (VHF_MMAP_WINDOW_LEN as i64 - 4) * 3;
             let time_between_stream_resume = (number_of_pages_between_stream_resume
                 * time_between_pages)
@@ -133,7 +139,7 @@ impl VHF {
                         readback,
                         engine_running,
                         buffer_signal,
-                        buffer,
+                        buffer_producer,
                         &time_between_pages,
                         time_between_stream_resume,
                         next_collect_time,
@@ -155,6 +161,7 @@ impl VHF {
             engine_running,
             vhf_stop: false,
             buffer_signal,
+            buffer_receive: buffer_consumer,
             buffer,
             time_between_pages,
             wake_mmap,
@@ -313,8 +320,12 @@ impl VHF {
             vhf_parent: self,
             engine_running: &self.engine_running,
             buffer_signal: &self.buffer_signal,
-            buffer: &self.buffer,
-            time_between_pages: self.time_between_pages.try_into().expect("Failed to convert Span to Duration"),
+            buffer_receive: &self.buffer_receive,
+            buffer: Rc::clone(&self.buffer),
+            time_between_pages: self
+                .time_between_pages
+                .try_into()
+                .expect("Failed to convert Span to Duration"),
             wake_mmap: &self.wake_mmap,
             total_pages_to_read: self.total_pages_to_read,
             windows_released: 0,
@@ -349,10 +360,12 @@ pub struct VHFIter<'a> {
     /// Used to receive signal from [self::mmap_reader::MMapReader] that new pages have been placed into
     /// [self.buffer].
     buffer_signal: &'a Arc<Condvar>,
+    /// This is the channel used to receive from the child thread.
+    buffer_receive: &'a Receiver<MmapPage>,
     /// buffer is a local mirror of Mmap that is intended for the likes of SlidingWindow
     /// [itertools::Itertools::tuple_windows] and par_map, which has more Rust Semantics than reading straight
     /// out of a Mmap.
-    buffer: &'a Arc<Mutex<Deque<MmapPage, DEQUE_CAP>>>,
+    buffer: Rc<RefCell<Deque<MmapPage, DEQUE_CAP>>>,
     /// This is the amount of time between any two pages. Used for determining other timings.
     time_between_pages: Duration,
     /// Expected time when to next wake up mmap_reader thread.
@@ -400,25 +413,37 @@ impl std::iter::Iterator for VHFIter<'_> {
         let mg = Mutex::new(());
 
         'get_page: loop {
-            // Return first if there are more elements in the buffer
-            if let Ok(mut buf) = self.buffer.try_lock() {
-                // if length >> num_items then assign to variable, pop left most, and return
-                if buf.len() >= VHF_MMAP_WINDOW_LEN {
-                    let arr = buf
-                        .iter()
-                        .take(VHF_MMAP_WINDOW_LEN)
-                        .cloned()
-                        .collect_array()
-                        .unwrap();
-                    let idx = self.windows_released;
-                    self.windows_released += 1;
-                    let _ = buf.pop_front();
-                    return Some((idx, arr));
+            // Try fetch out from channel
+            match self.buffer_receive.try_recv() {
+                Ok(page) => {
+                    let result = self.buffer.borrow_mut().push_back(page);
+                    if result.is_err() {
+                        log::error!("Pushing onto internal buffer without sufficient space.");
+                        // Discard failed to push page.
+                    }
+                    continue 'get_page;
                 }
-            } else if self.buffer.is_poisoned() {
-                panic!("MMapReader thread has panicked");
-            }; // We do nothing even if buffer was not locked: Child thread might still be pushing
-            // into it.
+                Err(TryRecvError::Disconnected) => (), // Child thread has completed or panicked.
+                Err(TryRecvError::Empty) => (),        // Proceed to next step
+            }
+
+            // Return first if there are more elements in the buffer
+            // if length >> num_items then assign to variable, pop left most, and return
+
+            if self.buffer.borrow().len() >= VHF_MMAP_WINDOW_LEN {
+                let arr = self
+                    .buffer
+                    .borrow_mut()
+                    .iter()
+                    .take(VHF_MMAP_WINDOW_LEN)
+                    .cloned()
+                    .collect_array()
+                    .unwrap();
+                let idx = self.windows_released;
+                self.windows_released += 1;
+                let _ = self.buffer.borrow_mut().pop_front();
+                return Some((idx, arr));
+            }
 
             // Early break - Engine is not running anymore for any reason (Thread panic perhaps?)
             if !self

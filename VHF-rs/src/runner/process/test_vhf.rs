@@ -7,7 +7,10 @@ use heapless::Deque;
 use std::{
     matches,
     ops::Deref,
-    sync::atomic::{AtomicU64, AtomicUsize, Ordering},
+    sync::{
+        atomic::{AtomicU64, AtomicUsize, Ordering},
+        mpsc::{SyncSender, sync_channel},
+    },
     time::Duration,
 };
 use tempfile::{NamedTempFile, TempDir};
@@ -16,7 +19,7 @@ use test_log::test;
 // Create a VHF struct with false child thread "map_reader".
 pub(super) fn debug_vhf_new(
     total_to_read: NonZeroUsize,
-) -> (VHF, Arc<Mutex<Deque<MmapPage, DEQUE_CAP>>>, Arc<AtomicBool>) {
+) -> (VHF, SyncSender<MmapPage>, Arc<AtomicBool>) {
     let tmp_dir = TempDir::new().expect("Could not create temp_dir");
     let raw_tmp_file = NamedTempFile::new_in(tmp_dir).expect("Could not create temp file");
 
@@ -32,7 +35,8 @@ pub(super) fn debug_vhf_new(
         .expect("map_reader could not be spawned.");
     let engine_running = Arc::new(AtomicBool::new(true));
     let buffer_signal = Arc::new(Condvar::new());
-    let buffer = Arc::new(Mutex::new(Deque::new()));
+    let (buffer_sender, buffer_receive) = sync_channel(DEQUE_CAP);
+    let buffer = Rc::new(RefCell::new(Deque::new()));
     // Nonzero amount of time so that signal can also acquire Mutex
     let time_between_pages = Span::new()
         .try_milliseconds(1)
@@ -48,19 +52,20 @@ pub(super) fn debug_vhf_new(
             engine_running: Arc::clone(&engine_running),
             vhf_stop: false,
             buffer_signal,
-            buffer: Arc::clone(&buffer),
+            buffer_receive,
+            buffer,
             time_between_pages,
             wake_mmap,
             total_pages_to_read: total_to_read,
         },
-        buffer,
+        buffer_sender,
         engine_running,
     )
 }
 
 /// Pushes [pages::Page]s from slice into [VHF].buffer.
 pub(super) fn push_arc_pages(
-    buffer: Arc<Mutex<Deque<MmapPage, DEQUE_CAP>>>,
+    buffer_sender: SyncSender<MmapPage>,
     data: impl Iterator<Item = RawVHFWord> + Send + 'static,
     sleep_between_pages: Duration,
     engine: Arc<AtomicBool>,
@@ -76,18 +81,9 @@ pub(super) fn push_arc_pages(
                 .map(Arc::new)
                 .map(MmapPage::Page)
                 .for_each(|x| {
-                    'try_lock: loop {
-                        if let Ok(mut buf) = buffer.try_lock()
-                        // Obtain lock here so that parent thread still obtain lock.
-                        {
-                            buf.push_back(x).expect("Failed to push back onto buffer");
-                            break 'try_lock;
-                        } else {
-                            log::debug!("failed to obtain lock to push onto buffer, trying again");
-                            thread::sleep(sleep_between_pages / 100);
-                            continue 'try_lock;
-                        };
-                    }
+                    buffer_sender
+                        .send(x)
+                        .expect("Failed to push back onto buffer");
                     thread::sleep(sleep_between_pages);
                 });
             // Set to false if Iterator has not already done so.
@@ -134,7 +130,7 @@ impl ZeroArr {
 fn vhf_drops_arc() {
     let debug_vhf_total_len = 1;
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
-    let (debug_vhf, dbg_vhf_buffer, eng) =
+    let (debug_vhf, dbg_vhf_sender, eng) =
         debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
 
     // We now add a weakpointer to the first object.
@@ -142,13 +138,11 @@ fn vhf_drops_arc() {
     let to_drop = Arc::downgrade(&testing_page);
 
     // We now add data into the buffer.
-    dbg_vhf_buffer
-        .try_lock()
-        .expect("Failed to lock buffer")
-        .push_back(MmapPage::Page(testing_page))
+    dbg_vhf_sender
+        .send(MmapPage::Page(testing_page))
         .expect("Failed to push_back testing page.");
     let push_arc_pages_thread = push_arc_pages(
-        dbg_vhf_buffer,
+        dbg_vhf_sender,
         ZeroArr::new((total_window_len - 1) * MMAP_PAGE_LEN, eng.clone()),
         Duration::default(),
         eng,
@@ -209,14 +203,14 @@ impl LinearArr {
 fn next_window_linear() {
     let debug_vhf_total_len = 5;
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN - 1;
-    let (debug_vhf, dbg_vhf_buffer, eng) =
+    let (debug_vhf, dbg_vhf_sender, eng) =
         debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
 
     // Define the signal that we are testing for. (Use linear so its easier to determine.)
     let signal = LinearArr::new(total_window_len * MMAP_PAGE_LEN, eng.clone());
 
     // Add signal into pages. We now add data into the buffer.
-    push_arc_pages(dbg_vhf_buffer, signal, Duration::default(), eng)
+    push_arc_pages(dbg_vhf_sender, signal, Duration::default(), eng)
         .expect("push_arc_pages failed");
 
     let mut debug_vhf_iter = debug_vhf.iter();

@@ -22,7 +22,7 @@ use test_log::test;
 fn writes_correct_header() {
     let debug_vhf_total_len = 4 * VHF_MMAP_WINDOW_LEN;
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
-    let (debug_vhf, dbg_vhf_buffer, eng) =
+    let (debug_vhf, dbg_vhf_sender, eng) =
         debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
@@ -51,7 +51,7 @@ fn writes_correct_header() {
     let _signal_expected = signal.clone(); // This will lose the engine
 
     // Add signal into pages. We now add data into the buffer.
-    let push_arc_pages_thread = push_arc_pages(dbg_vhf_buffer, signal, Duration::new(0, 100), eng)
+    let push_arc_pages_thread = push_arc_pages(dbg_vhf_sender, signal, Duration::new(0, 100), eng)
         .expect("push_arc_pages failed");
 
     let time_start = Zoned::now();
@@ -84,7 +84,7 @@ fn creates_multiple_files() {
     let debug_vhf_total_len = VHF_MMAP_WINDOW_LEN * scale_elements;
     log::info!("debug_vhf_total_len = {}", &debug_vhf_total_len);
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
-    let (debug_vhf, dbg_vhf_buffer, eng) =
+    let (debug_vhf, dbg_vhf_sender, eng) =
         debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
@@ -114,7 +114,7 @@ fn creates_multiple_files() {
 
     // Add signal into pages. We now add data into the buffer.
     let push_arc_pages_thread =
-        push_arc_pages(dbg_vhf_buffer, signal, Duration::new(0, 10_000), eng)
+        push_arc_pages(dbg_vhf_sender, signal, Duration::new(0, 10_000), eng)
             .expect("push_arc_pages failed");
 
     let time_start = Zoned::now();
@@ -163,7 +163,7 @@ fn creates_correct_multithreaded_files() {
     let debug_vhf_total_len = VHF_MMAP_WINDOW_LEN * scale_elements;
     log::info!("debug_vhf_total_len = {}", &debug_vhf_total_len);
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
-    let (mut debug_vhf, dbg_vhf_buffer, eng) =
+    let (mut debug_vhf, dbg_vhf_sender, eng) =
         debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
@@ -197,7 +197,7 @@ fn creates_correct_multithreaded_files() {
 
     // Add signal into pages. We now add data into the buffer.
     let push_arc_pages_thread =
-        push_arc_pages(dbg_vhf_buffer, signal, thread_sleep, eng).expect("push_arc_pages failed");
+        push_arc_pages(dbg_vhf_sender, signal, thread_sleep, eng).expect("push_arc_pages failed");
 
     let time_start = Zoned::now();
     let mut config = Configs::new(None).expect("Config struct could not be made");

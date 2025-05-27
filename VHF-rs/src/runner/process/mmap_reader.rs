@@ -4,15 +4,14 @@
 //! the use of [mmap_thread].
 
 use super::super::fold::StreamFold;
-use super::{DEQUE_CAP, MMAP_BYTES_LEN, consts::MMAP_PAGE_LEN, pages::MmapPage};
+use super::{MMAP_BYTES_LEN, consts::MMAP_PAGE_LEN, pages::MmapPage};
 use crate::{Error, Result};
-use heapless::Deque;
 use jiff::Span;
 use mmap_rs::Mmap;
-use std::hint::spin_loop;
 use std::num::NonZeroUsize;
+use std::sync::mpsc::SyncSender;
 use std::sync::{
-    Arc, Condvar, Mutex, RwLock,
+    Arc, Condvar, RwLock,
     atomic::{self, AtomicBool},
 };
 use std::thread;
@@ -38,7 +37,7 @@ pub(super) struct MMapReader {
     /// iterator.
     // Strongly note that MMapPages are therefore fragmented with respect to each other, but we eat
     // this cost first.
-    transfer_buffer: Arc<Mutex<Deque<MmapPage, DEQUE_CAP>>>,
+    transfer_buffer_sender: SyncSender<MmapPage>,
     /// This is the tfb32 value from the last ioctl.
     last_tfb32: libc::c_int,
     /// This is the last index being read from.
@@ -66,7 +65,7 @@ impl MMapReader {
         mmap: Mmap,
         engine_running: Arc<AtomicBool>,
         transfer_buffer_signal: Arc<Condvar>,
-        transfer_buffer: Arc<Mutex<Deque<MmapPage, DEQUE_CAP>>>,
+        transfer_buffer_sender: SyncSender<MmapPage>,
         time_between_mmap_page: &Span,
         time_between_stream_resume: Duration,
         next_collect_time: Arc<RwLock<Instant>>,
@@ -88,7 +87,7 @@ impl MMapReader {
             mmap,
             engine_running,
             transfer_buffer_signal,
-            transfer_buffer,
+            transfer_buffer_sender,
             last_tfb32: 0,
             prev_bytes: 0,
             page_duration: (*time_between_mmap_page).try_into().map_err(Error::Jiff)?,
@@ -174,47 +173,38 @@ impl MMapReader {
                 break 'next_mmap;
             }
 
-            // We deliberately do not fetch for a new value of ioctl whiles trying to get a
-            // mutex lock. (We will consider updating in the future if the try_lock takes too
-            // long.)
-            'push_back: loop {
-                match self.transfer_buffer.try_lock() {
-                    Err(_) => {
-                        log::trace!("could not get buffer for pushing onto page");
-                        spin_loop(); // This is a no-op on x86;
-                    }
-                    Ok(mut inner) => {
-                        use itertools::Itertools;
+            let mut num_pages = 0;
 
-                        let mut num_pages = 0;
+            let channel_push = {
+                use itertools::Itertools;
 
-                        self.get_mmap_iter(self.prev_bytes, next_bytes)
-                            .chunks(MMAP_PAGE_LEN)
-                            .into_iter()
-                            .map(|x| x.copied().collect_array().unwrap())
-                            .map(Arc::new)
-                            .map(MmapPage::Page)
-                            .for_each(|x| {
-                                num_pages += 1;
-                                (*inner).push_back(x).expect("Failed to push back.");
-                            });
+                self.get_mmap_iter(self.prev_bytes, next_bytes)
+                    .chunks(MMAP_PAGE_LEN)
+                    .into_iter()
+                    .map(|x| x.copied().collect_array().unwrap())
+                    .map(Arc::new)
+                    .map(MmapPage::Page)
+                    .try_for_each(|x| {
+                        num_pages += 1;
+                        self.transfer_buffer_sender.send(x)
+                    })
+            };
 
-                        // Update counter
-                        self.collected_pages += num_pages;
-                        self.prev_bytes = next_bytes;
+            // Update counter
+            self.collected_pages += num_pages;
+            self.prev_bytes = next_bytes;
 
-                        // Signal back to parent thread that pages have been placed in.
-                        self.transfer_buffer_signal.notify_all();
+            // Signal back to parent thread that pages have been placed in.
+            self.transfer_buffer_signal.notify_all();
 
-                        // Set next wake time again
-                        {
-                            let mut to_write = self.next_collect_time.write().unwrap();
-                            *to_write = Instant::now() + self.stream_pause;
-                        }
+            if channel_push.is_err() {
+                panic!("Channel from MMapReader to VHF was full");
+            }
 
-                        break 'push_back;
-                    }
-                };
+            // Set next wake time again
+            {
+                let mut to_write = self.next_collect_time.write().unwrap();
+                *to_write = Instant::now() + self.stream_pause;
             }
 
             // If number of pages read has exceeded break
@@ -251,16 +241,9 @@ impl MMapReader {
     fn pad_end(&self) -> Result<()> {
         let pad = self.pad_end_remaining();
         log::debug!("pad_end called with {} MMapPage::End to pad with", pad);
-        'push_back: loop {
-            match self.transfer_buffer.try_lock() {
-                Err(_) => spin_loop(),
-                Ok(mut inner) => {
-                    (0..pad)
-                        .for_each(|_| inner.push_back(MmapPage::End).expect("Failed to push_back"));
-                    break 'push_back;
-                }
-            };
-        }
+        (0..pad)
+            .try_for_each(|_| self.transfer_buffer_sender.send(MmapPage::End))
+            .expect("Failed to send");
         Ok(())
     }
 
@@ -294,7 +277,7 @@ pub(super) fn mmap_thread(
     mmap: Mmap,
     engine: Arc<AtomicBool>,
     buffer_signal: Arc<Condvar>,
-    buffer: Arc<Mutex<Deque<MmapPage, DEQUE_CAP>>>,
+    buffer_sender: SyncSender<MmapPage>,
     time_between_mmap_page: &Span,
     time_between_stream_resume: Duration,
     next_collect_time: Arc<RwLock<Instant>>,
@@ -306,7 +289,7 @@ pub(super) fn mmap_thread(
         mmap,
         engine,
         buffer_signal,
-        buffer,
+        buffer_sender,
         time_between_mmap_page,
         time_between_stream_resume,
         next_collect_time,
