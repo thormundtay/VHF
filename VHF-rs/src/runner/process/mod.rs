@@ -24,7 +24,7 @@ use std::sync::{
     atomic::{self, AtomicBool},
 };
 use std::thread::{self, JoinHandle};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 /// This is the size in bytes of the Mmap that is backed by the VHF device.
 const MMAP_BYTES_LEN: usize = 1 << 22;
@@ -314,7 +314,7 @@ impl VHF {
             engine_running: &self.engine_running,
             buffer_signal: &self.buffer_signal,
             buffer: &self.buffer,
-            time_between_pages: self.time_between_pages,
+            time_between_pages: self.time_between_pages.try_into().expect("Failed to convert Span to Duration"),
             wake_mmap: &self.wake_mmap,
             total_pages_to_read: self.total_pages_to_read,
             windows_released: 0,
@@ -354,7 +354,7 @@ pub struct VHFIter<'a> {
     /// out of a Mmap.
     buffer: &'a Arc<Mutex<Deque<MmapPage, DEQUE_CAP>>>,
     /// This is the amount of time between any two pages. Used for determining other timings.
-    time_between_pages: Span,
+    time_between_pages: Duration,
     /// Expected time when to next wake up mmap_reader thread.
     wake_mmap: &'a Arc<RwLock<Instant>>,
     /// This is the total number of pages to be read by [mmap_reader::MMapReader].
@@ -399,8 +399,6 @@ impl std::iter::Iterator for VHFIter<'_> {
         // WARN: Mutex creation every time next method is called.
         let mg = Mutex::new(());
 
-        let time_between_pages = self.time_between_pages.try_into().unwrap();
-
         'get_page: loop {
             // Return first if there are more elements in the buffer
             if let Ok(mut buf) = self.buffer.try_lock() {
@@ -436,7 +434,7 @@ impl std::iter::Iterator for VHFIter<'_> {
             // 1. Condvar activated or
             // 2. We self check that the current instant exceeds the time as a last measure.
 
-            thread::sleep(time_between_pages);
+            thread::sleep(self.time_between_pages);
             'get_wake: loop {
                 if let Ok(target_wakeup) = self.wake_mmap.read() {
                     let target_wakeup = *target_wakeup;
@@ -450,7 +448,7 @@ impl std::iter::Iterator for VHFIter<'_> {
                         // Wait 1 page of time for condvar
                         let timeout = self
                             .buffer_signal
-                            .wait_timeout(mg.lock().unwrap(), time_between_pages)
+                            .wait_timeout(mg.lock().unwrap(), self.time_between_pages)
                             .unwrap();
                         if !timeout.1.timed_out() {
                             // Forcibly try to get a page
