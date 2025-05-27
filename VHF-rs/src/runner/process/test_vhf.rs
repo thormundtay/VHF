@@ -44,7 +44,7 @@ pub(super) fn debug_vhf_new(
             configuration: Box::new(configuration),
             handle,
             raw_handle,
-            map_reader,
+            map_reader: Some(map_reader),
             engine_running: Arc::clone(&engine_running),
             vhf_stop: false,
             buffer_signal,

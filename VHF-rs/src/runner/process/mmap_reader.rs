@@ -267,7 +267,7 @@ impl MMapReader {
     /// Cleaning up before thread exits.
     fn close(&self) -> Result<()> {
         log::info!("MMapReader has been invoked to be closed");
-        self.engine_running.store(false, atomic::Ordering::Relaxed);
+        self.engine_running.store(false, atomic::Ordering::Release);
         Ok(())
     }
 }

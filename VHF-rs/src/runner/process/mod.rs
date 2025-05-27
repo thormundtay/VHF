@@ -39,7 +39,7 @@ pub struct VHF {
     /// map_reader contains the thread that is responsible for pulling elements out of the MMap
     /// into a [Self::buffer].
     /// More details is as given in [self::mmap_reader].
-    map_reader: JoinHandle<Result<()>>,
+    map_reader: Option<JoinHandle<Result<()>>>,
     /// Used to signal to [self::mmap_reader::MMapReader] has started, and to determine that child has stopped.
     engine_running: Arc<AtomicBool>,
     /// Stopped invoked
@@ -151,7 +151,7 @@ impl VHF {
             configuration: Box::new(config.clone()),
             handle,
             raw_handle,
-            map_reader,
+            map_reader: Some(map_reader),
             engine_running,
             vhf_stop: false,
             buffer_signal,
@@ -265,6 +265,21 @@ impl VHF {
         }
         self.vhf_stop = true;
 
+        if let Some(map) = self.map_reader.take() {
+            if !map.is_finished() {
+                log::warn!("MMapReader child thread not found to be exhausted.");
+                self.map_reader = Some(map); // Place back into struct.
+            } else {
+                if map.join().is_err() {
+                    log::warn!("MMapReader child thread found to have panicked.");
+                } else {
+                    log::debug!("MMapReader child thread closed successfully.")
+                }
+            }
+        } else {
+            log::warn!("MMapReader child thread not found. Was VHF already closed?");
+        }
+
         if self.engine_running.load(atomic::Ordering::Acquire) {
             log::warn!("Parent thread tried to close when engine has not shut down.");
             self.vhf_stop = false;
@@ -309,7 +324,7 @@ impl VHF {
     /// Unpark MMapReader thread
     #[inline]
     fn unpark_child(&self) {
-        self.map_reader.thread().unpark()
+        self.map_reader.as_ref().unwrap().thread().unpark()
     }
 }
 
