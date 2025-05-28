@@ -21,7 +21,6 @@ use std::cell::RefCell;
 use std::io::{BufWriter, Write};
 use std::num::NonZeroUsize;
 use std::rc::Rc;
-use std::sync::mpsc::TryRecvError;
 use std::sync::{
     Arc, Condvar, Mutex, RwLock,
     atomic::{self, AtomicBool},
@@ -413,18 +412,13 @@ impl std::iter::Iterator for VHFIter<'_> {
         let mg = Mutex::new(());
 
         'get_page: loop {
-            // Try fetch out from channel
-            match self.buffer_receive.try_recv() {
-                Ok(page) => {
-                    let result = self.buffer.borrow_mut().push_back(page);
-                    if result.is_err() {
-                        log::error!("Pushing onto internal buffer without sufficient space.");
-                        // Discard failed to push page.
-                    }
-                    continue 'get_page;
+            // Try non-blocking fetch out from channel
+            while let Ok(page) = self.buffer_receive.try_recv() {
+                let result = self.buffer.borrow_mut().push_back(page);
+                if result.is_err() {
+                    log::error!("Pushing onto internal buffer without sufficient space.");
+                    // Discard failed to push page.
                 }
-                Err(TryRecvError::Disconnected) => (), // Child thread has completed or panicked.
-                Err(TryRecvError::Empty) => (),        // Proceed to next step
             }
 
             // Return first if there are more elements in the buffer
@@ -433,7 +427,7 @@ impl std::iter::Iterator for VHFIter<'_> {
             if self.buffer.borrow().len() >= VHF_MMAP_WINDOW_LEN {
                 let arr = self
                     .buffer
-                    .borrow_mut()
+                    .borrow()
                     .iter()
                     .take(VHF_MMAP_WINDOW_LEN)
                     .cloned()
