@@ -1,11 +1,21 @@
 use pariter::IteratorExt;
 use std::path::PathBuf;
-use vhf::Result;
+use std::sync::mpsc::{Receiver, channel};
+use std::thread;
 use vhf::runner::{
     Config, VHF,
     fold::StreamFold,
-    writer::{V1Writer, VHFWriter},
+    writer::{V1Writer, VHFWriter, WriteBlock},
 };
+use vhf::{Error, Result};
+
+fn writer_thread(consumer: Receiver<WriteBlock>, mut file_writer: V1Writer) {
+    // try_recv will sleep when empty
+    while let Ok(words) = consumer.recv() {
+        file_writer.write_data(words).expect("failed to write");
+    }
+    file_writer.close().expect("Failed to close file_writer");
+}
 
 fn main() -> Result<()> {
     let _ = log4rs::init_file("log4rs.yml", Default::default()).expect("log4rs.yml not found!"); // Logger init
@@ -16,18 +26,24 @@ fn main() -> Result<()> {
     let mut vhf = VHF::new(&conf, &params)?;
     let time_start = vhf.start()?;
 
-    let file_writer = &mut V1Writer::new(&conf, time_start);
+    let file_writer = V1Writer::new(&conf, time_start);
     let StreamFold::Map(params) = params else {
         log::error!("Overlapping windows are not StreamFold::Map variant.");
         panic!()
     };
+
+    let (writer_send, writer_receive) = channel();
+    let writer_thread = thread::Builder::new()
+        .name("File Writer".to_string())
+        .spawn(move || writer_thread(writer_receive, file_writer))
+        .map_err(Error::Io)?;
 
     let vhf_iter = vhf.iter();
     let body = pariter::scope(|scope| {
         vhf_iter
             .step_by(params.step_by)
             .parallel_map_scoped(scope, |x| (*params.func)(x))
-            .try_for_each(|write_block| file_writer.write_data(write_block))
+            .try_for_each(|write_block| writer_send.send(write_block))
             .expect("Failed to write data");
     });
 
@@ -39,7 +55,9 @@ fn main() -> Result<()> {
     // VHF cleanup
     vhf.stop()?;
 
-    file_writer.close()?;
+    // File writer clean up
+    drop(writer_send);
+    writer_thread.join().expect("Could not close writer thread");
 
     Ok(())
 }
