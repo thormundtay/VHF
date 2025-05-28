@@ -20,6 +20,7 @@ pub enum Error {
     Jiff(jiff::Error),
     ExcessData,
     InternalInconsistency,
+    User,
 }
 
 impl error::Error for Error {}
