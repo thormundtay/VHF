@@ -81,6 +81,7 @@ fn assert_set_device_perms() -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug, PartialEq, Eq)]
 enum USBMode {
     ACM,
     Hybrid,
@@ -93,6 +94,17 @@ impl TryFrom<usize> for USBMode {
             1 => Ok(USBMode::ACM),
             2 => Ok(USBMode::Hybrid),
             _ => Err(Error::ParseUnrecognised("bConfig unrecognised".to_string())),
+        }
+    }
+}
+
+impl USBMode {
+    /// Equivalent value in bConfig.
+    #[inline]
+    fn val(&self) -> usize {
+        match self {
+            USBMode::ACM => 1,
+            USBMode::Hybrid => 2,
         }
     }
 }
