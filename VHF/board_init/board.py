@@ -116,7 +116,6 @@ class Board:
                 "Compiled C file for setting VHF board has wrong permissions bits! Run `make init` at root of git repository."  # noqa:E501
             )
 
-
     def __repr__(self):
         string = "\n".join(
             [
@@ -174,9 +173,9 @@ class Board:
 
         found = list(filter(lambda x: self.board_id in str(x), iterator))
         if len(found) > 1:
-            self.logger.warn(
+            self.logger.warning(
                 "More than 1 hotplug_path found. Searched with %s", self.board_id)
-            self.logger.warn("Found: %s", found)
+            self.logger.warning("Found: %s", found)
             if self.verbose:
                 print(f"Search: {self.board_id}\nMore than 1 found: {found}")
         elif len(found) == 0:
@@ -268,7 +267,7 @@ class Board:
     def hybrid_clear(self) -> None:
         """If ACM raising and lowering was not enough to clear FIFO, reading
         data out from Hybrid mode might just do the trick!"""
-        if self._aggressive != True:
+        if not self._aggressive:
             self.logger.warning("Not in aggressive mode.")
             return
         if self.usb_mode() != USBMode.Hybrid:
@@ -288,7 +287,7 @@ class Board:
                 'vhf_dev': quote(str(self.interface_path())),
             },
         )
-        for _ in range(10):
+        for _ in range(5):
             try:
                 with TemporaryFile(dir="/dev/shm") as f:
                     output = subprocess.run(
