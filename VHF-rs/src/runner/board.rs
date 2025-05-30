@@ -3,8 +3,12 @@ use nix::sys::stat::Mode;
 use nix::unistd::{Gid, Group, User};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::thread::sleep;
+use std::time::Duration;
 
 const DEVICE_BASE_PATH: &str = "/sys/bus/usb/devices";
+const SET_DEVICE_MODE: &str = "VHF/board_init/set_device_mode";
 
 /// List all usb-devices whose product description are VHF.
 ///
@@ -28,7 +32,6 @@ pub fn find_device_by_sys() -> Result<Vec<PathBuf>> {
 /// Asserts some expecatations with regards to the Cpp file.
 fn assert_set_device_perms() -> Result<()> {
     use std::os::unix::fs::MetadataExt;
-    const SET_DEVICE_MODE: &str = "VHF/board_init/set_device_mode";
     let set_mode = Path::new(SET_DEVICE_MODE);
 
     let mut has_error: bool = false;
@@ -225,5 +228,73 @@ impl Board {
         }
 
         Ok(())
+    }
+
+    /// Sets VHF Board to USB ACM Mode.
+    pub fn set_acm(&self) -> Result<()> {
+        log::debug!("Attempting to set to ACM mode.");
+
+        match self.usb_mode()? {
+            USBMode::ACM => Ok(()),
+            USBMode::Hybrid => {
+                let set_mode = Command::new(SET_DEVICE_MODE)
+                    .arg("set")
+                    .arg(self.b_config_path().as_os_str())
+                    .arg(USBMode::ACM.val().to_string())
+                    .output()
+                    .map_err(Error::Io)?;
+
+                match set_mode.status.success() {
+                    false => {
+                        log::error!("set_device_mode error! status = {:?}", set_mode.status);
+                        log::error!("stderr = {:?}", str::from_utf8(&set_mode.stderr));
+                        Err(Error::InternalInconsistency)
+                    }
+                    true => {
+                        sleep(Duration::new(0, 500_000_000));
+                        assert_eq!(self.usb_mode()?, USBMode::ACM);
+                        Ok(())
+                    }
+                }
+            }
+        }
+    }
+
+    /// Sets VHF Board to USB Hybrid Mode.
+    pub fn set_hybrid(&self) -> Result<()> {
+        log::debug!("Attempting to set to Hybrid mode.");
+
+        match self.usb_mode()? {
+            USBMode::Hybrid => Ok(()),
+            USBMode::ACM => {
+                let set_mode = Command::new(SET_DEVICE_MODE)
+                    .arg("set")
+                    .arg(self.b_config_path().as_os_str())
+                    .arg(USBMode::ACM.val().to_string())
+                    .output()
+                    .map_err(Error::Io)?;
+
+                match set_mode.status.success() {
+                    false => {
+                        log::error!("set_device_mode error! status = {:?}", set_mode.status);
+                        log::error!("stderr = {:?}", str::from_utf8(&set_mode.stderr));
+                        Err(Error::InternalInconsistency)
+                    }
+                    true => {
+                        sleep(Duration::new(0, 500_000_000));
+                        assert_eq!(self.usb_mode()?, USBMode::Hybrid);
+                        Ok(())
+                    }
+                }
+            }
+        }
+    }
+
+    /// Toggles between ACM and Hybrid Mode on VHF Board.
+    pub fn toggle_usb_mode(&self) -> Result<()> {
+        match self.usb_mode()? {
+            USBMode::ACM => self.set_hybrid(),
+            USBMode::Hybrid => self.set_acm(),
+        }
     }
 }
