@@ -297,4 +297,14 @@ impl Board {
             USBMode::Hybrid => self.set_acm(),
         }
     }
+
+    /// Check if a board is in use.
+    /// Errors if Io error occurs.
+    pub fn in_use(&self) -> Result<bool> {
+        match super::fuser_used(&self.interface_path()?) {
+            Ok(b) => Ok(b),
+            Err(Error::User) => panic!("Board no longer found despite initialisation"),
+            Err(e) => Err(e),
+        }
+    }
 }

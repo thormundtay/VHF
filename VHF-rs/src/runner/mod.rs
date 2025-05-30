@@ -1,5 +1,25 @@
+use crate::{Error, Result};
+use std::path::PathBuf;
+
+/// Checks via `fuser` if a file is in use. Returns an error if the provided path is not a file, or
+/// invalid.
+fn fuser_used(path: &PathBuf) -> Result<bool> {
+    let path = path.canonicalize().map_err(|_| Error::User)?;
+    if path.is_dir() || !path.exists() {
+        return Err(Error::User);
+    }
+
+    log::trace!("fuser on {}", path.display());
+
+    use std::process::Command;
+    Command::new("fuser")
+        .arg(path.as_os_str())
+        .output()
+        .map_err(Error::Io)
+        .map(|o| !o.stdout.is_empty())
+}
+
 /// Used in determining the running of a board, such as getting Major and Minor ID, fuser etc.
-#[cfg(feature = "clear-fifo")]
 pub mod board;
 
 /// Used in taking CLI and file configuration.
