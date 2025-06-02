@@ -307,4 +307,26 @@ impl Board {
             Err(e) => Err(e),
         }
     }
+
+    /// ACM method of clearing FIFO queue.
+    pub fn acm_clear(&self) -> Result<()> {
+        self.set_acm()?;
+        // Trying without Serial
+        let mut vhf = fs::File::options()
+            .write(true)
+            .open(self.interface_path()?)
+            .map_err(Error::Io)?;
+
+        use std::io::Write;
+        vhf.write(b"CONFIG 16\n").map_err(Error::Io)?;
+        log::info!("Raised Clear");
+        sleep(Duration::new(1, 0));
+
+        vhf.write(b"CONFIG 0\n").map_err(Error::Io)?;
+        vhf.write(b"SKIP\n").map_err(Error::Io)?;
+        vhf.write(b"CLOCKINIT\nADCINIT\n").map_err(Error::Io)?;
+        log::info!("Lowered Clear\nFIFO should be flushed!");
+
+        Ok(())
+    }
 }
