@@ -4,6 +4,7 @@ use nix::unistd::{Gid, Group, User};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::thread::Builder;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -329,4 +330,62 @@ impl Board {
 
         Ok(())
     }
+
+    /// Reading data out via hybrid mode.
+    /// Use when ACM clearing is insufficient.
+    pub fn hybrid_clear(&self) -> Result<()> {
+        if self.in_use()? {
+            return Err(Error::EngineRunning);
+        } else if self.usb_mode()? != USBMode::Hybrid {
+            return Err(Error::User);
+        }
+
+        (0..5).try_for_each(|_| {
+            sleep(Duration::from_millis(100));
+            let board = self.interface_path()?;
+            let drain = Builder::new()
+                .name("Drain VHF Board".to_string())
+                .spawn(|| hybrid_drain(board))
+                .map_err(Error::Io)?;
+            log::debug!("Spawned drain = {:?}", &drain);
+            match drain.join() {
+                Ok(Ok(v)) => Ok(v),
+                Ok(Err(e)) => {
+                    log::warn!("An error occurred while trying to drain VHF");
+                    log::warn!("{:?}", e);
+                    Err(e)
+                }
+                Err(_) => {
+                    log::warn!("Failed to spawn VHF drainer");
+                    Err(Error::InternalInconsistency)
+                }
+            }
+        })
+    }
+}
+
+/// Function passed to process for spawning that tries to read out from FIFO queue.
+fn hybrid_drain(board: PathBuf) -> Result<()> {
+    use super::Config;
+    use super::VHF;
+    use super::fold::StreamFold;
+
+    let stream_fold = StreamFold::none_default();
+
+    // Define the appropriate configuration first.
+    let config = Config {
+        num_samples: 1,
+        skip_num: 99,
+        board,
+        stream_fold: stream_fold.clone(),
+        ..Config::default()
+    };
+
+    let mut vhf = VHF::new(&config, &stream_fold)?;
+    vhf.start()?;
+
+    sleep(Duration::from_millis(500));
+    vhf.stop()?;
+
+    Ok(())
 }
