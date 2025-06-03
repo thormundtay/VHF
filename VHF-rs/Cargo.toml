@@ -15,11 +15,12 @@ name = "vhf"
 
 [features]
 default = []
-clear-fifo = ["nix/user",]
+clear-fifo = ["nix/user", "prettytable-rs"]
 
 [dependencies]
 bytemuck = { version = "1.23.0" }
 byteorder = "1.5.0"
+clap = { version = "4.5.39", features = ["derive",] }
 configparser = { version = "3.1.0", default-features = false }
 evalexpr = { version = "12.0.2", features = ["regex",] }
 heapless = { version = "0.8.0" }
@@ -32,6 +33,7 @@ mmap-rs = { version = "0.6.1" }
 nix = { version = "0.29.0", features = ["fs", "ioctl", "user"] }
 num-traits = { version = "0.2.19" }
 pariter = "0.5.1"
+prettytable-rs = { version = "0.10.0", default-features = false, optional = true }
 regex = { version = "1.11.1" }
 
 [dev-dependencies]
