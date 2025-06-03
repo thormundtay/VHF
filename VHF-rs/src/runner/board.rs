@@ -218,7 +218,7 @@ impl Board {
         use std::os::linux::fs::MetadataExt;
         let gid = meta.st_gid();
         let stat_mode = meta.st_mode();
-        let stat_mode = Mode::from_bits(stat_mode).unwrap();
+        let stat_mode = Mode::from_bits_truncate(stat_mode);
 
         if gid != Gid::effective().as_raw()
             || !Mode::S_IRGRP.intersects(stat_mode)
@@ -252,7 +252,7 @@ impl Board {
                         Err(Error::InternalInconsistency)
                     }
                     true => {
-                        sleep(Duration::new(0, 500_000_000));
+                        sleep(Duration::from_millis(500));
                         assert_eq!(self.usb_mode()?, USBMode::ACM);
                         Ok(())
                     }
@@ -271,7 +271,7 @@ impl Board {
                 let set_mode = Command::new(SET_DEVICE_MODE)
                     .arg("set")
                     .arg(self.b_config_path().as_os_str())
-                    .arg(USBMode::ACM.val().to_string())
+                    .arg(USBMode::Hybrid.val().to_string())
                     .output()
                     .map_err(Error::Io)?;
 
@@ -282,7 +282,7 @@ impl Board {
                         Err(Error::InternalInconsistency)
                     }
                     true => {
-                        sleep(Duration::new(0, 500_000_000));
+                        sleep(Duration::from_millis(500));
                         assert_eq!(self.usb_mode()?, USBMode::Hybrid);
                         Ok(())
                     }
