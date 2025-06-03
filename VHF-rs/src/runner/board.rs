@@ -211,7 +211,7 @@ impl Board {
 
     /// Check if interface_path() has correct read/write perms.
     /// Returns as error if invalid.
-    pub fn valid_interface_perms(&self) -> Result<()> {
+    pub fn valid_interface_perms(&self) -> Result<bool> {
         let interface = self.interface_path()?;
         let meta = interface.metadata().map_err(Error::Io)?;
 
@@ -225,10 +225,10 @@ impl Board {
             || !Mode::S_IWGRP.intersects(stat_mode)
         {
             log::error! {"interface {:?} does not have correct permissions. Driver installation error?", interface};
-            return Err(Error::InternalInconsistency);
+            return Ok(false);
         }
 
-        Ok(())
+        Ok(true)
     }
 
     /// Sets VHF Board to USB ACM Mode.
