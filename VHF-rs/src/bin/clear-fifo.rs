@@ -1,3 +1,9 @@
+use clap::{ArgAction, Parser};
+use log::LevelFilter;
+use log4rs::Config;
+use log4rs::append::console::ConsoleAppender;
+use log4rs::config::{Appender, Logger, Root};
+use log4rs::encode::pattern::PatternEncoder;
 use prettytable::{Attr, Cell, Row, Table, color, row};
 use std::path::PathBuf;
 use vhf::runner::board::{Board, find_device_by_sys};
@@ -9,6 +15,7 @@ fn clear_fifo_per_board(board: PathBuf, hybrid_clear: bool) -> Result<()> {
         log::warn!("Board {} already in use. Not resetting.", &board.board_id);
         return Ok(());
     }
+    log::info!("Clearing board {}", &board.board_id);
 
     board.acm_clear()?;
     board.set_hybrid()?;
@@ -70,12 +77,44 @@ fn show_all_dev_symlinks() -> Result<()> {
     Ok(())
 }
 
+/// Resets FIFO buffer on VHF board, and summarise state of all boards connected.
+#[derive(Parser)]
+#[command(about, long_about)]
+struct Cli {
+    /// Do not clear FIFO, only show state of connected boards
+    #[arg(short, long, action = ArgAction::SetTrue)]
+    status: bool,
+    /// Use Hybrid clear
+    #[arg(short, long, action = clap::ArgAction::SetTrue)]
+    force: bool,
+    /// Displays more information
+    #[arg(short, long)]
+    verbose: bool,
+}
+
 fn main() -> Result<()> {
-    let _ = log4rs::init_file("log4rs.yml", Default::default()).expect("log4rs.yml not found!"); // Logger init
+    let cli = Cli::parse();
 
-    let boards = find_device_by_sys();
+    // Set log level depending on verbosity
+    let _ = log4rs::init_config({
+        let stdout = ConsoleAppender::builder()
+            .encoder(Box::new(PatternEncoder::new(
+                "{d(%Y%m%dT%H:%M:%S)} {h({l:.<5})} [{M}] {m}{n}",
+            )))
+            .build();
+        Config::builder()
+            .appender(Appender::builder().build("stdout", Box::new(stdout)))
+            .logger(Logger::builder().build("stdout", LevelFilter::Debug))
+            .build(Root::builder().appender("stdout").build(if cli.verbose {
+                LevelFilter::Debug
+            } else {
+                LevelFilter::Info
+            }))
+            .unwrap()
+    })
+    .unwrap();
 
-    println!("{:?}", boards);
+    let boards = find_device_by_sys()?;
 
     Ok(())
 }

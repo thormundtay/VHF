@@ -326,7 +326,7 @@ impl Board {
         vhf.write(b"CONFIG 0\n").map_err(Error::Io)?;
         vhf.write(b"SKIP\n").map_err(Error::Io)?;
         vhf.write(b"CLOCKINIT\nADCINIT\n").map_err(Error::Io)?;
-        log::info!("Lowered Clear\nFIFO should be flushed!");
+        log::info!("Lowered Clear\tFIFO should be flushed!");
 
         Ok(())
     }
