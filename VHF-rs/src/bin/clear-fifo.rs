@@ -4,6 +4,7 @@ use log4rs::Config;
 use log4rs::append::console::ConsoleAppender;
 use log4rs::config::{Appender, Logger, Root};
 use log4rs::encode::pattern::PatternEncoder;
+use prettytable::format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR;
 use prettytable::{Attr, Cell, Row, Table, color, row};
 use std::path::PathBuf;
 use vhf::runner::board::{Board, find_device_by_sys};
@@ -26,6 +27,58 @@ fn clear_fifo_per_board(board: PathBuf, hybrid_clear: bool) -> Result<()> {
     if !board.valid_interface_perms()? {
         log::warn!("VHF drivers weren't installed as user but under sudo. Please reinstall.");
     }
+
+    Ok(())
+}
+
+/// Prints out list of devices for selecting to clear.
+fn summary_table(boards: &[PathBuf], verbose: bool) -> Result<()> {
+    let mut tbl = Table::new();
+    tbl.set_format(*FORMAT_NO_BORDER_LINE_SEPARATOR);
+
+    let mut header = vec!["idx", "Serial NO", "In Use", "USB Mode", "Interface"];
+    if verbose {
+        header.push("Udev address");
+    }
+    tbl.set_titles(Row::new(
+        header.into_iter().map(Cell::new).collect::<Vec<_>>(),
+    ));
+
+    boards
+        .iter()
+        .cloned()
+        .map(|p| Board::new(p).unwrap())
+        .enumerate()
+        .try_for_each(|(i, b)| {
+            let mut result = Vec::with_capacity(5 + if verbose { 1 } else { 0 });
+
+            result.push(Cell::new(i.to_string().as_str()));
+            result.push(Cell::new(b.board_id.as_str()));
+            result.push(Cell::new(if b.in_use()? { "True" } else { "False" }));
+            result.push(Cell::new(b.usb_mode()?.to_string().as_str()));
+            result.push(Cell::new(
+                b.interface_path()?
+                    .into_os_string()
+                    .into_string()
+                    .map_err(|_| Error::ParseUnrecognised("Interface Path".to_string()))?
+                    .as_str(),
+            ));
+            if verbose {
+                result.push(Cell::new(
+                    b.hotplug_path()?
+                        .into_os_string()
+                        .into_string()
+                        .map_err(|_| Error::ParseUnrecognised("Udev Address".to_string()))?
+                        .as_str(),
+                ));
+            }
+
+            tbl.add_row(Row::new(result));
+            Ok::<(), Error>(())
+        })?;
+
+    tbl.printstd();
+    println!();
 
     Ok(())
 }
@@ -116,5 +169,16 @@ fn main() -> Result<()> {
 
     let boards = find_device_by_sys()?;
 
+    summary_table(&boards, cli.verbose)?;
+    if cli.status {
+        show_all_dev_symlinks()?;
+        return Ok(());
+    }
+
+    for board in boards {
+        clear_fifo_per_board(board, true)?;
+    }
+
+    show_all_dev_symlinks()?;
     Ok(())
 }
