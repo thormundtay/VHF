@@ -86,7 +86,7 @@ fn assert_set_device_perms() -> Result<()> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum USBMode {
+pub enum USBMode {
     ACM,
     Hybrid,
 }
@@ -99,6 +99,16 @@ impl TryFrom<usize> for USBMode {
             2 => Ok(USBMode::Hybrid),
             _ => Err(Error::ParseUnrecognised("bConfig unrecognised".to_string())),
         }
+    }
+}
+
+impl ToString for USBMode {
+    fn to_string(&self) -> String {
+        match self {
+            USBMode::ACM => "ACM",
+            USBMode::Hybrid => "Hybrid",
+        }
+        .to_string()
     }
 }
 
@@ -165,11 +175,11 @@ impl Board {
             })
     }
 
-    fn usb_mode(&self) -> Result<USBMode> {
+    pub fn usb_mode(&self) -> Result<USBMode> {
         self.get_b_config().and_then(|v| v.try_into())
     }
 
-    fn hotplug_path(&self) -> Result<PathBuf> {
+    pub fn hotplug_path(&self) -> Result<PathBuf> {
         let iter = self
             .usb_mode()
             .map(|usb| match usb {
@@ -204,7 +214,7 @@ impl Board {
         Ok(found[0].path())
     }
 
-    fn interface_path(&self) -> Result<PathBuf> {
+    pub fn interface_path(&self) -> Result<PathBuf> {
         self.hotplug_path()
             .and_then(|p| p.canonicalize().map_err(Error::Io))
     }
