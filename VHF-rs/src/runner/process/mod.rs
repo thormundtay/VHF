@@ -282,12 +282,10 @@ impl VHF {
             if !map.is_finished() {
                 log::warn!("MMapReader child thread not found to be exhausted.");
                 self.map_reader = Some(map); // Place back into struct.
+            } else if map.join().is_err() {
+                log::warn!("MMapReader child thread found to have panicked.");
             } else {
-                if map.join().is_err() {
-                    log::warn!("MMapReader child thread found to have panicked.");
-                } else {
-                    log::debug!("MMapReader child thread closed successfully.")
-                }
+                log::debug!("MMapReader child thread closed successfully.")
             }
         } else {
             log::warn!("MMapReader child thread not found. Was VHF already closed?");

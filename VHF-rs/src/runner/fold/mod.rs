@@ -7,7 +7,7 @@ use crate::{
     parser::consts::M_OVERFLOW,
     types::{IQMTriplet, RawVHFWord},
 };
-use std::{cmp::Ordering, ops::Deref, sync::Arc};
+use std::{cmp::Ordering, hint::unreachable_unchecked, ops::Deref, sync::Arc};
 
 #[derive(Clone)]
 pub struct StreamFoldParameters {
@@ -127,7 +127,7 @@ impl StreamFold {
                         // The 2nd element of the window found to be more => underflow to positive
                         Ordering::Greater => Some((idx, -1)),
                         // Safety: M_OVERFLOW check above.
-                        Ordering::Equal => unreachable!(),
+                        Ordering::Equal => unsafe { unreachable_unchecked() },
                     }
                 } else {
                     None

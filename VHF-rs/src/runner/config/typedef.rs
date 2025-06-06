@@ -53,10 +53,10 @@ impl SamplingSpeed {
     }
 
     /// This is for being in the header
-    pub(crate) fn to_char(&self) -> &str {
+    pub(crate) fn as_char(&self) -> &str {
         match self {
-            SamplingSpeed::High => &"h",
-            SamplingSpeed::Low => &"l",
+            SamplingSpeed::High => "h",
+            SamplingSpeed::Low => "l",
         }
     }
 }
@@ -98,11 +98,11 @@ impl FromStr for Encode {
 }
 
 impl Encode {
-    pub(crate) fn to_char(&self) -> &str {
+    pub(crate) fn as_char(&self) -> &str {
         match self {
-            Self::Binary => &"b",
-            Self::Hexadecimal => &"x",
-            Self::ASCII => &"t",
+            Self::Binary => "b",
+            Self::Hexadecimal => "x",
+            Self::ASCII => "t",
         }
     }
 }

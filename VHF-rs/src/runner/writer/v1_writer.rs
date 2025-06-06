@@ -332,10 +332,7 @@ impl Debug for V1Writer {
             .entry(&"elements_tot", &self.num_elements_per_file)
             .entry(
                 &"internal_buf_len",
-                &self
-                    .elements_to_write
-                    .try_lock()
-                    .and_then(|x| Ok((*x).len())),
+                &self.elements_to_write.try_lock().map(|x| (*x).len()),
             )
             .entry(&"file_dir", &self.file_dir)
             // Don't really care for the internal headers etc as they are const

@@ -196,7 +196,7 @@ impl Configs {
 
         // Section: Paths
         self.save_dir = utils::get_with_ext_interp(&config, "Paths", "save_dir")
-            .and_then(|dir| Ok(PathBuf::from(dir)))
+            .map(|dir| PathBuf::from(dir))
             .unwrap_or_else(|e| {
                 log::warn!("No save directory provided by INI file. Using default. Error: {e}");
                 Self::default().save_dir
@@ -269,8 +269,8 @@ impl Configs {
         result.push("-s".to_string());
         result.push(self.skip_num.to_string());
 
-        result.push("-".to_string() + &self.speed.to_char());
-        result.push("-".to_string() + &self.encode.to_char());
+        result.push("-".to_string() + self.speed.as_char());
+        result.push("-".to_string() + self.encode.as_char());
 
         if let Some(filter_const) = self.filter_const {
             result.push("-F".to_string());
