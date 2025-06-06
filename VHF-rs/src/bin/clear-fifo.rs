@@ -106,6 +106,7 @@ fn show_all_dev_symlinks() -> Result<()> {
         });
 
     let mut tbl = Table::new();
+    tbl.set_format(*FORMAT_NO_BORDER_LINE_SEPARATOR);
     tbl.set_titles(row!["Path", "Device", "Connected"]);
     points_to_dev
         .into_iter()
@@ -128,6 +129,44 @@ fn show_all_dev_symlinks() -> Result<()> {
     tbl.printstd();
 
     Ok(())
+}
+
+/// A `Vec<usize>` containing the successfully parsed user input.
+fn get_user_selection(upper: usize) -> Result<Vec<usize>> {
+    let mut all_parsed_successfully = false;
+    let mut numbers = Vec::new();
+
+    while !all_parsed_successfully {
+        print!("Please enter boards to clear (space or comma separated): ");
+
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input).map_err(Error::Io)?;
+        println!();
+
+        let input = input.trim();
+        let parts: Vec<&str> = if input.contains(',') {
+            input.split(',').collect()
+        } else {
+            input.split_whitespace().collect()
+        };
+        match parts
+            .into_iter()
+            .map(|p| p.trim())
+            .filter(|p| p.is_empty())
+            .try_for_each(|tp| tp.parse::<usize>().map(|num| numbers.push(num)))
+        {
+            Ok(()) => {
+                all_parsed_successfully = true;
+            }
+            Err(_) => {
+                numbers = Vec::new();
+                all_parsed_successfully = false;
+                println!("Unable to parse input. Please try again.")
+            }
+        }
+    }
+
+    Ok(numbers.into_iter().filter(|v| *v < upper).collect())
 }
 
 /// Resets FIFO buffer on VHF board, and summarise state of all boards connected.
@@ -174,6 +213,20 @@ fn main() -> Result<()> {
         show_all_dev_symlinks()?;
         return Ok(());
     }
+
+    let boards: Vec<_> = if boards.len() <= 1 {
+        boards
+    } else {
+        let idx = get_user_selection(boards.len())?;
+        let mut select = vec![false; boards.len()];
+        idx.into_iter().for_each(|j| select[j] = true);
+
+        boards
+            .into_iter()
+            .zip(select)
+            .filter_map(|(b, s)| if s { Some(b) } else { None })
+            .collect()
+    };
 
     for board in boards {
         clear_fifo_per_board(board, true)?;
