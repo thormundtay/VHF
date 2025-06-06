@@ -232,6 +232,7 @@ fn main() -> Result<()> {
         clear_fifo_per_board(board, true)?;
     }
 
+    println!();
     show_all_dev_symlinks()?;
     Ok(())
 }

@@ -264,7 +264,14 @@ impl VHF {
     // Might want to consider moving this routine as to being called from the MmapMut reader thread
     // instead of being called from the main() function.
     pub fn stop(&mut self) -> Result<()> {
-        log::info!("VHF stop has been invoked.");
+        #[cfg(not(feature = "clear-fifo"))]
+        {
+            log::info!("VHF stop has been invoked.");
+        }
+        #[cfg(feature = "clear-fifo")]
+        {
+            log::debug!("VHF stop has been invoked.");
+        }
         if self.vhf_stop {
             log::warn!("Parent thread found engine to have already been stopped.");
             return Err(Error::EngineStopped);
@@ -301,7 +308,14 @@ impl VHF {
         // Stop hostside USB device.
         let result = board_ioctl_consts::ioctl_end(self.handle).map(|_| ());
 
-        log::info!("VHF stopped!");
+        #[cfg(not(feature = "clear-fifo"))]
+        {
+            log::info!("VHF stopped!");
+        }
+        #[cfg(feature = "clear-fifo")]
+        {
+            log::debug!("VHF stopped!");
+        }
 
         result
     }

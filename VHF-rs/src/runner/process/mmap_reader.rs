@@ -147,6 +147,10 @@ impl MMapReader {
                     log::error!("Received negative next value.");
                     return Err(Error::ioctl_call("Negative next value received."));
                 }
+                #[cfg(feature = "clear-fifo")]
+                {
+                    log::info!("clear_fifo.len = {}", next);
+                }
                 if next.wrapping_sub(self.last_tfb32) & i32::MAX <= (1 << ALIGN_VHF_OUTPUT_TO_PAGES)
                 {
                     thread::park_timeout(self.page_duration);
@@ -209,7 +213,14 @@ impl MMapReader {
 
             // If number of pages read has exceeded break
             if self.collected_pages >= self.total_pages.into() {
-                log::info!("MMapReader has collected pages >= total pages.");
+                #[cfg(not(feature = "clear-fifo"))]
+                {
+                    log::info!("MMapReader has collected pages >= total pages.");
+                }
+                #[cfg(feature = "clear-fifo")]
+                {
+                    log::debug!("MMapReader has collected pages >= total pages.");
+                }
                 // Empty pad so that iterator can pull out final window.
                 self.pad_end()?;
                 break;
@@ -249,7 +260,14 @@ impl MMapReader {
 
     /// Cleaning up before thread exits.
     fn close(&self) -> Result<()> {
-        log::info!("MMapReader has been invoked to be closed");
+        #[cfg(not(feature = "clear-fifo"))]
+        {
+            log::info!("MMapReader has been invoked to be closed");
+        }
+        #[cfg(feature = "clear-fifo")]
+        {
+            log::debug!("MMapReader has been invoked to be closed");
+        }
         self.engine_running.store(false, atomic::Ordering::Release);
         Ok(())
     }
@@ -267,7 +285,16 @@ impl core::ops::Drop for MMapReader {
                 log::error!("Forcing cleanup.");
                 let _ = self.close();
             }
-            false => log::info!("MMapReader has been dropped."),
+            false => {
+                #[cfg(not(feature = "clear-fifo"))]
+                {
+                    log::info!("MMapReader has been dropped.");
+                }
+                #[cfg(feature = "clear-fifo")]
+                {
+                    log::debug!("MMapReader has been dropped.");
+                }
+            }
         }
     }
 }
