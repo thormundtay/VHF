@@ -5,8 +5,8 @@
 *Author: Thormund*  
 *Date: 22 March 2023*
 
-This folder is a collection of scripts intended for invoking and parsing the 
-output of teststream.c executable, as provided from svn/usbhybrid (r14).
+This folder is mostly a set of code that is standalone intended for invoking
+and parsing the FPGA on a VHF board, with reference to svn/usbhybrid (r14).
 
 Please be very aware of the use of symlinks in this folder.
 
@@ -68,7 +68,7 @@ clear_FIFO.py will prompt as to the symblinks locations.
 ### Red light is active
 
 The VHF board has a red light used to indicate the FIFO being overflowed.
-`clear_FIFO.py` has dependencies `set_device_mode`.
+`clear_FIFO` has dependencies `set_device_mode`.
 
 For the most part, this script is run to reset the VHF board into a state ready
 for collecting 'stream' data.
@@ -78,13 +78,15 @@ prior to invoking `run_vhf`.
 
 ### Collecting Data
 
-`run_VHF.py` and `run_and_plot.py` are examples you can refer to. Do note that
+`run_VHF` and are examples you can refer to. Do note that
 they currently pull parameter information from `VHF_board_params.ini` to guide
 the filename and locations.
 
 ### Plotting Data
 
-Requirements.txt provides additional gui things that assists with plotting
+`run_and_plot.py` currently still depends on an out of tree executable.
+
+requirements.txt provides additional gui things that assists with plotting
 process. However, the installed python modules have some build dependencies.
 On OpenSUSE, consider
 ```
@@ -103,7 +105,7 @@ With string format specifier `%F %T %z`, it is not an ISO-8601 compliant
 string, but Python 3.11 and 3.12's datetime library seems to accept it. Until
 the svn usbhybrid repository solves this issue, a test as provided in
 test/test_datetime.py is provisioned, in case.  
-Without VSCode, the tests can be runned by navigating into the `test/` folder,
+Without VSCode, the tests can be run by navigating into the `test/` folder,
 and running `pytest` in the command line. (This assumes that pip has already
 installed pytest.)  
 **This should be fixed in USBHybrid repository.**

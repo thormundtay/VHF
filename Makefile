@@ -5,7 +5,7 @@ init:
 	sudo chmod +s VHF/board_init/set_device_mode
 	ln -sf /dev/usbhybrid0 vhf_board.softlink
 	ln -sf /home/qitlab/programs/usbhybrid/apps/teststream teststream.exec
-	mkdir Log
-	mkdir Data
-	cargo build --release --bin stream
-	ln -sf target/release/stream run_vhf
+	mkdir Log &
+	mkdir Data &
+	cargo build --release --bin stream && ln -sf target/release/stream run_vhf
+	cargo build --release --bin clear-fifo --features clear-fifo && ln -sf target/release/clear-fifo clear_FIFO
