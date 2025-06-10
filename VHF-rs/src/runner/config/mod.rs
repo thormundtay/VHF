@@ -6,6 +6,7 @@ pub(crate) mod typedef;
 
 use super::fold::StreamFold;
 use crate::{Error, Result};
+use clap::{Arg, ArgAction, ArgGroup, Command, ValueHint, value_parser};
 use configparser::ini;
 use std::{
     collections::HashMap,
@@ -218,6 +219,163 @@ impl Configs {
         };
 
         Ok(())
+    }
+
+    /// For user input by stream.rs
+    fn clap_args(&mut self) -> clap::Command {
+        let mut cmd = Command::new("VHF Stream").disable_help_flag(true);
+        cmd = cmd
+            .about("Stream data from VHF board.")
+            .long_about("Successor of `svn:usbhybrid/apps/teststream.c` streaming executable. This program allows for in-flight processing, and guarantees no reset between file instances.\n\nArguments are first taken from `./VHF_board_params.ini` before being overwritten by any flags passed into this executable.");
+
+        // -?,--help
+        cmd = cmd.arg(
+            Arg::new("help")
+                .short('?')
+                .long("help")
+                .action(ArgAction::Help),
+        );
+
+        // -U <device>
+        cmd = cmd.arg(
+            Arg::new("VHF board")
+                .short('U')
+                .long("board")
+                .action(ArgAction::Set)
+                .value_hint(ValueHint::FilePath)
+                .help("Board to read from")
+                .long_help(
+                    "Board to read from. Boards accessible can be determined from ./clear_FIFO",
+                ),
+        );
+
+        // -q <num_samples> --num-files <num_files>
+        cmd = cmd.arg(
+            Arg::new("Number of samples")
+                .short('q')
+                .long("num_samples")
+                .action(ArgAction::Set)
+                .value_parser(value_parser!(usize))
+                .help("Number of continuous samples per file")
+                .long_help(
+                    "Number of continuous samples per file.\n\
+                    Setting 0 to not save to file for continuous streaming not yet supported.",
+                ),
+        );
+        cmd = cmd.arg(
+            Arg::new("Number of files")
+                .long("num_files")
+                .action(ArgAction::Set)
+                .help("Number of save files")
+                .long_help(
+                    "Number of save files.\n\
+                    (Not yet implemented: If num_samples is set to 0, this argument is ignored.)",
+                ),
+        );
+
+        // [-l|-h]
+        cmd = {
+            let low_speed = Arg::new("speed_low")
+                .short('l')
+                .action(ArgAction::SetTrue)
+                .help("Low sampling speed")
+                .long_help("VHF board samples at 80MHz, each (IQM) value is estimated from 8 samples, yielding a base sampling rate of 10 MHz.");
+            let high_speed = Arg::new("speed_high")
+                .short('h')
+                .action(ArgAction::SetTrue)
+                .help("High sampling speed")
+                .long_help("VHF board samples at 80MHz, each (IQM) value is estimated from 4 samples, yielding a base sampling rate of 20 MHz.");
+            let speed_group = ArgGroup::new("Speed")
+                .multiple(false)
+                .arg("speed_low")
+                .arg("speed_high");
+            cmd.arg(low_speed).arg(high_speed).group(speed_group)
+        };
+
+        // -F -G -s
+        cmd = cmd.arg(
+            Arg::new("Board Filter Constant")
+                .short('F')
+                .long("filter")
+                .action(ArgAction::Set)
+                .value_parser(value_parser!(u8))
+                .help("Hardware filter for low pass filtering")
+                .long_help("Hardware filter for low pass filtering. Valid: 0..=15"),
+        );
+        cmd = cmd.arg(
+            Arg::new("Board Gain")
+                .short('g')
+                .long("gain")
+                .action(ArgAction::Set)
+                .value_parser(value_parser!(u8))
+                .help("Dynamic gain")
+                .long_help("Dynamic gain. Valid: 0..=8"),
+        );
+        cmd = cmd.arg(
+            Arg::new("Board Skip Num")
+                .short('s')
+                .long("skip")
+                .action(ArgAction::Set)
+                .value_parser(value_parser!(u16))
+                .help("Decimation factor for FPGA")
+                .long_help(
+                    "Skip_num is passed into the FPGA for decimation. \
+                    Adding 1 to it yields the decimation factor by the FPGA. \
+                    Valid: 0..=65535.\nThis is not the total decimation, \
+                    if stream-filtering is present.",
+                ),
+        );
+
+        // [-b|-t|-x]
+        cmd = {
+            let binary = Arg::new("binary")
+                .short('b')
+                .long("binary")
+                .action(ArgAction::SetTrue)
+                .help("Packed binary output")
+                .long_help("File will be written in packed binary mode.");
+            let ascii = Arg::new("ASCII")
+                .short('t')
+                .long("text")
+                .action(ArgAction::SetTrue)
+                .help("ASCII output")
+                .long_help("File will be written in ASCII mode.");
+            let hexadecimal = Arg::new("hexadecimal")
+                .short('x')
+                .long("hexadecimal")
+                .action(ArgAction::SetTrue)
+                .help("Hexadecimal output")
+                .long_help("File will be written in Hexadecimal mode.");
+            let encode_group =
+                ArgGroup::new("Encode")
+                    .multiple(false)
+                    .args(["binary", "ASCII", "hexadecimal"]);
+            cmd.args([binary, ascii, hexadecimal]).group(encode_group)
+        };
+
+        // -o
+        cmd = cmd.arg(
+            Arg::new("outfile")
+                .short('o')
+                .long("outfile")
+                .action(ArgAction::Set)
+                .value_hint(ValueHint::FilePath)
+                .help("[Deprecated] File to save to.")
+                .long_help(
+                    "[Deprecated] File path to save to. Program will instead take the parent directory \
+                    and automatically generate the name.",
+                )
+        );
+        cmd = cmd.arg(
+            Arg::new("save_dir")
+                .short('D')
+                .long("save_dir")
+                .action(ArgAction::Set)
+                .value_hint(ValueHint::DirPath)
+                .help("Directory to save to."),
+        );
+
+        cmd
     }
 
     /// Checks if configuration has tripped anything. Errors only if warnings have been emitted.
