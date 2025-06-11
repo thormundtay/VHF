@@ -101,7 +101,7 @@ impl Configs {
         config.load(file).unwrap();
         let result = self.with_config(config);
         if result.is_ok() {
-            let _ = self.validate_config();
+            let _ = self.validate_config(true, false);
         }
         result
     }
@@ -378,11 +378,76 @@ impl Configs {
         cmd
     }
 
-    /// Checks if configuration has tripped anything. Errors only if warnings have been emitted.
-    fn validate_config(&self) -> Result<()> {
+    /// Used to ensure [self] is valid before running VHF board.
+    pub fn is_valid(&mut self) -> Result<()> {
+        self.validate_config(true, true)
+    }
+
+    /// Checks if configuration has tripped anything. Errors if strict and if warnings have been emitted.
+    // Typically the first pass of ini_config_file's path should not error out, as CLI after might fix.
+    // Thus, call strict only for finalisation of config.
+    fn validate_config(&mut self, strict: bool, strict_path: bool) -> Result<()> {
         if self.skip_num + 1 < 5 {
             log::warn!("Received skip_num less than 10! byte alignment has known to break!");
-            return Err(Error::ini_coerce("Board", "skip_num", "less than 10"));
+            if strict {
+                return Err(Error::ini_coerce("Board", "skip_num", "less than 10"));
+            }
+        }
+
+        self.validate_config_path(strict_path)?;
+
+        Ok(())
+    }
+
+    /// Checks if specified folder locations exists. Makes best effort to create folder.
+    /// Errors out if fails to create folder and strict.
+    fn validate_config_path(&mut self, strict: bool) -> Result<()> {
+        // Error only if not in /dev. Warns if board not found.
+        if self.board.is_symlink() {
+            // is symlink because passed via CLI rather than resolved when reading from file
+            if let Ok(board_loc) = self.board.canonicalize() {
+                self.board = board_loc
+            } else {
+                log::warn!("Failed to canonicalize {}", self.board.display());
+            }
+        }
+        if !self.board.starts_with("/dev") {
+            log::error!(
+                "self.board expected to be in /dev, found in {}",
+                self.board.display()
+            );
+            return Err(Error::InternalInconsistency);
+        } else if !self.board.exists() {
+            log::warn!(
+                "self.board at `{}` could not be found.",
+                self.board.display()
+            );
+        }
+
+        // Ensure is a full path that is an existing directory
+        if self.save_dir.is_relative() || !self.save_dir.exists() {
+            self.save_dir = match self.save_dir.canonicalize() {
+                Ok(d) => d,
+                Err(e) => {
+                    log::warn!(
+                        "Could not canonicalize, trying to create self.save_dir = `{}`. Error msg = {e}",
+                        self.save_dir.display()
+                    );
+                    match strict {
+                        true => {
+                            std::fs::create_dir_all(&self.save_dir).map_err(Error::Io)?;
+                            self.save_dir.canonicalize().map_err(Error::Io)?
+                        }
+                        false => {
+                            let _ = std::fs::create_dir_all(&self.save_dir);
+                            self.save_dir.canonicalize().unwrap_or_else(|e| {
+                                log::warn!("Still could not canonicalize. Error msg = {e}");
+                                self.save_dir.clone()
+                            })
+                        }
+                    }
+                }
+            }
         }
 
         Ok(())
