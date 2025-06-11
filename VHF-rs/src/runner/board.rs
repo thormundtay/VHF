@@ -102,6 +102,7 @@ impl TryFrom<usize> for USBMode {
     }
 }
 
+#[allow(clippy::to_string_trait_impl)]
 impl ToString for USBMode {
     fn to_string(&self) -> String {
         match self {
@@ -136,7 +137,7 @@ impl Board {
     ///
     /// # Errors
     /// - User: Check if folder has been set to configured to expectation as done through Makefile
-    /// initialisation.
+    ///   initialisation.
     /// - Io: Spawn etc has issues.
     pub fn new(dev_id: PathBuf) -> Result<Self> {
         // Check Cpp file

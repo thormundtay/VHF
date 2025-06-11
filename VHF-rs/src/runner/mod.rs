@@ -1,9 +1,9 @@
 use crate::{Error, Result};
-use std::path::PathBuf;
+use std::path::Path;
 
 /// Checks via `fuser` if a file is in use. Returns an error if the provided path is not a file, or
 /// invalid.
-fn fuser_used(path: &PathBuf) -> Result<bool> {
+fn fuser_used(path: &Path) -> Result<bool> {
     let path = path.canonicalize().map_err(|_| Error::User)?;
     if path.is_dir() || !path.exists() {
         return Err(Error::User);
