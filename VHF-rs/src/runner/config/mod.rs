@@ -279,8 +279,7 @@ impl Configs {
         // self.stream_fold = ...
 
         // We still support -o even if deprecated.
-        // NOTE: Downcasting to Path/PathBuf panics.
-        if let Some(save_loc) = args.get_one::<String>("outfile").map(PathBuf::from) {
+        if let Some(save_loc) = args.get_one::<PathBuf>("outfile") {
             log::warn!("-o flag has been deprecated! Please use --save_dir!");
             if save_loc.extension().is_some() {
                 // If there is an extension, means its a file-like path, and take parent.
@@ -301,12 +300,12 @@ impl Configs {
             } else {
                 // This is folder-like, we use it and let [self::validate_config] check. Do not
                 // canonicalize as it will error out
-                self.save_dir = save_loc;
+                self.save_dir = save_loc.clone();
             }
             self.validate_config_path(true)?; // Do not let self.save_dir be non-canonicalized upon scope-end
         }
         // Overwrite -o input if -D is also provided
-        if let Some(save_loc) = args.get_one::<String>("save_dir").map(PathBuf::from) {
+        if let Some(save_loc) = args.get_one::<PathBuf>("save_dir") {
             // Check that specified is folder-like
             if save_loc.extension().is_some() {
                 // If there is an extension, means its a file-like path, and take parent.
@@ -328,11 +327,11 @@ impl Configs {
             } else {
                 // This is folder-like, we use it and let [self::validate_config] check. Do not
                 // canonicalize as it will error out
-                self.save_dir = save_loc;
+                self.save_dir = save_loc.clone();
             }
             self.validate_config_path(true)?; // Do not let self.save_dir be non-canonicalized upon scope-end
         }
-        if let Some(b_in) = args.get_one::<String>("VHF board").map(PathBuf::from) {
+        if let Some(b_in) = args.get_one::<PathBuf>("VHF board") {
             self.board = b_in.canonicalize().unwrap_or(b_in.to_path_buf());
             self.validate_config_path(true)?; // Do not let self.board be non-canonicalized upon scope-end
         };
@@ -362,6 +361,7 @@ impl Configs {
                 .long("board")
                 .action(ArgAction::Set)
                 .value_hint(ValueHint::FilePath)
+                .value_parser(value_parser!(PathBuf))
                 .help("Board to read from")
                 .long_help(
                     "Board to read from. Boards accessible can be determined from ./clear_FIFO",
@@ -479,6 +479,7 @@ impl Configs {
                 .long("outfile")
                 .action(ArgAction::Set)
                 .value_hint(ValueHint::FilePath)
+                .value_parser(value_parser!(PathBuf))
                 .help("[Deprecated] File to save to.")
                 .long_help(
                     "[Deprecated] File path to save to. Program will instead take the parent directory \
@@ -491,6 +492,7 @@ impl Configs {
                 .long("save_dir")
                 .action(ArgAction::Set)
                 .value_hint(ValueHint::DirPath)
+                .value_parser(value_parser!(PathBuf))
                 .help("Directory to save to."),
         );
 
