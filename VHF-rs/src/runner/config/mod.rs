@@ -10,7 +10,7 @@ use clap::{Arg, ArgAction, ArgGroup, Command, ValueHint, value_parser};
 use configparser::ini;
 use std::{
     collections::HashMap,
-    ffi::CString,
+    ffi::{CString, OsString},
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -221,6 +221,125 @@ impl Configs {
         Ok(())
     }
 
+    /// Modifies by arguments as taken from std::env::args_os().
+    ///
+    /// This is destructive on the existing state of Configuration.
+    /// # Panic
+    /// Panics from [clap::Command::get_matches_from].
+    // Parsing of clap_args() is in the order of the [self] struct.
+    // args.get_one(/* ... */) argument comes from
+    // This function thus does mapping from args variable to [self] struct with minimal bounds
+    // checking, deferring to other functions to validate check.
+    pub fn with_cli(
+        &mut self,
+        env_args: impl IntoIterator<Item = OsString> + std::fmt::Debug,
+    ) -> Result<()> {
+        log::debug!("with_cli called with env_args: {:?}", env_args);
+        let args = self.clap_args().get_matches_from(env_args);
+
+        if let Some(&num_samples) = args.get_one::<usize>("Number of samples") {
+            self.num_samples = num_samples;
+        }
+        if let Some(&num_files) = args.get_one::<usize>("Number of files") {
+            self.num_files = num_files;
+        }
+        if let Some(&skip) = args.get_one::<u16>("Board Skip Num") {
+            self.skip_num = skip;
+        }
+
+        if args.get_flag("speed_low") {
+            self.speed = SamplingSpeed::Low;
+        } else if args.get_flag("speed_high") {
+            self.speed = SamplingSpeed::High;
+        }
+        if args.get_flag("binary") {
+            self.encode = Encode::Binary;
+        } else if args.get_flag("ASCII") {
+            self.encode = Encode::ASCII;
+        } else if args.get_flag("hexadecimal") {
+            self.encode = Encode::Hexadecimal;
+        }
+
+        if args.get_one::<u8>("Board Gain").is_some_and(|&v| v <= 8) {
+            // Condition duplicated from [self::with_config]
+            self.gain = args.get_one::<u8>("Board Gain").cloned();
+        } else if args.get_one::<u8>("Board Gain").is_some() {
+            log::warn!("Board Gain value given out of bounds! Ignored.")
+        };
+        if args
+            .get_one::<u8>("Board Filter Constant")
+            .is_some_and(|&v| v <= 15)
+        {
+            // Condition duplicated from [self::with_config]
+            self.gain = args.get_one::<u8>("Board Filter Constant").cloned();
+        } else if args.get_one::<u8>("Board Filter Constant").is_some() {
+            log::warn!("Board Filter Constant value given out of bounds! Ignored.")
+        };
+        // self.verbosity = ...
+        // self.stream_fold = ...
+
+        // We still support -o even if deprecated.
+        // NOTE: Downcasting to Path/PathBuf panics.
+        if let Some(save_loc) = args.get_one::<String>("outfile").map(PathBuf::from) {
+            log::warn!("-o flag has been deprecated! Please use --save_dir!");
+            if save_loc.extension().is_some() {
+                // If there is an extension, means its a file-like path, and take parent.
+                // leave for [self::validate_config] to check
+                self.save_dir = save_loc
+                    .parent()
+                    .expect("with extension implies file implies in directory")
+                    .to_path_buf();
+            } else if save_loc.is_file() {
+                log::error!(
+                    "-o value: {} points to an existing file!",
+                    save_loc.display()
+                );
+                return Err(Error::User);
+            } else if save_loc.is_dir() {
+                // If its a specified folder already on disk, that's great
+                self.save_dir = save_loc.canonicalize().map_err(Error::Io)?
+            } else {
+                // This is folder-like, we use it and let [self::validate_config] check. Do not
+                // canonicalize as it will error out
+                self.save_dir = save_loc;
+            }
+            self.validate_config_path(true)?; // Do not let self.save_dir be non-canonicalized upon scope-end
+        }
+        // Overwrite -o input if -D is also provided
+        if let Some(save_loc) = args.get_one::<String>("save_dir").map(PathBuf::from) {
+            // Check that specified is folder-like
+            if save_loc.extension().is_some() {
+                // If there is an extension, means its a file-like path, and take parent.
+                // leave for [self::validate_config] to check
+                log::warn!("Please pass only directory-like paths!");
+                self.save_dir = save_loc
+                    .parent()
+                    .expect("with extension implies file implies in directory")
+                    .to_path_buf();
+            } else if save_loc.is_file() {
+                log::error!(
+                    "-D value: {} points to an existing file! Expected directory!",
+                    save_loc.display()
+                );
+                return Err(Error::User);
+            } else if save_loc.is_dir() {
+                // If its a specified folder already on disk, that's great
+                self.save_dir = save_loc.canonicalize().map_err(Error::Io)?
+            } else {
+                // This is folder-like, we use it and let [self::validate_config] check. Do not
+                // canonicalize as it will error out
+                self.save_dir = save_loc;
+            }
+            self.validate_config_path(true)?; // Do not let self.save_dir be non-canonicalized upon scope-end
+        }
+        if let Some(b_in) = args.get_one::<String>("VHF board").map(PathBuf::from) {
+            self.board = b_in.canonicalize().unwrap_or(b_in.to_path_buf());
+            self.validate_config_path(true)?; // Do not let self.board be non-canonicalized upon scope-end
+        };
+
+        Ok(())
+    }
+
     /// For user input by stream.rs
     fn clap_args(&mut self) -> clap::Command {
         let mut cmd = Command::new("VHF Stream").disable_help_flag(true);
@@ -378,7 +497,7 @@ impl Configs {
         cmd
     }
 
-    /// Used to ensure [self] is valid before running VHF board.
+    /// Used to ensure [Configs] is valid before running VHF board.
     pub fn is_valid(&mut self) -> Result<()> {
         self.validate_config(true, true)
     }
