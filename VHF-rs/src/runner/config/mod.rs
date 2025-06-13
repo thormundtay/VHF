@@ -278,6 +278,35 @@ impl Configs {
         // self.verbosity = ...
         // self.stream_fold = ...
 
+        if let Some(phasemeter_kwargs) = args.get_raw("File details") {
+            // First convert OsString into CString
+            let kv = phasemeter_kwargs.map(|raw_value| -> (CString, CString) {
+                // Account for keys without values
+                let rv = raw_value.to_str().expect("Invalid UTF-8 in --phasemeter.");
+                let (k, v) = rv
+                    .split_at_checked(rv.find('=').unwrap_or(rv.len()))
+                    .map(|(r, v)| (r, v.as_bytes().iter().skip(1).cloned().collect()))
+                    .unwrap_or((rv, vec![]));
+                (
+                    CString::new(k).expect("Could not make CString"),
+                    CString::new(v).expect("Could not make CString"),
+                )
+            });
+
+            // Insert if key does not already exist.
+            kv.for_each(|(k, v)| {
+                match self.phasemeter_kwargs.entry(k.clone()) {
+                    std::collections::hash_map::Entry::Occupied(entry) => {
+                        log::warn!("Overwriting phasemeter kwarg `{:?}` with `{:?}`.", &k, &v);
+                        *entry.into_mut() = v;
+                    }
+                    std::collections::hash_map::Entry::Vacant(entry) => {
+                        entry.insert(v);
+                    }
+                };
+            });
+        }
+
         // We still support -o even if deprecated.
         if let Some(save_loc) = args.get_one::<PathBuf>("outfile") {
             log::warn!("-o flag has been deprecated! Please use --save_dir!");
@@ -495,6 +524,19 @@ impl Configs {
                 .value_hint(ValueHint::DirPath)
                 .value_parser(value_parser!(PathBuf))
                 .help("Directory to save to."),
+        );
+
+        // --phasemeter
+        cmd = cmd.arg(
+            Arg::new("File details")
+                .long("phasemeter")
+                .action(ArgAction::Append) // Allows multiple --phasemeter-kwarg key=value
+                .num_args(0..)
+                .value_name("DETAIL=VALUE")
+                .help("Phasemeter details for filename")
+                .long_help(
+                    "Phasmeter details to save in the filename. E.g.: `./stream --phasemeter fibre_length=1.0km laser_chip=ULN00238`"
+                )
         );
 
         cmd
