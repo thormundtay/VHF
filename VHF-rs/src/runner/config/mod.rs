@@ -271,7 +271,7 @@ impl Configs {
             .is_some_and(|&v| v <= 15)
         {
             // Condition duplicated from [self::with_config]
-            self.gain = args.get_one::<u8>("Board Filter Constant").cloned();
+            self.filter_const = args.get_one::<u8>("Board Filter Constant").cloned();
         } else if args.get_one::<u8>("Board Filter Constant").is_some() {
             log::warn!("Board Filter Constant value given out of bounds! Ignored.")
         };
@@ -385,6 +385,7 @@ impl Configs {
             Arg::new("Number of files")
                 .long("num_files")
                 .action(ArgAction::Set)
+                .value_parser(value_parser!(usize))
                 .help("Number of save files")
                 .long_help(
                     "Number of save files.\n\
@@ -411,7 +412,7 @@ impl Configs {
             cmd.arg(low_speed).arg(high_speed).group(speed_group)
         };
 
-        // -F -G -s
+        // -F -g -s
         cmd = cmd.arg(
             Arg::new("Board Filter Constant")
                 .short('F')
@@ -423,7 +424,7 @@ impl Configs {
         );
         cmd = cmd.arg(
             Arg::new("Board Gain")
-                .short('g')
+                .short('G')
                 .long("gain")
                 .action(ArgAction::Set)
                 .value_parser(value_parser!(u8))
