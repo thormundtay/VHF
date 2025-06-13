@@ -721,7 +721,7 @@ mod configurations {
     use super::*;
 
     #[test]
-    fn intended_case() {
+    fn intended_file_case() {
         let ini_config = {
             let mut config = ini::Ini::new();
             config
@@ -768,5 +768,141 @@ mod configurations {
         assert_eq!(config.save_dir, PathBuf::from("Data"));
         // Ignore due to canonicalization
         assert_eq!(config.board, Configs::default().board);
+    }
+
+    #[test]
+    fn intended_cli_case() {
+        let args: Vec<OsString> = [
+            "exec_name",
+            "-U",
+            "/dev/usbhybrid99",
+            "-q",
+            "524288",
+            "--num_files",
+            "500",
+            "-l",
+            "-s",
+            "499",
+            "-F",
+            "7",
+            "-G",
+            "3",
+            "-b",
+            "--save_dir",
+            std::env::temp_dir().to_str().unwrap(),
+            "--phasemeter",
+            "length=2km",
+        ]
+        .into_iter()
+        .map(OsString::from)
+        .collect();
+
+        let mut config = Configs::default();
+        let p = config.with_cli(args);
+
+        assert!(p.is_ok());
+        assert_eq!(config.board, PathBuf::from("/dev/usbhybrid99"));
+        assert_eq!(config.num_samples, 524288);
+        assert_eq!(config.num_files, 500);
+        matches!(config.speed, SamplingSpeed::Low);
+        assert_eq!(config.filter_const, Some(7));
+        assert_eq!(config.gain, Some(3));
+        matches!(config.encode, Encode::Binary);
+        assert_eq!(config.save_dir, std::env::temp_dir());
+        assert_eq!(config.phasemeter_kwargs.len(), 1);
+        assert_eq!(
+            config.phasemeter_kwargs.into_iter().next().unwrap(),
+            (
+                CString::new("length").unwrap(),
+                CString::new("2km").unwrap()
+            )
+        );
+    }
+
+    #[test]
+    fn overwriting_cli_case() {
+        let ini_config = {
+            let mut config = ini::Ini::new();
+            config
+                .read(
+                    "[Board]
+                    num_samples = 1
+                    skip_num = 10 - 1
+                    speed: low
+                    encode: binary
+                    vga_num = 0
+                    vga_num_enable = False
+                    filter_const = 0
+                    filter_const_enable = False
+                    v = 3
+
+                    [Paths]
+                    base_dir: .
+                    save_dir: Data
+                    # This should just yield the default
+                    board: ${base_dir}/vhf_board
+                    save_to_file = True
+
+                    [Phasemeter Details]
+                    length=1km"
+                        .to_string(),
+                )
+                .expect("Ini lib parse error.");
+            config
+        };
+
+        // From file first
+        let mut config = Configs::new(None).expect("Unable to create Config from empty");
+        let p = config.with_config(ini_config);
+        assert!(p.is_ok());
+        assert_eq!(
+            config.phasemeter_kwargs[&CString::new("length").unwrap()],
+            CString::new("1km").unwrap()
+        );
+
+        // Overwriting with CLI.
+        let args: Vec<OsString> = [
+            "exec_name",
+            "-U",
+            "/dev/usbhybrid99",
+            "-q",
+            "524288",
+            "--num_files",
+            "500",
+            "-l",
+            "-s",
+            "499",
+            "-F",
+            "7",
+            "-G",
+            "3",
+            "-b",
+            "--save_dir",
+            std::env::temp_dir().to_str().unwrap(),
+            "--phasemeter",
+            "length=2km",
+        ]
+        .into_iter()
+        .map(OsString::from)
+        .collect();
+        let p = config.with_cli(args);
+        assert!(p.is_ok());
+
+        assert_eq!(config.board, PathBuf::from("/dev/usbhybrid99"));
+        assert_eq!(config.num_samples, 524288);
+        assert_eq!(config.num_files, 500);
+        matches!(config.speed, SamplingSpeed::Low);
+        assert_eq!(config.filter_const, Some(7));
+        assert_eq!(config.gain, Some(3));
+        matches!(config.encode, Encode::Binary);
+        assert_eq!(config.save_dir, std::env::temp_dir());
+        assert_eq!(config.phasemeter_kwargs.len(), 1);
+        assert_eq!(
+            config.phasemeter_kwargs.into_iter().next().unwrap(),
+            (
+                CString::new("length").unwrap(),
+                CString::new("2km").unwrap()
+            )
+        );
     }
 }
