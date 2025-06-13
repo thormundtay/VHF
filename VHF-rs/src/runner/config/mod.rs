@@ -157,7 +157,7 @@ impl Configs {
         self.verbosity = match config.getuint("Board", "v").map_err(Error::IniParse)? {
             None => return Err(Error::ini_missing("Board", "v")),
             Some(t) => {
-                if t <= 5 {
+                if t <= 15 {
                     t as u8
                 } else {
                     return Err(Error::IniParse(
@@ -275,7 +275,9 @@ impl Configs {
         } else if args.get_one::<u8>("Board Filter Constant").is_some() {
             log::warn!("Board Filter Constant value given out of bounds! Ignored.")
         };
-        // self.verbosity = ...
+        if let Some(&verbosity) = args.get_one::<u8>("verbosity") {
+            self.verbosity = verbosity;
+        }
         // self.stream_fold = ...
 
         if let Some(phasemeter_kwargs) = args.get_raw("File details") {
@@ -502,6 +504,25 @@ impl Configs {
             cmd.args([binary, ascii, hexadecimal]).group(encode_group)
         };
 
+        // -v
+        cmd = cmd.arg(
+            Arg::new("verbosity")
+                .short('v')
+                .long("verbosity")
+                .action(ArgAction::Set)
+                .value_parser(value_parser!(u8))
+                .help("Verbosity level of file output.")
+                .long_help(
+                    "Sets the verbosity level of the file output. Add the values for adding options.\n\
+                    0: No Header is added (default).\n\
+                    1: A string representation of commands run is added.\n\
+                    2: Date and time associated to first data point in the data file.\n\
+                    4: Use v2 (or higher) file output. Necessary for putting if filtering was used (or not) in header data.\n\
+                       (Not yet implemented: Also see `--net_cdf`.)\n\
+                    8: Header also includes m-overflow indices. Requires v2 binary file format from 4.",
+                ),
+        );
+
         // -o
         cmd = cmd.arg(
             Arg::new("outfile")
@@ -556,6 +577,13 @@ impl Configs {
             if strict {
                 return Err(Error::ini_coerce("Board", "skip_num", "less than 10"));
             }
+        }
+
+        if self.verbosity >= 4 && (self.verbosity & 0b100 == 0) && strict {
+            log::warn!(
+                "Verbosity was found to have been configured to use v2 (or higher) file writer without specifying use of v2 (or higher) file writer. Coercing."
+            );
+            self.verbosity |= 0b100;
         }
 
         self.validate_config_path(strict_path)?;
@@ -831,6 +859,8 @@ mod configurations {
             "-G",
             "3",
             "-b",
+            "-v",
+            "2",
             "--save_dir",
             std::env::temp_dir().to_str().unwrap(),
             "--phasemeter",
@@ -851,6 +881,7 @@ mod configurations {
         assert_eq!(config.filter_const, Some(7));
         assert_eq!(config.gain, Some(3));
         matches!(config.encode, Encode::Binary);
+        assert_eq!(config.verbosity, 2);
         assert_eq!(config.save_dir, std::env::temp_dir());
         assert_eq!(config.phasemeter_kwargs.len(), 1);
         assert_eq!(
