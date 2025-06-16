@@ -1,4 +1,5 @@
 use pariter::IteratorExt;
+use std::env;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, channel};
 use std::thread;
@@ -9,6 +10,26 @@ use vhf::runner::{
 };
 use vhf::{Error, Result};
 
+/// Start logging and get [vhf::runner::Config] from file and command line.
+fn initialisation() -> Result<Config> {
+    if env::args_os().any(|s| s == *"-?" || s == *"--help") {
+        Config::default().with_cli(env::args_os())?; // Do not parse VHF_board_params if --help
+    }
+
+    log4rs::init_file("log4rs.yml", Default::default()).expect("log4rs.yml not found!"); // Logger init
+    let conf = {
+        let mut result = Config::new(Some(PathBuf::from("./VHF_board_params.ini")))?;
+        if env::args_os().len() > 1 {
+            result.with_cli(env::args_os())?; // Invoke argument parsing only when arguments are present
+        }
+        result.is_valid()?;
+        result.inform_params();
+        result
+    };
+    Ok(conf)
+}
+
+/// Separate file writer into its own child thread.
 fn writer_thread(consumer: Receiver<WriteBlock>, mut file_writer: V1Writer) {
     // try_recv will sleep when empty
     while let Ok(words) = consumer.recv() {
@@ -18,10 +39,7 @@ fn writer_thread(consumer: Receiver<WriteBlock>, mut file_writer: V1Writer) {
 }
 
 fn main() -> Result<()> {
-    let _ = log4rs::init_file("log4rs.yml", Default::default()).expect("log4rs.yml not found!"); // Logger init
-    let conf = Config::new(Some(PathBuf::from("./VHF_board_params.ini")))?;
-    conf.inform_params();
-
+    let conf = initialisation()?;
     let params = conf.stream_fold_parameters().clone();
     let mut vhf = VHF::new(&conf, &params)?;
     let time_start = vhf.start()?;
