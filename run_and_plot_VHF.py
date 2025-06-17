@@ -7,9 +7,17 @@ import numpy as np
 import subprocess
 from subprocess import PIPE
 import sys
-from tempfile import NamedTemporaryFile
+from tempfile import TemporaryDirectory
 from VHF.parse import VHFparser
 from VHF.runner import VHFRunner
+
+
+def tmp_store_file(dir: str) -> Path:
+    """Get the file saved in the temp store folder."""
+    all_files = [f for f in Path(dir).iterdir() if f.is_file()]
+    if len(all_files) > 1:
+        logging.warning("More than 1 file found in temp folder!")
+    return all_files[0]
 
 
 def run_and_plot():
@@ -24,6 +32,7 @@ def run_and_plot():
             'skip_num': 4,
             'num_samples': 2**23,
             'v': 3,
+            '-num_files': 1
         }
     )
     vhf_runner.inform_params()
@@ -41,11 +50,11 @@ def run_and_plot():
         level=logging.DEBUG,
     )
 
-    with NamedTemporaryFile(dir='/dev/shm') as tmp_store:
+    with TemporaryDirectory(prefix="VHF") as tmp_store:
         emsg = 0
         start_time = datetime.datetime.now()
 
-        sb_run = vhf_runner.subprocess_run(stdout=tmp_store)
+        sb_run = vhf_runner.subprocess_run(tmp_dir=tmp_store)
         try:
             retcode = subprocess.run(**sb_run, stderr=PIPE)
             logging.info("Subprocess ran with %s", str(sb_run))
@@ -71,8 +80,8 @@ def run_and_plot():
         if emsg != 0:
             sys.exit(-emsg)
 
-        parsed = VHFparser(tmp_store.name)
-        tmp_store_name = tmp_store.name
+        tmp_store_name = tmp_store_file(tmp_store)
+        parsed = VHFparser(tmp_store_name)
         logging.debug("min(m) = %f, max(m) = %f", np.min(parsed.m_arr), np.max(parsed.m_arr))
 
     phase = parsed.reduced_phase
@@ -83,7 +92,7 @@ def run_and_plot():
     fig.set_size_inches(view_const * 0.85 *
                         (8.25 - 0.875 * 2), view_const * 2.5)
     fig.tight_layout()
-    fig.canvas.manager.set_window_title(tmp_store_name)
+    fig.canvas.manager.set_window_title(str(tmp_store_name))
     plt.show(block=True)
 
     return

@@ -4,13 +4,13 @@ Provides VHFRunner.
 VHFRunner is a config parser that aims to simplify subprocess arguments.
 """
 import configparser
-import datetime
 import logging
 from enum import Enum
 from os import PathLike
 from os.path import realpath
 from pathlib import Path
 from shlex import quote
+import subprocess
 import sys
 from typing import Any
 from typing import IO
@@ -108,6 +108,18 @@ class Encode(EnumWithAttrs):
                     "'hexadecimal', 'ascii', or 'text'")
 
 
+def stream_location() -> str:
+    """Ensures existence of ./target/release/stream before returning."""
+    if not Path("target/release/stream").exists():
+        logging.warning("Folder has not been inited? Running stream make now!")
+        subprocess.run(["cargo", "build", "--bin", "stream", "--release"])
+
+        if not Path("target/release/stream").exists():
+            logging.error("Binary still could not be found! Exiting!")
+            sys.exit(1)
+    return realpath("target/release/stream")
+
+
 class VHFRunner():
     """Configparses config file into appropriate strings for subprocess."""
 
@@ -125,6 +137,7 @@ class VHFRunner():
             library.
         force_to_buffer: bool
             If true, disregards conf_file's save_to_file option.
+            This will use a tempdir provided by Python.
         strict_use: bool
             Defaults to True. If true, exits running process, to avoid adding
             more commands to existingly running VHF board.
@@ -168,13 +181,15 @@ class VHFRunner():
             'base_dir': realpath(conf['Paths']['base_dir']),
             'save_dir': realpath(conf['Paths']['save_dir']),
             'vhf_dev': realpath(conf['Paths']['board']),
-            'stream': realpath(conf['Paths']['stream_exec']),
+            'stream': stream_location(),
         }
 
-        # Pass via stdout vs to a file
-        self.to_file = conf.getboolean('Paths', 'save_to_file')
+        # Currently always into a file until ./stream supports stdout
+        self.to_file: bool = True
+        self.to_temp_dir: bool = force_to_buffer
+        self.temp_dir_loc: PathLike = Path("")
         if force_to_buffer:
-            self.to_file = False
+            self.path['save_dir'] = ""
 
         # Overwrite properties read from file via script
         if len(overwrite_properties) > 0:
@@ -294,33 +309,13 @@ class VHFRunner():
 
         return result
 
-    def get_filename(self, params: list[str], timestamp: bool = True):
-        """Obtain the filename that would be generated, shell-escaped.
-
-        No special effort is done to ensure that the generated path's parent
-        exists or is safe under the current C implementation of teststream's -o
-        flag.
-
-        Input
-        -----
-        params: list
-            list of params that is being invoked for subprocess_run being
-            passed to the VHF board.
-        """
-        def qs(x): return quote(str(x))
-
-        fn = datetime.datetime.now().isoformat() if timestamp else "" + \
-            "".join(params[3:]).replace('-', '_')
-        fn += '_' + '_'.join(flatten(self.phasemeter_kwargs.items()))
-        fn += "." + self.encode.ext
-        fn = qs(Path(self.path['save_dir']).joinpath(fn).resolve())
-
-        return fn
-
     def subprocess_cmd(self) -> list:
         """First argument of subprocess.run(...)."""
+        def qs(x) -> str:
+            return quote(str(x))
+
         result = self.get_params()
-        # Filename generated
+        # Currently true until ./stream supports stdout
         if self.to_file:
             if ' ' in self.path["save_dir"]:
                 # This is the only part of the file name that is user-defined.
@@ -335,11 +330,17 @@ class VHFRunner():
             if not Path(self.path["save_dir"]).exists():
                 # Folder creation is not the responsibility of this class.
                 raise ValueError(
-                    f"Desired save_dir of `{self.path["save_dir"]}` could not "
+                    f"Desired save_dir of `{self.path['save_dir']}` could not"
                     " be found.")
 
-            fn = self.get_filename(result)
-            result.extend(['-o', fn])
+            result.extend(
+                ['--save_dir', qs(Path(self.path['save_dir']).resolve())]
+            )
+            result.append('--phasemeter')
+            result.extend(
+                ["=".join([k, v]) for k, v in self.phasemeter_kwargs.items()]
+            )
+
         return result
 
     def subprocess_Popen(self) -> dict:
@@ -362,25 +363,34 @@ class VHFRunner():
         self.logger.debug("subprocess_Popen called. Returning %s", result)
         return result
 
-    def subprocess_run(self, stdout: _FILE = None, timeout: Optional[float] = None) -> dict:
+    def subprocess_run(
+        self,
+        tmp_dir: Optional[_PATH] = None,
+        timeout: Optional[float] = None
+    ) -> dict:
         """All arguments for subprocess.run(...).
 
         If writing to stdout instead, user is to provide their own pipe to pass
         into subprocess.run, through `stdout` arg.
         """
-        result = self.subprocess_Popen()
+        result = {}
         result["check"] = True
         if timeout is None:
             result["timeout"] = 7 + self.sample_time()
         else:
             result["timeout"] = timeout
 
-        if self.to_file:
+        if self.to_file and not self.to_temp_dir:
             result['capture_output'] = True
+        elif self.to_temp_dir:
+            if tmp_dir is None:
+                raise ValueError("tmp_dir expected argument!")
+            if self.path['save_dir'] != '':
+                raise ValueError("save_dir should have been empty from init")
+            self.path['save_dir'] = tmp_dir
         else:
-            if stdout is None:
-                raise ValueError("Stdout expected argument!")
-            result['stdout'] = stdout
+            raise Exception("Inconsistent state achieved")
+        result.update(self.subprocess_Popen())
         self.logger.debug("subprocess_run called. Returning %s", result)
         return result
 
