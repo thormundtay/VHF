@@ -370,7 +370,7 @@ class VHFRunner():
         """
         result = self.subprocess_Popen()
         result["check"] = True
-        if float is None:
+        if timeout is None:
             result["timeout"] = 7 + self.sample_time()
         else:
             result["timeout"] = timeout
