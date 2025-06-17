@@ -229,7 +229,7 @@ fn main() -> Result<()> {
     };
 
     for board in boards {
-        clear_fifo_per_board(board, true)?;
+        clear_fifo_per_board(board, cli.force)?;
     }
 
     println!();
