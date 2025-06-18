@@ -96,8 +96,8 @@ impl MMapReader {
             next_collect_time,
             total_pages,
             collected_pages: 0,
-            step_by: streamfold.step_by(),
-            stream_pad: streamfold.pad(),
+            step_by: streamfold.step_by,
+            stream_pad: streamfold.pad,
         })
     }
 

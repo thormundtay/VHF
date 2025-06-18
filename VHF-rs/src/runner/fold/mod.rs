@@ -10,16 +10,18 @@ use crate::{
 use std::{cmp::Ordering, hint::unreachable_unchecked, ops::Deref, sync::Arc};
 
 #[derive(Clone)]
-pub struct StreamFoldParameters {
+pub struct StreamFold {
     /// This the function that has to be applied to every chunked window from [super::VHF].next.
     pub func: Arc<dyn Fn(<super::VHFIter as Iterator>::Item) -> WriteBlock + Send + Sync>,
     /// This is the number of windows to step by each time prior to par_iter.
     pub step_by: usize,
     /// This is the number of windows to pad to the start.
     pub pad: usize,
+    /// This is the operation performed.
+    pub op: StreamFoldOp,
 }
 
-impl PartialEq for StreamFoldParameters {
+impl PartialEq for StreamFold {
     fn eq(&self, other: &Self) -> bool {
         std::ptr::addr_eq(Arc::as_ptr(&self.func), Arc::as_ptr(&other.func))
             && self.step_by == other.step_by
@@ -27,50 +29,38 @@ impl PartialEq for StreamFoldParameters {
     }
 }
 
-impl Eq for StreamFoldParameters {}
+impl Eq for StreamFold {}
 
 /// Determines the mode of operation on [super::VHF].next.
 #[derive(Clone, PartialEq, Eq)]
-pub enum StreamFold {
+pub enum StreamFoldOp {
     /// Identity Transform on Stream without index checking
-    None(StreamFoldParameters),
+    None,
     // Reduce,
     /// Quite literally the map in functional programming.
-    Map(StreamFoldParameters),
+    Map,
 }
 
 impl std::fmt::Debug for StreamFold {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                StreamFold::None(_) => "none",
-                StreamFold::Map(_) => "map",
-            }
-        )
+        f.debug_struct("StreamFold")
+            .field("func", &"...")
+            .field("step_by", &self.step_by)
+            .field("pad", &self.pad)
+            .field(
+                "op",
+                &match self.op {
+                    StreamFoldOp::None => "none",
+                    StreamFoldOp::Map => "map",
+                },
+            )
+            .finish()
     }
 }
 
 impl StreamFold {
-    /// Gets the number of windows to pad with at the start.
-    pub(in crate::runner) fn pad(&self) -> usize {
-        match self {
-            Self::None(x) => x.pad,
-            Self::Map(x) => x.pad,
-        }
-    }
-
-    /// Gets the number of windows to step_by each time.
-    pub(in crate::runner) fn step_by(&self) -> usize {
-        match self {
-            Self::None(x) => x.step_by,
-            Self::Map(x) => x.step_by,
-        }
-    }
-
     /// This is the Identity transform without any roll-over checking.
-    pub fn none_default() -> StreamFold {
+    pub fn none_default() -> Self {
         let identity = |(_, pages): <super::VHFIter as Iterator>::Item| {
             let data = {
                 let mut data = Vec::with_capacity(VHF_MMAP_WINDOW_LEN * MMAP_PAGE_LEN);
@@ -81,15 +71,16 @@ impl StreamFold {
             WriteBlock::new(data)
         };
 
-        StreamFold::None(StreamFoldParameters {
+        StreamFold {
             func: Arc::new(identity),
             step_by: VHF_MMAP_WINDOW_LEN,
             pad: 0,
-        })
+            op: StreamFoldOp::None,
+        }
     }
 
     //// This is the Identity transform with roll-over checking.
-    pub fn identity_default() -> StreamFold {
+    pub fn identity_default() -> Self {
         /// Offset into each window in which all pages prior can be thought of as lookbacks into
         /// previous windows.
         const PAGES_START: usize = 1;
@@ -162,11 +153,12 @@ impl StreamFold {
             result
         }
 
-        StreamFold::Map(StreamFoldParameters {
+        StreamFold {
             func: Arc::new(overlapping_identity),
             step_by: VHF_MMAP_WINDOW_LEN - PAGES_START,
             pad: PAGES_START,
-        })
+            op: StreamFoldOp::Map,
+        }
     }
 }
 

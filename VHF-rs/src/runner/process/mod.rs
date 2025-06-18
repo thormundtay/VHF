@@ -107,7 +107,7 @@ impl VHF {
             let mut buffer = Deque::new();
             // Left padding is initialisation, and is thus handled in the parent.
             // Right-padding is termination, and therefore has to be handled by the child thread.
-            (0..config.stream_fold.pad())
+            (0..config.stream_fold.pad)
                 .try_for_each(|_| buffer.push_back(MmapPage::Empty))
                 .expect("Failed to push_back onto buffer.");
             Rc::new(RefCell::new(buffer))

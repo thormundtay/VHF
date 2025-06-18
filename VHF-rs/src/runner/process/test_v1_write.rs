@@ -1,7 +1,7 @@
 //! This file is to test if [super::super::Writer] works.
 
 use super::super::config::Configs;
-use super::super::fold::StreamFold;
+use super::super::fold::{StreamFold, StreamFoldOp};
 use super::super::writer::{V1Writer, VHFWriter};
 use super::consts::MMAP_PAGE_LEN;
 use super::test_vhf::{debug_vhf_new, push_arc_pages};
@@ -26,10 +26,8 @@ fn writes_correct_header() {
         debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
-    let StreamFold::None(params) = StreamFold::none_default() else {
-        log::error!("Nonoverlapping windows are not StreamFold::None variant.");
-        panic!()
-    };
+    let params = StreamFold::none_default();
+    matches!(params.op, StreamFoldOp::None);
 
     // Define the signal we are testing for.
     let ampl = 5000f64;
@@ -88,10 +86,8 @@ fn creates_multiple_files() {
         debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
-    let StreamFold::None(params) = StreamFold::none_default() else {
-        log::error!("Nonoverlapping windows are not StreamFold::None variant.");
-        panic!()
-    };
+    let params = StreamFold::none_default();
+    matches!(params.op, StreamFoldOp::None);
 
     // Define the signal we are testing for.
     let ampl = 5000f64;
@@ -167,10 +163,8 @@ fn creates_correct_multithreaded_files() {
         debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
-    let StreamFold::None(params) = StreamFold::none_default() else {
-        log::error!("Nonoverlapping windows are not StreamFold::None variant.");
-        panic!()
-    };
+    let params = StreamFold::none_default();
+    matches!(params.op, StreamFoldOp::None);
 
     // Define the signal we are testing for.
     let ampl = 5000f64;

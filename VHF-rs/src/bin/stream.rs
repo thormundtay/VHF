@@ -5,7 +5,7 @@ use std::sync::mpsc::{Receiver, channel};
 use std::thread;
 use vhf::runner::{
     Config, VHF,
-    fold::StreamFold,
+    fold::StreamFoldOp,
     writer::{V1Writer, VHFWriter, WriteBlock},
 };
 use vhf::{Error, Result};
@@ -45,10 +45,7 @@ fn main() -> Result<()> {
     let time_start = vhf.start()?;
 
     let file_writer = V1Writer::new(&conf, time_start);
-    let StreamFold::Map(params) = params else {
-        log::error!("Overlapping windows are not StreamFold::Map variant.");
-        panic!()
-    };
+    matches!(params.op, StreamFoldOp::Map);
 
     let (writer_send, writer_receive) = channel();
     let writer_thread = thread::Builder::new()

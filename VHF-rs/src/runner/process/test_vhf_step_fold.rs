@@ -4,7 +4,7 @@
 //! ```
 //! behaves to expectation.
 
-use super::super::fold::StreamFold;
+use super::super::fold::{StreamFoldOp, StreamFold};
 use super::consts::MMAP_PAGE_LEN;
 use super::test_vhf::{debug_vhf_new, push_arc_pages};
 use super::*;
@@ -94,10 +94,8 @@ fn stepped_nonoverlapping_identity_a() {
         debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
-    let StreamFold::None(params) = StreamFold::none_default() else {
-        log::error!("Nonoverlapping windows are not StreamFold::None variant.");
-        panic!()
-    };
+    let params = StreamFold::none_default();
+    matches!(params.op, StreamFoldOp::None);
 
     // Define the signal we are testing for.
     let ampl = 5000f64;
@@ -146,10 +144,8 @@ fn stepped_nonoverlapping_identity_b() {
         debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
-    let StreamFold::None(params) = StreamFold::none_default() else {
-        log::error!("Nonoverlapping windows are not StreamFold::None variant.");
-        panic!()
-    };
+    let params = StreamFold::none_default();
+    matches!(params.op, StreamFoldOp::None);
 
     // Define the signal we are testing for.
     let ampl = 5000f64;
@@ -198,10 +194,8 @@ fn stepped_nonoverlapping_identity_b() {
 /// Check that without any m-overflow, StreamFold behaves to expectation.
 #[test]
 fn stepped_overlapping_identity_a() {
-    let StreamFold::Map(params) = StreamFold::identity_default() else {
-        log::error!("Nonoverlapping windows are not StreamFold::Map variant.");
-        panic!()
-    };
+    let params = StreamFold::identity_default();
+    matches!(params.op, StreamFoldOp::Map);
 
     let debug_vhf_total_len = 4 * params.step_by;
     let total_window_len = debug_vhf_total_len + params.step_by;
@@ -266,10 +260,8 @@ fn stepped_overlapping_identity_a() {
 /// Check that with m-overflow, StreamFold behaves to expectation.
 #[test]
 fn stepped_overlapping_identity_b() {
-    let StreamFold::Map(params) = StreamFold::identity_default() else {
-        log::error!("Nonoverlapping windows are not StreamFold::Map variant.");
-        panic!()
-    };
+    let params = StreamFold::identity_default();
+    matches!(params.op, StreamFoldOp::Map);
 
     let total_window_len = params.step_by;
     let (debug_vhf, dbg_vhf_sender, eng) =
