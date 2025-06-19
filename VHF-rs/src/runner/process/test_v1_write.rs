@@ -22,8 +22,11 @@ use test_log::test;
 fn writes_correct_header() {
     let debug_vhf_total_len = 4 * VHF_MMAP_WINDOW_LEN;
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
-    let (debug_vhf, dbg_vhf_sender, eng) =
-        debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
+    let debug_vhf_conf = Configs::default();
+    let (debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
+        &debug_vhf_conf,
+        NonZeroUsize::new(debug_vhf_total_len).unwrap(),
+    );
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
     let params = StreamFold::none_default();
@@ -82,8 +85,11 @@ fn creates_multiple_files() {
     let debug_vhf_total_len = VHF_MMAP_WINDOW_LEN * scale_elements;
     log::info!("debug_vhf_total_len = {}", &debug_vhf_total_len);
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
-    let (debug_vhf, dbg_vhf_sender, eng) =
-        debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
+    let debug_vhf_conf = Config::default();
+    let (debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
+        &debug_vhf_conf,
+        NonZeroUsize::new(debug_vhf_total_len).unwrap(),
+    );
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
     let params = StreamFold::none_default();
@@ -159,8 +165,11 @@ fn creates_correct_multithreaded_files() {
     let debug_vhf_total_len = VHF_MMAP_WINDOW_LEN * scale_elements;
     log::info!("debug_vhf_total_len = {}", &debug_vhf_total_len);
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
-    let (mut debug_vhf, dbg_vhf_sender, eng) =
-        debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
+    let debug_vhf_conf = Config::default();
+    let (mut debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
+        &debug_vhf_conf,
+        NonZeroUsize::new(debug_vhf_total_len).unwrap(),
+    );
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
     let params = StreamFold::none_default();

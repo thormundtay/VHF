@@ -21,8 +21,11 @@ use utils::PythonMath;
 ///
 /// We expect to first source from the INI file, before overwriting with any command line
 /// arguments. The implementation here however does not impose any strict ordering.
-// In line with Rust's impossible to represent invalid states, the struct should only contain known
-// data.
+///
+/// While trying to be inline with Rust's impossible to represent invalid states, the struct should
+/// only contain known data, the non-finalization means that the state within the struct is an
+/// over-representation of what is alloweable. This is a superset of the valid [BoardConfig],
+/// and [WriterBuilder] states.
 #[derive(Clone, Debug)]
 pub struct Configs {
     /// For a single continuous file, this is the number of samples expected to be at least within
@@ -651,12 +654,6 @@ impl Configs {
         self.speed.base_sampling_freq() as f64 / (1. + self.skip_num as f64)
     }
 
-    /// Number of elements to read from VHF board, after board-decimation factor, before any
-    /// processing by us.
-    pub fn total_elements_to_read(&self) -> usize {
-        self.num_files * self.num_samples
-    }
-
     /// This determines the time difference the first data point of multiple files.
     pub fn file_timespan(&self) -> jiff::Span {
         // In case there are drifts...
@@ -725,11 +722,6 @@ impl Configs {
         s.join("_")
     }
 
-    /// Gets the parameters of StreamFold part of the configuration.
-    pub fn stream_fold_parameters(&self) -> &StreamFold {
-        &self.stream_fold
-    }
-
     /// Prints user-friendly string as to the configuration being used to run.
     pub fn inform_params(&self) {
         const BLUE: &str = "\x1B[34m";
@@ -784,6 +776,67 @@ impl Configs {
                 )
                 .unwrap_or_default()
         )
+    }
+
+    /// If all parameters in [self] are valid, a [BoardConfig] will be produced that fully
+    /// represents all necessary processes required to interact with VHF Board.
+    pub fn build_board_config(&self) -> Result<BoardConfig> {
+        BoardConfig::new(self)
+    }
+}
+
+/// Valid representation of board interaction along with process requirements.
+/// (These are placed together as the board has to collect more data in the event that process
+/// decimates the board's collected data.)
+pub struct BoardConfig<'a> {
+    /// For a single continuous file, this is the number of samples expected to be at least within
+    /// the file.
+    pub num_samples: &'a usize,
+    /// This is the number of continuous files is expected to run without calling USB_START_ENGINE
+    /// again.
+    pub num_files: &'a usize,
+    /// This value (known as "-s skipnum") is passed into the FPGA for decimation. Adding 1 to it
+    /// yields the decimation factor by the FPGA. Valid in 0..=65535.
+    pub skip_num: &'a u16,
+    /// This value (known as "-h" or "-l") is passed into the FPGA to operate at either 20 or 10
+    /// MHz. Defaults to High unless otherwise specified.
+    pub speed: &'a SamplingSpeed,
+
+    /// This is the dynamic gain (-g)
+    pub gain: &'a Option<u8>,
+    /// This is the hardware filter (-F) used by the FPGA for low pass filtering.
+    pub filter_const: &'a Option<u8>,
+
+    /// Runtime processing method
+    pub stream_fold: &'a StreamFold,
+
+    pub board: &'a PathBuf,
+}
+
+impl<'a> BoardConfig<'a> {
+    /// It is strongly recommended that [Configs::is_valid] is called before this point.
+    fn new(config: &'a Configs) -> Result<Self> {
+        Ok(BoardConfig {
+            num_samples: &config.num_samples,
+            num_files: &config.num_files,
+            skip_num: &config.skip_num,
+            speed: &config.speed,
+            gain: &config.gain,
+            filter_const: &config.filter_const,
+            stream_fold: &config.stream_fold,
+            board: &config.board,
+        })
+    }
+
+    /// Number of elements to read from VHF board, after board-decimation factor, before any
+    /// processing by us.
+    pub fn total_elements_to_read(&self) -> usize {
+        self.num_files * self.num_samples
+    }
+
+    /// Gets the parameters of StreamFold part of the configuration.
+    pub fn stream_fold_parameters(&self) -> &StreamFold {
+        &self.stream_fold
     }
 }
 

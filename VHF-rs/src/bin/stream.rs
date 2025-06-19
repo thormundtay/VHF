@@ -40,7 +40,8 @@ fn writer_thread(consumer: Receiver<WriteBlock>, mut file_writer: V1Writer) {
 
 fn main() -> Result<()> {
     let conf = initialisation()?;
-    let params = conf.stream_fold_parameters().clone();
+    let board_conf = conf.build_board_config()?;
+    let params = board_conf.stream_fold_parameters().clone();
     let mut vhf = VHF::new(&conf, &params)?;
     let time_start = vhf.start()?;
 

@@ -90,8 +90,11 @@ impl Clone for SineArr {
 fn stepped_nonoverlapping_identity_a() {
     let debug_vhf_total_len = 4 * VHF_MMAP_WINDOW_LEN;
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
-    let (debug_vhf, dbg_vhf_sender, eng) =
-        debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
+    let debug_vhf_conf = Config::default();
+    let (debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
+        &debug_vhf_conf,
+        NonZeroUsize::new(debug_vhf_total_len).unwrap(),
+    );
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
     let params = StreamFold::none_default();
@@ -140,8 +143,11 @@ fn stepped_nonoverlapping_identity_a() {
 fn stepped_nonoverlapping_identity_b() {
     let debug_vhf_total_len = 4 * VHF_MMAP_WINDOW_LEN;
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
-    let (debug_vhf, dbg_vhf_sender, eng) =
-        debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
+    let debug_vhf_conf = Config::default();
+    let (debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
+        &debug_vhf_conf,
+        NonZeroUsize::new(debug_vhf_total_len).unwrap(),
+    );
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
     let params = StreamFold::none_default();
@@ -199,8 +205,11 @@ fn stepped_overlapping_identity_a() {
 
     let debug_vhf_total_len = 4 * params.step_by;
     let total_window_len = debug_vhf_total_len + params.step_by;
-    let (debug_vhf, dbg_vhf_sender, eng) =
-        debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
+    let debug_vhf_conf = Config::default();
+    let (debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
+        &debug_vhf_conf,
+        NonZeroUsize::new(debug_vhf_total_len).unwrap(),
+    );
     let total_elements = total_window_len * MMAP_PAGE_LEN;
 
     // Define the signal we are testing for.
@@ -264,8 +273,11 @@ fn stepped_overlapping_identity_b() {
     matches!(params.op, StreamFoldOp::Map);
 
     let total_window_len = params.step_by;
-    let (debug_vhf, dbg_vhf_sender, eng) =
-        debug_vhf_new(NonZeroUsize::new(total_window_len).unwrap());
+    let debug_vhf_conf = Config::default();
+    let (debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
+        &debug_vhf_conf,
+        NonZeroUsize::new(total_window_len).unwrap(),
+    );
     let total_elements = total_window_len * MMAP_PAGE_LEN;
     log::info!("total_elements = {}", total_elements);
 

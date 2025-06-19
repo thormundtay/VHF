@@ -6,6 +6,7 @@ mod mmap_reader;
 pub(super) mod pages;
 
 use super::Config;
+use super::config::BoardConfig;
 use super::config::typedef::SamplingSpeed;
 use super::fold::StreamFold;
 use crate::{Error, Result};
@@ -35,8 +36,8 @@ const MMAP_BYTES_LEN: usize = 1 << 22;
 const DEQUE_CAP: usize = 256;
 
 /// Everything necessary to ensure the lifetime of pulling memory out from the VHF for its runtime
-pub struct VHF {
-    configuration: Box<Config>,
+pub struct VHF<'a> {
+    configuration: BoardConfig<'a>,
     handle: libc::c_int,
     raw_handle: std::fs::File,
     /// map_reader contains the thread that is responsible for pulling elements out of the MMap
@@ -64,7 +65,7 @@ pub struct VHF {
     total_pages_to_read: NonZeroUsize,
 }
 
-impl VHF {
+impl<'a> VHF<'a> {
     /// Create a new instance of VHF control. The goal of [VHF] is to create all necessary control
     /// flow to read out of Mmap and to stream in the `impl Iterator for VHF` trait.
     /// # Arguments
@@ -72,7 +73,8 @@ impl VHF {
     ///   Configuration for running VHF.
     /// - params: [StreamFold]
     ///   This is to ensure that the same parameters are being used by the driving body and [VHF].
-    pub fn new(config: &Config, params: &StreamFold) -> Result<Self> {
+    pub fn new(config: &'a Config, params: &StreamFold) -> Result<Self> {
+        let config: BoardConfig<'_> = config.build_board_config()?;
         let handle = Self::open_dev(
             config
                 .board
@@ -153,7 +155,7 @@ impl VHF {
         log::debug!("Readback buffer thread created");
 
         Ok(Self {
-            configuration: Box::new(config.clone()),
+            configuration: config,
             handle,
             raw_handle,
             map_reader: Some(map_reader),
@@ -350,7 +352,7 @@ impl VHF {
     }
 }
 
-impl Drop for VHF {
+impl Drop for VHF<'_> {
     fn drop(&mut self) {
         if !self.vhf_stop {
             log::debug!("VHF cleanup on drop has been invoked for us.");
@@ -365,7 +367,7 @@ impl Drop for VHF {
 
 pub struct VHFIter<'a> {
     /// non-iter parent
-    vhf_parent: &'a VHF,
+    vhf_parent: &'a VHF<'a>,
     /// Used to signal to [self::mmap_reader::MMapReader] has started, and to determine that child has stopped.
     engine_running: &'a Arc<AtomicBool>,
     /// Used to receive signal from [self::mmap_reader::MMapReader] that new pages have been placed into

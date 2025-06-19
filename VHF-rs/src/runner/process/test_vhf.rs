@@ -17,13 +17,14 @@ use tempfile::{NamedTempFile, TempDir};
 use test_log::test;
 
 // Create a VHF struct with false child thread "map_reader".
-pub(super) fn debug_vhf_new(
+pub(super) fn debug_vhf_new<'a>(
+    configuration: &'a Config,
     total_to_read: NonZeroUsize,
-) -> (VHF, SyncSender<MmapPage>, Arc<AtomicBool>) {
+) -> (VHF<'a>, SyncSender<MmapPage>, Arc<AtomicBool>) {
     let tmp_dir = TempDir::new().expect("Could not create temp_dir");
     let raw_tmp_file = NamedTempFile::new_in(tmp_dir).expect("Could not create temp file");
 
-    let configuration = Config::default();
+    let configuration = configuration.build_board_config().unwrap();
     let handle = {
         use std::os::fd::AsRawFd;
         raw_tmp_file.as_raw_fd()
@@ -45,7 +46,7 @@ pub(super) fn debug_vhf_new(
 
     (
         VHF {
-            configuration: Box::new(configuration),
+            configuration,
             handle,
             raw_handle,
             map_reader: Some(map_reader),
@@ -130,8 +131,11 @@ impl ZeroArr {
 fn vhf_drops_arc() {
     let debug_vhf_total_len = 1;
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
-    let (debug_vhf, dbg_vhf_sender, eng) =
-        debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
+    let debug_vhf_conf = Config::default();
+    let (debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
+        &debug_vhf_conf,
+        NonZeroUsize::new(debug_vhf_total_len).unwrap(),
+    );
 
     // We now add a weakpointer to the first object.
     let testing_page = Arc::new([0; MMAP_PAGE_LEN]);
@@ -203,8 +207,11 @@ impl LinearArr {
 fn next_window_linear() {
     let debug_vhf_total_len = 5;
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN - 1;
-    let (debug_vhf, dbg_vhf_sender, eng) =
-        debug_vhf_new(NonZeroUsize::new(debug_vhf_total_len).unwrap());
+    let debug_vhf_conf = Config::default();
+    let (debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
+        &debug_vhf_conf,
+        NonZeroUsize::new(debug_vhf_total_len).unwrap(),
+    );
 
     // Define the signal that we are testing for. (Use linear so its easier to determine.)
     let signal = LinearArr::new(total_window_len * MMAP_PAGE_LEN, eng.clone());
