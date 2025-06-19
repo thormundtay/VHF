@@ -781,6 +781,14 @@ impl Configs {
     /// If all parameters in [self] are valid, a [BoardConfig] will be produced that fully
     /// represents all necessary processes required to interact with VHF Board.
     pub fn build_board_config(&self) -> Result<BoardConfig> {
+        // Check self.board resolves and exists. Done here because it is Configs that does not
+        // fully assert the correctness.
+        #[cfg(not(test))]
+        if !self.board.canonicalize().map_err(Error::Io)?.exists() {
+            log::error!("Board could not be found!");
+            return Err(Error::User);
+        };
+
         BoardConfig::new(self)
     }
 }
