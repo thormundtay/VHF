@@ -1,13 +1,13 @@
 root:
   level: info
   appenders:
-    - stdout
+    - stderr
     - file
 
 appenders:
-  stdout:
+  stderr:
     kind: console
-    target: stdout
+    target: stderr
     filters:
       - kind: threshold
         level: info
