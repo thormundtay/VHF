@@ -589,6 +589,11 @@ impl Configs {
             self.verbosity |= 0b100;
         }
 
+        if !self.save_to_file && strict && self.num_files != 1 {
+            log::warn!("Coercing num_files to 1 as writing to stdout found!");
+            self.num_files = 1;
+        }
+
         self.validate_config_path(strict_path)?;
 
         Ok(())
