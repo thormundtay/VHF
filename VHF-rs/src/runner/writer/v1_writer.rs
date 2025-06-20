@@ -17,7 +17,7 @@ use std::{
     thread,
 };
 
-const V1_MAGIC_HEADER: u64 = 0x123456ABCDEF0000;
+pub(super) const V1_MAGIC_HEADER: u64 = 0x123456ABCDEF0000;
 
 pub struct V1Writer {
     /// Timestamp of the first file's first datapoint.

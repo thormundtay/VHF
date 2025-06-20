@@ -1,9 +1,13 @@
 // mod netcdf_writer;
+mod v1_stdout;
 mod v1_writer;
 // mod v2_writer;
 
 use super::super::types::RawVHFWord;
 use crate::{Result, runner::Config};
+
+pub use v1_stdout::V1StdOut;
+use v1_writer::V1_MAGIC_HEADER;
 pub use v1_writer::V1Writer;
 
 /// In the event that the [VHFWriter] receives less than this amount of data, no file will be
