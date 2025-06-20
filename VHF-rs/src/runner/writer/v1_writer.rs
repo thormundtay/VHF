@@ -43,28 +43,6 @@ pub struct V1Writer {
 }
 
 impl VHFWriter for V1Writer {
-    /// # Silent errors
-    /// Does not respect if encode is not Binary.
-    fn new(config: &Config, start_time: jiff::Zoned) -> Self {
-        Self {
-            start_time,
-            num_files: config.num_files,
-            num_files_so_far: AtomicUsize::new(0),
-            time_between_files: config.file_timespan(),
-            num_elements_per_file: config.num_samples,
-            num_elements_written: AtomicUsize::new(0),
-            verbosity: config.verbosity,
-            header_details: config.details(),
-            filename_details: config.filename(),
-            encode: config.encode,
-            elements_to_write: Arc::new(Mutex::new(Vec::with_capacity(
-                FILE_LAZY_LEN.min(config.num_samples),
-            ))),
-            file_dir: config.save_dir.clone(),
-            current_file_handle: Arc::new(Mutex::new(None)),
-        }
-    }
-
     /// Push [super::WriteBlock] onto file.
     fn write_data(&mut self, mut words: super::WriteBlock) -> Result<()> {
         let data: &mut Vec<_> = &mut words.data;
@@ -107,6 +85,34 @@ impl VHFWriter for V1Writer {
 }
 
 impl V1Writer {
+    /// Creates an object that allows for writing of data processed out of [super::process::VHF].
+    /// Whilst still working out if [crate::runner::Config] contains enough information about the
+    /// runtime, the `main()` function should instead be responsible for determining the time by
+    /// which the first data point is being written to file. This means that data points being
+    /// dropped in processing should be accounted for.
+    ///
+    /// # Silent errors
+    /// Does not respect if encode is not Binary.
+    pub fn new(config: &Config, start_time: jiff::Zoned) -> Self {
+        Self {
+            start_time,
+            num_files: config.num_files,
+            num_files_so_far: AtomicUsize::new(0),
+            time_between_files: config.file_timespan(),
+            num_elements_per_file: config.num_samples,
+            num_elements_written: AtomicUsize::new(0),
+            verbosity: config.verbosity,
+            header_details: config.details(),
+            filename_details: config.filename(),
+            encode: config.encode,
+            elements_to_write: Arc::new(Mutex::new(Vec::with_capacity(
+                FILE_LAZY_LEN.min(config.num_samples),
+            ))),
+            file_dir: config.save_dir.clone(),
+            current_file_handle: Arc::new(Mutex::new(None)),
+        }
+    }
+
     /// Tries to open a file in the specified location with the required name. Fails if file
     /// already exists.
     fn open_file(&mut self) -> Result<BufWriter<File>> {

@@ -22,19 +22,6 @@ pub struct V1StdOut {
 }
 
 impl VHFWriter for V1StdOut {
-    /// # Silent errors
-    /// Does not respect if encode is not Binary.
-    fn new(config: &crate::runner::Config, start_time: jiff::Zoned) -> Self {
-        Self {
-            start_time,
-            verbosity: config.verbosity,
-            header_details: config.details(),
-            encode: config.encode,
-            stdout: BufWriter::new(std::io::stdout()),
-            has_written: AtomicBool::new(false),
-        }
-    }
-
     fn close(&mut self) -> Result<()> {
         use std::io::Write;
         self.stdout.flush().map_err(Error::Io)?;
@@ -56,6 +43,25 @@ impl VHFWriter for V1StdOut {
 }
 
 impl V1StdOut {
+    /// Creates an object that allows for writing of data processed out of [super::process::VHF].
+    /// Whilst still working out if [crate::runner::Config] contains enough information about the
+    /// runtime, the `main()` function should instead be responsible for determining the time by
+    /// which the first data point is being written to file. This means that data points being
+    /// dropped in processing should be accounted for.
+    ///
+    /// # Silent errors
+    /// Does not respect if encode is not Binary.
+    pub fn new(config: &crate::runner::Config, start_time: jiff::Zoned) -> Self {
+        Self {
+            start_time,
+            verbosity: config.verbosity,
+            header_details: config.details(),
+            encode: config.encode,
+            stdout: BufWriter::new(std::io::stdout()),
+            has_written: AtomicBool::new(false),
+        }
+    }
+
     fn write_header(&mut self) -> Result<()> {
         // Early exit
         if self.verbosity == 0 {
