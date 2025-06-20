@@ -594,6 +594,10 @@ impl Configs {
             self.num_files = 1;
         }
 
+        if strict && !matches!(self.encode, Encode::Binary) {
+            log::warn!("Non-binary encoding found. This setting might not be respected!");
+        }
+
         self.validate_config_path(strict_path)?;
 
         Ok(())

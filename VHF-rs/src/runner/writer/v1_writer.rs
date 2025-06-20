@@ -1,5 +1,6 @@
 //! Writer method meant to be as identical as possible to the original C file writer.
 
+use super::super::config::typedef::Encode;
 use super::{FILE_LAZY_LEN, VHFWriter};
 use crate::{Error, Result, runner::Config, types::RawVHFWord};
 #[cfg(not(test))]
@@ -33,6 +34,8 @@ pub struct V1Writer {
     verbosity: u8,
     header_details: String,
     filename_details: String,
+    #[allow(dead_code)]
+    encode: Encode,
     /// Avoid writing to a file until we exceed some amount.
     elements_to_write: Arc<Mutex<Vec<RawVHFWord>>>,
     file_dir: PathBuf,
@@ -40,6 +43,8 @@ pub struct V1Writer {
 }
 
 impl VHFWriter for V1Writer {
+    /// # Silent errors
+    /// Does not respect if encode is not Binary.
     fn new(config: &Config, start_time: jiff::Zoned) -> Self {
         Self {
             start_time,
@@ -51,6 +56,7 @@ impl VHFWriter for V1Writer {
             verbosity: config.verbosity,
             header_details: config.details(),
             filename_details: config.filename(),
+            encode: config.encode,
             elements_to_write: Arc::new(Mutex::new(Vec::with_capacity(
                 FILE_LAZY_LEN.min(config.num_samples),
             ))),
