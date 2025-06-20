@@ -10,6 +10,7 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
+/// This has not been well-tested! Please consider using [super::V1Writer]!
 pub struct V1StdOut {
     /// Timestamp of the first file's first datapoint.
     start_time: Zoned,

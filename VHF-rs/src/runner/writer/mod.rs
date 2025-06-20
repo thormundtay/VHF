@@ -1,14 +1,17 @@
+mod builder;
+pub use builder::WriterBuilder;
 // mod netcdf_writer;
 mod v1_stdout;
 mod v1_writer;
 // mod v2_writer;
 
-use super::super::types::RawVHFWord;
-use crate::{Result, runner::Config};
-
 pub use v1_stdout::V1StdOut;
 use v1_writer::V1_MAGIC_HEADER;
 pub use v1_writer::V1Writer;
+
+use super::super::types::RawVHFWord;
+use super::Config;
+use crate::Result;
 
 /// In the event that the [VHFWriter] receives less than this amount of data, no file will be
 /// written. This is particularly necessary for when a trailing amount of data is created but just
