@@ -2,6 +2,7 @@
 
 use super::super::config::Configs;
 use super::super::fold::{StreamFold, StreamFoldOp};
+use super::super::writer::builder::Writers;
 use super::super::writer::{V1Writer, VHFWriter};
 use super::consts::MMAP_PAGE_LEN;
 use super::test_vhf::{debug_vhf_new, push_arc_pages};
@@ -63,7 +64,10 @@ fn writes_correct_header() {
     config.verbosity = 3;
     log::info!("save_dir = {:?}", &config.save_dir);
 
-    let mut writer = V1Writer::new(&config, time_start);
+    let builder = config.file_writer().unwrap();
+    matches!(builder.writer_type, Writers::V1(_));
+    let mut writer = builder.with_start_time(time_start).build();
+
     debug_vhf
         .iter()
         .step_by(params.step_by)
@@ -136,7 +140,10 @@ fn creates_multiple_files() {
 
     config.phasemeter_kwargs = phasemeter_kwargs;
 
-    let mut writer = V1Writer::new(&config, time_start);
+    let builder = config.file_writer().unwrap();
+    matches!(builder.writer_type, Writers::V1(_));
+    let mut writer = builder.with_start_time(time_start).build();
+
     debug_vhf
         .iter()
         .step_by(params.step_by)
@@ -230,7 +237,9 @@ fn creates_correct_multithreaded_files() {
     config.phasemeter_kwargs = phasemeter_kwargs;
 
     // Pull out from buffer and write to file in multithreaded
-    let mut writer = V1Writer::new(&config, time_start);
+    let builder = config.file_writer().unwrap();
+    matches!(builder.writer_type, Writers::V1(_));
+    let mut writer = builder.with_start_time(time_start).build();
     let vhf_iter = debug_vhf.iter();
     use pariter::IteratorExt;
     let body = pariter::scope(|scope| {

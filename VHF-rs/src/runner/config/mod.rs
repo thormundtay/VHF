@@ -5,6 +5,7 @@ mod utils;
 pub(crate) mod typedef;
 
 use super::fold::StreamFold;
+use super::writer::WriterBuilder;
 use crate::{Error, Result};
 use clap::{Arg, ArgAction, ArgGroup, Command, ValueHint, value_parser};
 use configparser::ini;
@@ -799,6 +800,13 @@ impl Configs {
         };
 
         BoardConfig::new(self)
+    }
+
+    /// This is yield the WriterBuilder, which requires [WriterBuilder::with_start_time] to begin.
+    pub fn file_writer(&self) -> Result<WriterBuilder> {
+        // Default to v1arg first before breaking into individual choices through the use of
+        // [WriterBuilder::new].
+        WriterBuilder::new(self)
     }
 }
 

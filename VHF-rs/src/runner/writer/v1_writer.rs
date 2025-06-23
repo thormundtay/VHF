@@ -2,7 +2,7 @@
 
 use super::super::config::typedef::Encode;
 use super::{FILE_LAZY_LEN, VHFWriter};
-use crate::{Error, Result, runner::Config, types::RawVHFWord};
+use crate::{Error, Result, types::RawVHFWord};
 #[cfg(not(test))]
 use jiff::SignedDuration;
 use jiff::{Span, Zoned};
@@ -10,7 +10,7 @@ use std::{
     fmt::Debug,
     fs::{File, OpenOptions},
     io::BufWriter,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
         atomic::{AtomicUsize, Ordering},
@@ -84,6 +84,18 @@ impl VHFWriter for V1Writer {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct V1Arg<'a> {
+    pub num_samples: &'a usize,
+    pub num_files: &'a usize,
+    pub encode: &'a Encode,
+    pub verbosity: &'a u8,
+    pub file_timespan: Box<Span>,
+    pub header_details: String,
+    pub filename_details: String,
+    pub save_dir: &'a Path,
+}
+
 impl V1Writer {
     /// Creates an object that allows for writing of data processed out of [super::process::VHF].
     /// Whilst still working out if [crate::runner::Config] contains enough information about the
@@ -93,22 +105,22 @@ impl V1Writer {
     ///
     /// # Silent errors
     /// Does not respect if encode is not Binary.
-    pub fn new(config: &Config, start_time: jiff::Zoned) -> Self {
+    pub fn new(config: V1Arg, start_time: jiff::Zoned) -> Self {
         Self {
             start_time,
-            num_files: config.num_files,
+            num_files: *config.num_files,
             num_files_so_far: AtomicUsize::new(0),
-            time_between_files: config.file_timespan(),
-            num_elements_per_file: config.num_samples,
+            time_between_files: *config.file_timespan,
+            num_elements_per_file: *config.num_samples,
             num_elements_written: AtomicUsize::new(0),
-            verbosity: config.verbosity,
-            header_details: config.details(),
-            filename_details: config.filename(),
-            encode: config.encode,
+            verbosity: *config.verbosity,
+            header_details: config.header_details.to_string(),
+            filename_details: config.filename_details.to_string(),
+            encode: *config.encode,
             elements_to_write: Arc::new(Mutex::new(Vec::with_capacity(
-                FILE_LAZY_LEN.min(config.num_samples),
+                FILE_LAZY_LEN.min(*config.num_samples),
             ))),
-            file_dir: config.save_dir.clone(),
+            file_dir: config.save_dir.to_path_buf(),
             current_file_handle: Arc::new(Mutex::new(None)),
         }
     }
