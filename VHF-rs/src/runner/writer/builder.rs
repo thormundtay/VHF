@@ -3,17 +3,11 @@
 //! For more details, please see [crate::runner::Configs].
 
 use super::super::{Config, config::typedef::Encode};
-use super::V1StdOut;
 use super::VHFWriter;
+use super::{V1StdOut, v1_stdout::V1StdOutArg};
 use super::{V1Writer, v1_writer::V1Arg};
 use crate::{Error, Result};
 use jiff::Zoned;
-
-#[derive(Debug, Clone)]
-pub struct V1StdOutArg<'a> {
-    pub encode: &'a Encode,
-    pub verbosity: &'a u8,
-}
 
 /// Please see [WriterBuilder].
 #[derive(Debug, Clone)]
@@ -75,7 +69,7 @@ impl<'a> WriterBuilder<'a> {
         match self.writer_type {
             Writers::V1(v1arg) => Box::new(V1Writer::new(v1arg, self.start_time.unwrap().clone())),
             Writers::V1Stdout(v1stdoutarg) => {
-                todo!()
+                Box::new(V1StdOut::new(v1stdoutarg, self.start_time.unwrap().clone()))
             }
         }
     }
