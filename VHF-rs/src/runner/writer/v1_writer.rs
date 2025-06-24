@@ -97,11 +97,11 @@ pub struct V1Arg<'a> {
 }
 
 impl V1Writer {
-    /// Creates an object that allows for writing of data processed out of [super::process::VHF].
-    /// Whilst still working out if [crate::runner::Config] contains enough information about the
-    /// runtime, the `main()` function should instead be responsible for determining the time by
-    /// which the first data point is being written to file. This means that data points being
-    /// dropped in processing should be accounted for.
+    /// Creates an object that allows for writing of data processed out of
+    /// [crate::runner::process::VHF]. Whilst still working out if [crate::runner::Config] contains
+    /// enough information about the runtime, the `main()` function should instead be responsible
+    /// for determining the time by which the first data point is being written to file. This means
+    /// that data points being dropped in processing should be accounted for.
     ///
     /// # Silent errors
     /// Does not respect if encode is not Binary.

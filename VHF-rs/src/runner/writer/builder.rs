@@ -1,6 +1,6 @@
 //! WriterBuilder is to help determine at runtime which form of output is to be delegated to.
 //! These can be configured through the `.ini` file configuration, or with command line arguments.
-//! For more details, please see [crate::runner::Configs].
+//! For more details, please see [crate::runner::Config].
 
 use super::super::{Config, config::typedef::Encode};
 use super::VHFWriter;
@@ -24,7 +24,7 @@ pub enum Writers<'a> {
 /// might be an issue especially in the case of writing to stdout.
 pub struct WriterBuilder<'a> {
     /// This is the start time expected by all writers.  
-    /// Example: [v1_writer::V1Writer::start_time]
+    /// Example: [V1Writer::start_time]
     start_time: Option<Zoned>,
     /// The variant to be determined shall be the responsibility of [Config].
     pub writer_type: Writers<'a>,

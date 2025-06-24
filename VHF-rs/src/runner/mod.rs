@@ -24,6 +24,7 @@ pub mod board;
 
 /// Used in taking CLI and file configuration.
 mod config;
+pub use config::BoardConfig;
 pub use config::Configs as Config;
 
 /// Map and Reduce are subsets of Folds.  

@@ -3,7 +3,6 @@
 use super::super::config::Configs;
 use super::super::fold::{StreamFold, StreamFoldOp};
 use super::super::writer::builder::Writers;
-use super::super::writer::{V1Writer, VHFWriter};
 use super::consts::MMAP_PAGE_LEN;
 use super::test_vhf::{debug_vhf_new, push_arc_pages};
 use super::test_vhf_step_fold::SineArr;
