@@ -1,13 +1,11 @@
+use jiff::Zoned;
 use pariter::IteratorExt;
 use std::env;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, channel};
 use std::thread;
-use vhf::runner::{
-    Config, VHF,
-    fold::StreamFoldOp,
-    writer::{V1Writer, VHFWriter, WriteBlock},
-};
+use vhf::runner::writer::WriterBuilder;
+use vhf::runner::{Config, VHF, fold::StreamFoldOp, writer::WriteBlock};
 use vhf::{Error, Result};
 
 /// Start logging and get [vhf::runner::Config] from file and command line.
@@ -30,7 +28,10 @@ fn initialisation() -> Result<Config> {
 }
 
 /// Separate file writer into its own child thread.
-fn writer_thread(consumer: Receiver<WriteBlock>, mut file_writer: V1Writer) {
+fn writer_thread(consumer: Receiver<WriteBlock>, config: Config, time_start: Zoned) {
+    let builder: WriterBuilder<'_> = config.file_writer().unwrap();
+    let builder = builder.with_start_time(time_start);
+    let mut file_writer = builder.build();
     // try_recv will sleep when empty
     while let Ok(words) = consumer.recv() {
         file_writer.write_data(words).expect("failed to write");
@@ -42,16 +43,17 @@ fn main() -> Result<()> {
     let conf = initialisation()?;
     let board_conf = conf.build_board_config()?;
     let params = board_conf.stream_fold_parameters().clone();
-    let mut vhf = VHF::new(&conf, &params)?;
-    let time_start = vhf.start()?;
-
-    let file_writer = V1Writer::new(&conf, time_start);
     matches!(params.op, StreamFoldOp::Map);
+    assert!(conf.file_writer().is_ok());
+
+    let conf_bind = conf.clone();
+    let mut vhf = VHF::new(&conf_bind, &params)?;
+    let time_start = vhf.start()?;
 
     let (writer_send, writer_receive) = channel();
     let writer_thread = thread::Builder::new()
         .name("File Writer".to_string())
-        .spawn(move || writer_thread(writer_receive, file_writer))
+        .spawn(move || writer_thread(writer_receive, conf, time_start))
         .map_err(Error::Io)?;
 
     let vhf_iter = vhf.iter();

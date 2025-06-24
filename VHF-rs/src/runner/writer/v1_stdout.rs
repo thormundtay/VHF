@@ -52,12 +52,12 @@ impl V1StdOut {
     ///
     /// # Silent errors
     /// Does not respect if encode is not Binary.
-    pub fn new(config: &crate::runner::Config, start_time: jiff::Zoned) -> Self {
+    pub fn new(config: V1StdOutArg, start_time: jiff::Zoned) -> Self {
         Self {
             start_time,
-            verbosity: config.verbosity,
-            header_details: config.details(),
-            encode: config.encode,
+            verbosity: *config.verbosity,
+            header_details: config.header_details,
+            encode: *config.encode,
             stdout: BufWriter::new(std::io::stdout()),
             has_written: AtomicBool::new(false),
         }
@@ -106,4 +106,11 @@ impl V1StdOut {
 
         Ok(())
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct V1StdOutArg<'a> {
+    pub encode: &'a Encode,
+    pub verbosity: &'a u8,
+    pub header_details: String,
 }
