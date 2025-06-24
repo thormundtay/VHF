@@ -59,6 +59,7 @@ fn writes_correct_header() {
     let time_start = Zoned::now();
     let mut config = Configs::new(None).expect("Config struct could not be made");
     let tmp_dir = TempDir::new().expect("Could not create temp_dir");
+    config.save_to_file = true;
     config.save_dir = (*tmp_dir.path()).into();
     config.num_samples = 1 << 18;
     config.verbosity = 3;
@@ -126,6 +127,7 @@ fn creates_multiple_files() {
     let time_start = Zoned::now();
     let mut config = Configs::new(None).expect("Config struct could not be made");
     let tmp_dir = TempDir::new().expect("Could not create temp_dir");
+    config.save_to_file = true;
     config.save_dir = (*tmp_dir.path()).into();
     config.num_samples = VHF_MMAP_WINDOW_LEN * MMAP_PAGE_LEN * file_save_size;
     config.verbosity = 3;
