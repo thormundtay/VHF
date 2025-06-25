@@ -727,21 +727,11 @@ class VHFparser:
             raise ValueError(
                 "Buffer does not conform to header expectations.")
 
-        # in accordance with convert_bin_to_text.c
-        header_count_b = (int.from_bytes(header, "little") & 0xFFFF) - 1
-        # in teststream.c (SVN v17), 1 + i lines(8 bytes) were written (see
-        # line 353), where i was (magic mask + 1). we note that due to improper
-        # null termination of headerbuffer (in line 352) meant that
-        # teststream.c was reading beyond buffer, which was not guaranteed to
-        # be all 0s. Nonetheless, consume it as header in accordance with
-        # masked magic number and dump away. As such, stripping supposed 0s are
-        # ok.
-        # -----
-        # + 1 to read one more byte than spec (convert_bin_to_text.c)
+        header_count_b = (int.from_bytes(header, "little") & 0xFFFF)
         self._bytes_per_word = BinaryVHFTrace.bytes_per_word
-        header_count = (header_count_b+1) * self._bytes_per_word
+        header_count = (header_count_b) * self._bytes_per_word
         self._num_head_bytes += header_count  # this is the claimed headersize
-        self.headerraw: bytes = buffer.read(header_count-8)  # read continues stream position
+        self.headerraw: bytes = buffer.read(header_count - self._bytes_per_word)  # read continues stream position
         self.headerraw = self.headerraw.rstrip(b"\x00")
         self.parse_header(self.headerraw)
 
