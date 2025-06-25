@@ -3,7 +3,7 @@ pub use builder::WriterBuilder;
 // mod netcdf_writer;
 mod v1_stdout;
 mod v1_writer;
-// mod v2_writer;
+mod v2_bin_writer;
 
 pub use v1_stdout::V1StdOut;
 use v1_writer::V1_MAGIC_HEADER;
