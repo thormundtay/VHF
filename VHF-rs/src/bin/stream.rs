@@ -43,7 +43,7 @@ fn main() -> Result<()> {
     let conf = initialisation()?;
     let board_conf = conf.build_board_config()?;
     let params = board_conf.stream_fold_parameters().clone();
-    matches!(params.op, StreamFoldOp::Map);
+    matches!(params.op, StreamFoldOp::Map(true));
     assert!(conf.file_writer().is_ok());
 
     let conf_bind = conf.clone();

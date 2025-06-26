@@ -4,7 +4,7 @@
 //! ```
 //! behaves to expectation.
 
-use super::super::fold::{StreamFoldOp, StreamFold};
+use super::super::fold::{StreamFold, StreamFoldOp};
 use super::consts::MMAP_PAGE_LEN;
 use super::test_vhf::{debug_vhf_new, push_arc_pages};
 use super::*;
@@ -201,7 +201,7 @@ fn stepped_nonoverlapping_identity_b() {
 #[test]
 fn stepped_overlapping_identity_a() {
     let params = StreamFold::identity_default();
-    matches!(params.op, StreamFoldOp::Map);
+    matches!(params.op, StreamFoldOp::Map(true));
 
     let debug_vhf_total_len = 4 * params.step_by;
     let total_window_len = debug_vhf_total_len + params.step_by;
@@ -270,7 +270,7 @@ fn stepped_overlapping_identity_a() {
 #[test]
 fn stepped_overlapping_identity_b() {
     let params = StreamFold::identity_default();
-    matches!(params.op, StreamFoldOp::Map);
+    matches!(params.op, StreamFoldOp::Map(true));
 
     let total_window_len = params.step_by;
     let debug_vhf_conf = Config::default();

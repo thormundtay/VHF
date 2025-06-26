@@ -19,6 +19,15 @@ pub struct StreamFold {
     pub pad: usize,
     /// This is the operation performed.
     pub op: StreamFoldOp,
+    /// This is a json-representation that aims to convey what was done in the fold.
+    /// For example,
+    /// 1) Only m-rollover was tracked, and so effectively nothing was done:
+    /// ## TODO: None preferred?
+    /// ```json
+    /// { fold: [] }
+    /// ```
+    /// 2) two-pass decimation with different decimation factors and filter kernels.
+    pub json_repr: Option<String>,
 }
 
 impl PartialEq for StreamFold {
@@ -38,7 +47,12 @@ pub enum StreamFoldOp {
     None,
     // Reduce,
     /// Quite literally the map in functional programming.
-    Map,
+    ///
+    /// The boolean enclosed, if true, means that the map is *effectively* the same as
+    /// [StreamFoldOp::None]. This is needed for [crate::runner::writer::V1Writer] and
+    /// [crate::runner::writer::V1StdOut], which require that the phase and skip values are not
+    /// altered in the fold process.
+    Map(bool),
 }
 
 impl std::fmt::Debug for StreamFold {
@@ -51,7 +65,7 @@ impl std::fmt::Debug for StreamFold {
                 "op",
                 &match self.op {
                     StreamFoldOp::None => "none",
-                    StreamFoldOp::Map => "map",
+                    StreamFoldOp::Map(_) => "map",
                 },
             )
             .finish()
@@ -76,6 +90,7 @@ impl StreamFold {
             step_by: VHF_MMAP_WINDOW_LEN,
             pad: 0,
             op: StreamFoldOp::None,
+            json_repr: None,
         }
     }
 
@@ -157,7 +172,8 @@ impl StreamFold {
             func: Arc::new(overlapping_identity),
             step_by: VHF_MMAP_WINDOW_LEN - PAGES_START,
             pad: PAGES_START,
-            op: StreamFoldOp::Map,
+            op: StreamFoldOp::Map(true),
+            json_repr: None,
         }
     }
 }
