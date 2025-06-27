@@ -4,10 +4,11 @@ use super::process::{
 };
 use super::writer::WriteBlock;
 use crate::{
+    Result,
     parser::consts::M_OVERFLOW,
     types::{IQMTriplet, RawVHFWord},
 };
-use std::{cmp::Ordering, hint::unreachable_unchecked, ops::Deref, sync::Arc};
+use std::{cmp::Ordering, hint::unreachable_unchecked, num::NonZeroU64, ops::Deref, sync::Arc};
 
 #[derive(Clone)]
 pub struct StreamFold {
@@ -48,11 +49,14 @@ pub enum StreamFoldOp {
     // Reduce,
     /// Quite literally the map in functional programming.
     ///
-    /// The boolean enclosed, if true, means that the map is *effectively* the same as
+    /// If the enclosed Option is None, means that the map is *effectively* the same as
     /// [StreamFoldOp::None]. This is needed for [crate::runner::writer::V1Writer] and
     /// [crate::runner::writer::V1StdOut], which require that the phase and skip values are not
     /// altered in the fold process.
-    Map(bool),
+    /// If [Option::Some], consider the context of [super::Config::skip_num], StreamFold will lead
+    /// to a decrease in number of elements between the FPGA and what is written to the file. This
+    /// number summarizes the possuibly multiple steps performed by [StreamFold::func].
+    Map(Option<NonZeroU64>),
 }
 
 impl std::fmt::Debug for StreamFold {
@@ -172,8 +176,17 @@ impl StreamFold {
             func: Arc::new(overlapping_identity),
             step_by: VHF_MMAP_WINDOW_LEN - PAGES_START,
             pad: PAGES_START,
-            op: StreamFoldOp::Map(true),
+            op: StreamFoldOp::Map(None),
             json_repr: None,
+        }
+    }
+
+    /// Determine if the process of [self] creates any sort of decimation.
+    /// Result because reduce would not make sense to call this.
+    pub fn effective_decimation_factor(&self) -> Result<u64> {
+        match self.op {
+            StreamFoldOp::None => Ok(1),
+            StreamFoldOp::Map(e) => Ok(e.map(|v| v.into()).unwrap_or(1)),
         }
     }
 }
