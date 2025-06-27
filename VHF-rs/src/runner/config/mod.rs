@@ -238,7 +238,7 @@ impl Configs {
         &mut self,
         env_args: impl IntoIterator<Item = OsString> + std::fmt::Debug,
     ) -> Result<()> {
-        log::debug!("with_cli called with env_args: {:?}", env_args);
+        log::debug!("with_cli called with env_args: {env_args:?}");
         let args = self.clap_args().get_matches_from(env_args);
 
         if let Some(&num_samples) = args.get_one::<usize>("Number of samples") {
@@ -740,7 +740,7 @@ impl Configs {
 
         let sf = self.sampling_frequency();
         if sf < 1e3 {
-            println!("Sampling at {:.4} Hz.", sf);
+            println!("Sampling at {sf:.4} Hz.");
         } else if sf < 1e6 {
             println!("Sampling at {:.4} kHz.", sf / 1e3);
         } else if sf < 1e9 {
@@ -750,14 +750,11 @@ impl Configs {
         }
 
         if let Some(filter_const) = self.filter_const {
-            println!(
-                "Filter constant has been set to: {BLUE}{}{RESET}",
-                filter_const
-            );
+            println!("Filter constant has been set to: {BLUE}{filter_const}{RESET}",);
         }
 
         if let Some(gain_const) = self.gain {
-            println!("Onboard gain has been set to: {BLUE}{}{RESET}", gain_const);
+            println!("Onboard gain has been set to: {BLUE}{gain_const}{RESET}");
         }
 
         println!(
@@ -861,7 +858,7 @@ impl<'a> BoardConfig<'a> {
 
     /// Gets the parameters of StreamFold part of the configuration.
     pub fn stream_fold_parameters(&self) -> &StreamFold {
-        &self.stream_fold
+        self.stream_fold
     }
 }
 

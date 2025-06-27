@@ -164,10 +164,7 @@ impl V1Writer {
             }
         }
         if std::fs::exists(path.clone()).unwrap() {
-            log::error!(
-                "Created file name found to already exist in location, path = {:?}",
-                path
-            );
+            log::error!("Created file name found to already exist in location, path = {path:?}");
             log::error!(
                 "self.start_time = {}, self.time_between_files = {}, num_files_so_far = {}",
                 self.start_time,
@@ -337,7 +334,7 @@ impl V1Writer {
 impl Drop for V1Writer {
     fn drop(&mut self) {
         if thread::panicking() {
-            log::warn!("V1Writer in panic. self = {:?}", self);
+            log::warn!("V1Writer in panic. self = {self:?}");
         }
 
         let tmp = self.close_file();

@@ -155,7 +155,7 @@ impl V2BinWriter {
 impl Drop for V2BinWriter {
     fn drop(&mut self) {
         if thread::panicking() {
-            log::warn!("V2Writer in panic. self = {:?}", self);
+            log::warn!("V2Writer in panic. self = {self:?}");
         }
 
         let tmp = self.close_file();

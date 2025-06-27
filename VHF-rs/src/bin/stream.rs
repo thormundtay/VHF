@@ -67,7 +67,7 @@ fn main() -> Result<()> {
 
     match body {
         Ok(_) => log::info!("Run completed"),
-        Err(e) => log::error!("Main loop occurred with error = {:?}", e),
+        Err(e) => log::error!("Main loop occurred with error = {e:?}"),
     };
 
     // VHF cleanup

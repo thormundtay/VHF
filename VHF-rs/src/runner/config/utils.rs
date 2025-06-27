@@ -42,7 +42,7 @@ impl PythonMath for String {
                     format!("{}", 1 << exponent)
                 })
                 .to_string();
-            log::trace!("Expression to evaluate: {}", tmp);
+            log::trace!("Expression to evaluate: {tmp}");
             Ok(tmp)
         } else {
             Ok(self)
@@ -84,12 +84,12 @@ pub fn if_enabled_value<T>(
 where
     T: num_traits::bounds::Bounded + Into<u64> + TryFrom<u64>,
 {
-    let key_enable = &format!("{}_enable", key);
+    let key_enable = &format!("{key}_enable");
     let map = config.get_map_ref();
 
     if map
         .get(&section.to_ascii_lowercase())
-        .unwrap_or_else(|| panic!("ini file '{}' section not found.", section))
+        .unwrap_or_else(|| panic!("ini file '{section}' section not found."))
         .get(key_enable)
         .is_none()
     {
@@ -125,7 +125,7 @@ where
             Err(e) => return Err(e),
             Ok(Value::Int(v)) => v as u64,
             Ok(t) => {
-                log::trace!("{section} - {key} getuint yielded {}", t);
+                log::trace!("{section} - {key} getuint yielded {t}");
                 return Err(crate::Error::IniParse(
                     "ini file '{section} - {key}' was not integer.".to_string(),
                 ));
@@ -265,7 +265,7 @@ mod configutil_tests {
         let result: Result<Option<u8>> =
             super::if_enabled_value(&conf, "Board", "vga_num", |v| v <= 8);
         let expected = Some(6u8);
-        log::info!("result = {:?}", result);
+        log::info!("result = {result:?}");
         assert_eq!(result.unwrap(), expected);
     }
 

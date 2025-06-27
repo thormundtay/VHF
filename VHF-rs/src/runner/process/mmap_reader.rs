@@ -61,6 +61,7 @@ pub(super) struct MMapReader {
 }
 
 impl MMapReader {
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
         mmap: Mmap,
         engine_running: Arc<AtomicBool>,
@@ -80,7 +81,7 @@ impl MMapReader {
                 .unwrap())
         .try_into()
         .map_err(Error::Jiff)?;
-        log::debug!("mmap_reader thread loop_timeout = {:?}", loop_timeout);
+        log::debug!("mmap_reader thread loop_timeout = {loop_timeout:?}");
 
         Ok(Self {
             handle,
@@ -251,7 +252,7 @@ impl MMapReader {
     /// so that the final next() method can pull out all empty windows.
     fn pad_end(&self) -> Result<()> {
         let pad = self.pad_end_remaining();
-        log::debug!("pad_end called with {} MMapPage::End to pad with", pad);
+        log::debug!("pad_end called with {pad} MMapPage::End to pad with");
         (0..pad)
             .try_for_each(|_| self.transfer_buffer_sender.send(MmapPage::End))
             .expect("Failed to send");
