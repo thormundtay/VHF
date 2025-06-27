@@ -6,6 +6,7 @@ use super::super::{Config, config::typedef::Encode};
 use super::VHFWriter;
 use super::{V1StdOut, v1_stdout::V1StdOutArg};
 use super::{V1Writer, v1_writer::V1Arg};
+use super::{V2BinWriter, v2_bin_writer::V2BinArg};
 use crate::{Error, Result};
 use jiff::Zoned;
 
@@ -17,6 +18,7 @@ pub enum Writers<'a> {
     V1Stdout(V1StdOutArg<'a>),
     /// V1Output, but to more than 1 file with file-size guarantees.
     V1(V1Arg<'a>),
+    V2Bin(V2BinArg<'a>),
 }
 
 /// Parameters and validation checking associated with getting the appropriate file writer
@@ -160,6 +162,7 @@ impl<'a> WriterBuilder<'a> {
     /// If any required field has not yet been inserted.
     pub fn build(self) -> Box<dyn VHFWriter> {
         match self.writer_type {
+            Writers::V2Bin(v2binarg) => todo!(),
             Writers::V1(v1arg) => Box::new(V1Writer::new(v1arg, self.start_time.unwrap().clone())),
             Writers::V1Stdout(v1stdoutarg) => {
                 Box::new(V1StdOut::new(v1stdoutarg, self.start_time.unwrap().clone()))

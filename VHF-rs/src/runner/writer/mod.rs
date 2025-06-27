@@ -8,6 +8,7 @@ mod v2_bin_writer;
 pub use v1_stdout::V1StdOut;
 use v1_writer::V1_MAGIC_HEADER;
 pub use v1_writer::V1Writer;
+pub use v2_bin_writer::V2BinWriter;
 
 use super::super::types::RawVHFWord;
 use crate::Result;
