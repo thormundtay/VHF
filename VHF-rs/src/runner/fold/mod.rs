@@ -14,19 +14,15 @@ use repr::Representation;
 use serde::Serialize;
 use std::{cmp::Ordering, hint::unreachable_unchecked, num::NonZeroU64, ops::Deref, sync::Arc};
 
-#[derive(Clone, Serialize)]
+#[derive(Clone)]
 pub struct StreamFold {
     /// This the function that has to be applied to every chunked window from [super::VHF].next.
-    #[serde(skip_serializing)]
     pub func: Arc<dyn Fn(<super::VHFIter as Iterator>::Item) -> WriteBlock + Send + Sync>,
     /// This is the number of windows to step by each time prior to par_iter.
-    #[serde(skip_serializing)]
     pub step_by: usize,
     /// This is the number of windows to pad to the start.
-    #[serde(skip_serializing)]
     pub pad: usize,
     /// This is the operation performed.
-    #[serde(skip_serializing)]
     pub op: StreamFoldOp,
     /// This is a representation that aims to convey what was done in the fold. See [repr].
     ///
@@ -36,7 +32,6 @@ pub struct StreamFold {
     /// { fold: [] }
     /// ```
     /// 2) two-pass decimation with different decimation factors and filter kernels.
-    #[serde(rename(serialize = "fold"))]
     pub repr: Vec<Representation<f64>>,
 }
 
@@ -197,6 +192,19 @@ impl StreamFold {
             StreamFoldOp::None => Ok(1),
             StreamFoldOp::Map(e) => Ok(e.map(|v| v.into()).unwrap_or(1)),
         }
+    }
+}
+
+impl Serialize for StreamFold {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // Rather than specifying #[serde(skip_deserializing)] for all but self.repr.
+        use serde::ser::SerializeStruct;
+        let mut s = serializer.serialize_struct("StreamFold", 1)?;
+        s.serialize_field("fold", &self.repr)?;
+        s.end()
     }
 }
 
