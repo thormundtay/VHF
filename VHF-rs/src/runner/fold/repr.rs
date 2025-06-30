@@ -6,7 +6,7 @@ use serde::Serialize;
 /// There exists a multitude of ways in which [super] can do process the data. This aims to pool
 /// together a collection of valid means of processing, and place the information together into a
 /// single place.
-#[derive(Clone, Serialize)]
+#[derive(PartialEq, Eq, Clone, Serialize)]
 pub enum Representation<T> {
     /// This is LFilter using a FIR. If the FIR is symmetric about some t_0, the filtering will be
     /// be a linear phase filter.
@@ -18,7 +18,7 @@ pub enum Representation<T> {
 }
 
 /// This aims to represent the relevant information of the Finite Impulse Response filter.
-#[derive(Clone, Serialize)]
+#[derive(PartialEq, Eq, Clone, Serialize)]
 pub struct FIR<T> {
     /// This is the decimation performed by this FIR filter.
     skip_num: usize,

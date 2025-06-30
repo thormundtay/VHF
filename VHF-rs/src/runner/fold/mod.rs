@@ -40,6 +40,8 @@ impl PartialEq for StreamFold {
         std::ptr::addr_eq(Arc::as_ptr(&self.func), Arc::as_ptr(&other.func))
             && self.step_by == other.step_by
             && self.pad == other.pad
+            && self.op == other.op
+            && self.repr == other.repr
     }
 }
 
