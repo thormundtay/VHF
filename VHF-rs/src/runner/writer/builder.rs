@@ -12,7 +12,7 @@ use jiff::Zoned;
 
 /// Please see [WriterBuilder].
 #[derive(Debug, Clone)]
-pub enum Writers<'a> {
+pub(in super::super) enum Writers<'a> {
     /// This uses the same structure as V1Writer, but has the complications associated with issue
     /// #23. [Config] should not invoke Stdout writer to the best of its ability.
     V1Stdout(V1StdOutArg<'a>),
@@ -29,7 +29,7 @@ pub struct WriterBuilder<'a> {
     /// Example: [V1Writer::start_time]
     start_time: Option<Zoned>,
     /// The variant to be determined shall be the responsibility of [Config].
-    pub writer_type: Writers<'a>,
+    pub(in super::super) writer_type: Writers<'a>,
 }
 
 impl<'a> WriterBuilder<'a> {

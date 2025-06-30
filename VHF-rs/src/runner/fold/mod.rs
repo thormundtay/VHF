@@ -1,3 +1,5 @@
+pub mod repr;
+
 use super::process::{
     consts::{MMAP_PAGE_LEN, VHF_MMAP_WINDOW_LEN},
     pages::MmapPage,
@@ -8,27 +10,34 @@ use crate::{
     parser::consts::M_OVERFLOW,
     types::{IQMTriplet, RawVHFWord},
 };
+use repr::Representation;
+use serde::Serialize;
 use std::{cmp::Ordering, hint::unreachable_unchecked, num::NonZeroU64, ops::Deref, sync::Arc};
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct StreamFold {
     /// This the function that has to be applied to every chunked window from [super::VHF].next.
+    #[serde(skip_serializing)]
     pub func: Arc<dyn Fn(<super::VHFIter as Iterator>::Item) -> WriteBlock + Send + Sync>,
     /// This is the number of windows to step by each time prior to par_iter.
+    #[serde(skip_serializing)]
     pub step_by: usize,
     /// This is the number of windows to pad to the start.
+    #[serde(skip_serializing)]
     pub pad: usize,
     /// This is the operation performed.
+    #[serde(skip_serializing)]
     pub op: StreamFoldOp,
-    /// This is a json-representation that aims to convey what was done in the fold.
+    /// This is a representation that aims to convey what was done in the fold. See [repr].
+    ///
     /// For example,
     /// 1) Only m-rollover was tracked, and so effectively nothing was done:
-    /// ## TODO: None preferred?
     /// ```json
     /// { fold: [] }
     /// ```
     /// 2) two-pass decimation with different decimation factors and filter kernels.
-    pub json_repr: Option<String>,
+    #[serde(rename(serialize = "fold"))]
+    pub repr: Vec<Representation<f64>>,
 }
 
 impl PartialEq for StreamFold {
@@ -94,7 +103,7 @@ impl StreamFold {
             step_by: VHF_MMAP_WINDOW_LEN,
             pad: 0,
             op: StreamFoldOp::None,
-            json_repr: None,
+            repr: Vec::new(),
         }
     }
 
@@ -177,7 +186,7 @@ impl StreamFold {
             step_by: VHF_MMAP_WINDOW_LEN - PAGES_START,
             pad: PAGES_START,
             op: StreamFoldOp::Map(None),
-            json_repr: None,
+            repr: Vec::new(),
         }
     }
 

@@ -9,6 +9,7 @@ use super::writer::WriterBuilder;
 use crate::{Error, Result};
 use clap::{Arg, ArgAction, ArgGroup, Command, ValueHint, value_parser};
 use configparser::ini;
+use serde::Serialize;
 use std::{
     collections::HashMap,
     ffi::{CString, OsString},
@@ -810,6 +811,7 @@ impl Configs {
 /// Valid representation of board interaction along with process requirements.
 /// (These are placed together as the board has to collect more data in the event that process
 /// decimates the board's collected data.)
+#[derive(Debug, Serialize)]
 pub struct BoardConfig<'a> {
     /// For a single continuous file, this is the number of samples expected to be at least within
     /// the file.

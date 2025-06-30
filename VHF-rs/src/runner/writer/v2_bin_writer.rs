@@ -1,10 +1,12 @@
 //! Writer method with newer methods.
 
+use super::super::BoardConfig;
 use super::{FILE_LAZY_LEN, VHFWriter};
 use crate::{Error, Result, types::RawVHFWord};
 #[cfg(not(test))]
 use jiff::SignedDuration;
 use jiff::{Span, Zoned};
+use serde::Serialize;
 use std::{
     fmt::Debug,
     fs::{File, OpenOptions},

@@ -8,7 +8,7 @@ name = "stream"
 
 [[bin]]
 name = "clear-fifo"
-required-features = ["clear-fifo",]
+required-features = ["clear-fifo"]
 
 [lib]
 name = "vhf"
@@ -20,23 +20,25 @@ clear-fifo = ["nix/user", "prettytable-rs"]
 [dependencies]
 bytemuck = { version = "1.23.0" }
 byteorder = "1.5.0"
-clap = { version = "4.5.39", features = ["derive",] }
+clap = { version = "4.5.39", features = ["derive"] }
 configparser = { version = "3.1.0", default-features = false }
-evalexpr = { version = "12.0.2", features = ["regex",] }
+evalexpr = { version = "12.0.2", features = ["regex"] }
 heapless = { version = "0.8.0" }
 itertools = { version = "0.14.0" }
-jiff = { version = "0.2.13", features = ["alloc", "serde",] }
+jiff = { version = "0.2.13", features = ["alloc", "serde"] }
 libc = { version = "0.2" }
 log = { version = "0.4.22" }
-log4rs = { version = "1.3.0", features = ["console_appender",] }
+log4rs = { version = "1.3.0", features = ["console_appender"] }
 mmap-rs = { version = "0.6.1" }
 nix = { version = "0.29.0", features = ["fs", "ioctl", "user"] }
 num-traits = { version = "0.2.19" }
 pariter = "0.5.1"
 prettytable-rs = { version = "0.10.0", default-features = false, optional = true }
 regex = { version = "1.11.1" }
+serde = { version = "1.0.219" }
+serde_json = { version = "1.0.140" }
 
 [dev-dependencies]
-approx = {version = "0.5.1" }
-test-log = { version = "0.2.17", features = ["trace", "color",] }
-tempfile = { version = "3.19.1", features = ["default",] }
+approx = { version = "0.5.1" }
+test-log = { version = "0.2.17", features = ["trace", "color"] }
+tempfile = { version = "3.19.1", features = ["default"] }
