@@ -6,13 +6,19 @@ use super::process::{
 };
 use super::writer::WriteBlock;
 use crate::{
-    Result,
+    Error, Result,
     parser::consts::M_OVERFLOW,
     types::{IQMTriplet, RawVHFWord},
 };
 use repr::Representation;
 use serde::Serialize;
-use std::{cmp::Ordering, hint::unreachable_unchecked, num::NonZeroU64, ops::Deref, sync::Arc};
+use std::{
+    cmp::Ordering,
+    hint::unreachable_unchecked,
+    num::{NonZeroU64, NonZeroUsize},
+    ops::Deref,
+    sync::Arc,
+};
 
 #[derive(Clone)]
 pub struct StreamFold {
@@ -59,25 +65,35 @@ pub enum StreamFoldOp {
     /// [StreamFoldOp::None]. This is needed for [crate::runner::writer::V1Writer] and
     /// [crate::runner::writer::V1StdOut], which require that the phase and skip values are not
     /// altered in the fold process.
-    /// If [Option::Some], consider the context of [super::Config::skip_num], StreamFold will lead
-    /// to a decrease in number of elements between the FPGA and what is written to the file. This
-    /// number summarizes the possuibly multiple steps performed by [StreamFold::func].
-    Map(Option<NonZeroU64>),
+    Map(Option<MapArg>),
+}
+
+/// With the context of [super::Config::skip_num], [StreamFold] will lead to a decrease in number of
+/// elements between the FPGA and what is written to the file.
+/// This struct contains all arguments specific to [StreamFoldOp::Map] that would otherwise
+/// definetly not make sense to be in [StreamFoldOp::None].
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct MapArg {
+    /// This number summarizes the possibly multiple steps performed by [StreamFold::func].
+    pub effective_decimation: NonZeroU64,
+    /// This is the number of elements that are "dropped" before the first element is written to
+    /// file.
+    pub num_before_first_drop: NonZeroUsize,
 }
 
 impl std::fmt::Debug for StreamFold {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let op_str = match &self.op {
+            StreamFoldOp::None => "none".to_string(),
+            StreamFoldOp::Map(None) => "map: None".to_string(),
+            StreamFoldOp::Map(Some(e)) => format!("map: Some({e:?})"),
+        };
+
         f.debug_struct("StreamFold")
             .field("func", &"...")
             .field("step_by", &self.step_by)
             .field("pad", &self.pad)
-            .field(
-                "op",
-                &match self.op {
-                    StreamFoldOp::None => "none",
-                    StreamFoldOp::Map(_) => "map",
-                },
-            )
+            .field("op", &op_str)
             .finish()
     }
 }
@@ -192,7 +208,30 @@ impl StreamFold {
     pub fn effective_decimation_factor(&self) -> Result<u64> {
         match self.op {
             StreamFoldOp::None => Ok(1),
-            StreamFoldOp::Map(e) => Ok(e.map(|v| v.into()).unwrap_or(1)),
+            StreamFoldOp::Map(None) => Ok(1),
+            StreamFoldOp::Map(Some(MapArg {
+                effective_decimation: e,
+                ..
+            })) => Ok(e.into()),
+        }
+    }
+
+    /// Determine the number of elements dropped, starting from the first word from FPGA, up to,
+    /// and not including the first element written to the file.
+    pub fn words_dropped_before_first_write(&self) -> Result<i64> {
+        match &self.op {
+            StreamFoldOp::None => Ok(0),
+            StreamFoldOp::Map(None) => Ok(0),
+            StreamFoldOp::Map(Some(MapArg {
+                num_before_first_drop: n,
+                ..
+            })) => {
+                let n: usize = (*n).into();
+                n.try_into().map_err(|_| {
+                    log::error!("Could not get num_words_dropped as i64!");
+                    Error::User
+                })
+            }
         }
     }
 }
