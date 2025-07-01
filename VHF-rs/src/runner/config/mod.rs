@@ -864,6 +864,18 @@ impl<'a> BoardConfig<'a> {
                 .try_nanoseconds((1e9 / self.sampling_frequency()).round() as i64)
                 .unwrap()
     }
+
+    pub fn time_between_VHF_start_and_first_element(&self) -> Result<jiff::Span> {
+        let num_drop = self.stream_fold.words_dropped_before_first_write()?;
+        // let ns: f64 = (num_drop * 1_000_000_000) as f64 / self.sampling_frequency();
+        let ns: f64 = {
+            let numerator = num_drop * 1_000_000_000 * (1 + *self.skip_num as i64);
+            let denominator = self.speed.base_sampling_freq();
+            numerator as f64 / denominator as f64
+        };
+        let ns: i64 = ns.round() as i64;
+        jiff::Span::new().try_nanoseconds(ns).map_err(Error::Jiff)
+    }
 }
 
 #[cfg(test)]
