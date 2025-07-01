@@ -84,16 +84,19 @@ impl<'a> WriterBuilder<'a> {
                 verbosity: 0..=3,
                 encode: Encode::Binary,
                 ..
-            } => Ok(Writers::V1(V1Arg {
-                num_samples: &conf.num_samples,
-                num_files: &conf.num_files,
-                encode: &conf.encode,
-                verbosity: &conf.verbosity,
-                file_timespan: Box::new(conf.file_timespan()),
-                header_details: conf.details(),
-                filename_details: conf.filename(),
-                save_dir: &conf.save_dir,
-            })),
+            } => {
+                let board_config = conf.build_board_config()?;
+                Ok(Writers::V1(V1Arg {
+                    num_samples: &conf.num_samples,
+                    num_files: &conf.num_files,
+                    encode: &conf.encode,
+                    verbosity: &conf.verbosity,
+                    file_timespan: Box::new(board_config.file_timespan()),
+                    header_details: conf.details(),
+                    filename_details: conf.filename(),
+                    save_dir: &conf.save_dir,
+                }))
+            }
             Config {
                 num_files: 0..,
                 save_to_file: true,

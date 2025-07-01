@@ -659,25 +659,6 @@ impl Configs {
         Ok(())
     }
 
-    /// This the frequency in Hertz at which data is being emitted from the board after skip_num (`s`)
-    /// decimation.
-    pub fn sampling_frequency(&self) -> f64 {
-        self.speed.base_sampling_freq() as f64 / (1. + self.skip_num as f64)
-    }
-
-    /// This determines the time difference the first data point of multiple files.
-    pub fn file_timespan(&self) -> jiff::Span {
-        // In case there are drifts...
-        log::debug!(
-            "Timespan of one sample point in nanoseconds = {}",
-            1e9 / self.sampling_frequency()
-        );
-        self.num_samples as i64
-            * jiff::Span::new()
-                .try_nanoseconds((1e9 / self.sampling_frequency()).round() as i64)
-                .unwrap()
-    }
-
     /// This is a string representation of what the C variant would have received from the command
     /// line. This primarily is used just to keep track of experiment properties.
     pub fn details(&self) -> String {
@@ -739,7 +720,9 @@ impl Configs {
         const REDBOLD: &str = "\x1B[31;1m";
         const RESET: &str = "\x1B[0m";
 
-        let sf = self.sampling_frequency();
+        let board_conf = self.build_board_config().unwrap();
+
+        let sf = board_conf.sampling_frequency();
         if sf < 1e3 {
             println!("Sampling at {sf:.4} Hz.");
         } else if sf < 1e6 {
@@ -772,7 +755,7 @@ impl Configs {
             println!("Output will be captured from {BLUE}STDIN{RESET}.");
         }
 
-        let total_time = self.num_files as i64 * self.file_timespan();
+        let total_time = self.num_files as i64 * board_conf.file_timespan();
         println!(
             "Sampling is expected to take {REDBOLD}{}{RESET}.",
             total_time
@@ -811,7 +794,7 @@ impl Configs {
 /// Valid representation of board interaction along with process requirements.
 /// (These are placed together as the board has to collect more data in the event that process
 /// decimates the board's collected data.)
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct BoardConfig<'a> {
     /// For a single continuous file, this is the number of samples expected to be at least within
     /// the file.
@@ -861,6 +844,25 @@ impl<'a> BoardConfig<'a> {
     /// Gets the parameters of StreamFold part of the configuration.
     pub fn stream_fold_parameters(&self) -> &StreamFold {
         self.stream_fold
+    }
+
+    /// This the frequency in Hertz at which data is being emitted from the board after skip_num (`s`)
+    /// decimation.
+    pub fn sampling_frequency(&self) -> f64 {
+        self.speed.base_sampling_freq() as f64 / (1. + *self.skip_num as f64)
+    }
+
+    /// This determines the time difference the first data point of multiple files.
+    pub fn file_timespan(&self) -> jiff::Span {
+        // In case there are drifts...
+        log::debug!(
+            "Timespan of one sample point in nanoseconds = {}",
+            1e9 / self.sampling_frequency()
+        );
+        *self.num_samples as i64
+            * jiff::Span::new()
+                .try_nanoseconds((1e9 / self.sampling_frequency()).round() as i64)
+                .unwrap()
     }
 }
 
