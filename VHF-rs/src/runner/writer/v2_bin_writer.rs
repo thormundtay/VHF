@@ -21,14 +21,16 @@ use std::{
 
 pub(super) const V2_MAGIC_HEADER: &str = "VHFV2BIN";
 
-pub struct V2BinWriter {
-    /// Timestamp of the first file's first datapoint.
-    start_time: Zoned,
+pub struct V2BinWriter<'a> {
+    /// Timestamp of the board's start time.
+    start_time: Box<Zoned>,
+    /// Construct the header associated with the file.
+    board_config: Box<BoardConfig<'a>>,
     /// Total number of files expected.
     num_files: usize,
     /// Number of files that have been opened so far.
     num_files_so_far: AtomicUsize,
-    time_between_files: Span,
+    time_between_files: Box<Span>,
     /// This is the number of [crate::runner::Config::num_samples] to be eventually be written to file.
     num_elements_per_file: usize,
     num_elements_written: AtomicUsize,
@@ -57,7 +59,7 @@ pub struct V2BinWriter {
     m_overflow_written: usize,
 }
 
-impl VHFWriter for V2BinWriter {
+impl<'a> VHFWriter for V2BinWriter<'a> {
     fn write_data(&mut self, words: super::WriteBlock) -> Result<()> {
         todo!()
     }
@@ -67,18 +69,19 @@ impl VHFWriter for V2BinWriter {
     }
 }
 
-impl V2BinWriter {
+impl<'a> V2BinWriter<'a> {
     /// Creates an object that allows for writing of data processed out of
     /// [crate::runner::process::VHF]. Whilst still working out if [crate::runner::Config] contains
     /// enough information about the runtime, the `main()` function should instead be responsible
     /// for determining the time by which the first data point is being written to file. This means
     /// that data points being dropped in processing should be accounted for.
-    fn new(config: V2BinArg, start_time: jiff::Zoned) -> Self {
+    fn new(config: V2BinArg<'a>, start_time: jiff::Zoned) -> Self {
         Self {
-            start_time,
+            start_time: Box::new(start_time),
+            board_config: Box::new(config.board_config),
             num_files: *config.num_files,
             num_files_so_far: AtomicUsize::new(0),
-            time_between_files: *config.file_timespan,
+            time_between_files: Box::new(*config.file_timespan),
             num_elements_per_file: *config.num_samples,
             num_elements_written: AtomicUsize::new(0),
             verbosity: *config.verbosity,
@@ -117,7 +120,7 @@ impl V2BinWriter {
         let file_start_time = self
             .start_time
             .checked_add(
-                self.time_between_files
+                *self.time_between_files
                     // Because the file has already been opened, we have to sub by 1.
                     * self.num_files_so_far
                         .load(Ordering::Acquire)
@@ -125,6 +128,23 @@ impl V2BinWriter {
                         .unwrap() as i64,
             )
             .map_err(Error::Jiff)?;
+        let header_details = {
+            let bin_header = V2BinHeader {
+                file_start: &file_start_time,
+                board_config: &self.board_config,
+                m_overflow_total: self.m_overflow_total,
+                m_offset: self.m_offset,
+            };
+
+            serde_json::to_string(&bin_header)
+        }
+        .map_err(|_| {
+            log::error!("Serialization error!");
+            Error::InternalInconsistency
+        })?;
+        if header_details.len() as u64 > u64::MAX {
+            return Err(Error::ExcessData);
+        }
         let file_start_unix: jiff::Timestamp = file_start_time.into();
 
         use byteorder::{NativeEndian, WriteBytesExt};
@@ -154,7 +174,7 @@ impl V2BinWriter {
     }
 }
 
-impl Drop for V2BinWriter {
+impl Drop for V2BinWriter<'_> {
     fn drop(&mut self) {
         if thread::panicking() {
             log::warn!("V2Writer in panic. self = {self:?}");
@@ -167,7 +187,7 @@ impl Drop for V2BinWriter {
     }
 }
 
-impl Debug for V2BinWriter {
+impl Debug for V2BinWriter<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_map()
             .entry(&"files", &self.num_files_so_far)
@@ -186,7 +206,8 @@ impl Debug for V2BinWriter {
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct V2BinArg<'a> {
+pub(in super::super) struct V2BinArg<'a> {
+    pub board_config: BoardConfig<'a>,
     pub num_samples: &'a usize,
     pub num_files: &'a usize,
     pub verbosity: &'a u8,
@@ -195,4 +216,16 @@ pub(super) struct V2BinArg<'a> {
     pub filename_details: String,
     pub save_dir: &'a Path,
     pub m_overflow_total: &'a usize,
+}
+
+#[derive(Serialize)]
+struct V2BinHeader<'a> {
+    /// For the 0th file, this need not be the time the VHF engine starts.
+    // It might be easier to just use PyO3 to deserialize this with serde than to use orjson in
+    // Python.
+    file_start: &'a Zoned,
+    #[serde(flatten)]
+    board_config: &'a BoardConfig<'a>,
+    m_overflow_total: usize,
+    m_offset: i64,
 }

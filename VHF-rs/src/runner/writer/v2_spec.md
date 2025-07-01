@@ -22,9 +22,10 @@ structure.
    incomplete start time of the data set.
 4. The next eight bytes SHALL be native-endian u64 describing how long the
    *remaining* of the header is in bytes.
-5. The header shall specify:
-  a. The filters used
+5. The header MUST be written in UTF-8. The header shall specify:
+   a. The filters used, in the sequence the filters were applied.
 6. As m_offset is given by the header, software processing between data taken
    out of the FPGA and file writing MUST keep track of m_overflow, such that
    continuous files can have their first element be associated to the correct
    m_overflow element.
+7. The header is then 0-flushed up to the next word boundary, similar to v1.
