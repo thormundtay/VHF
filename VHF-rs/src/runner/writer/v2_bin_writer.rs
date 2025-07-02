@@ -35,15 +35,12 @@ pub struct V2BinWriter<'a> {
     num_elements_per_file: usize,
     num_elements_written: AtomicUsize,
     verbosity: u8,
-    header_details: String,
     filename_details: String,
     /// Avoid writing to a file until we exceed some amount.
     elements_to_write: Arc<Mutex<Vec<RawVHFWord>>>,
     m_overflow_to_write: Arc<Mutex<Vec<i8>>>,
     file_dir: PathBuf,
     current_file_handle: Arc<Mutex<Option<BufWriter<File>>>>,
-    /// This is the size of the header in bytes before the start of m_overflow block.
-    header_bytes: usize,
     /// This is the number of elements seen so far. This is necessary for ensuring that m_overflow
     /// idx is correct. This differs from num_elements_written as this may be nonzero while nothing
     /// has yet been written.
@@ -76,6 +73,10 @@ impl<'a> V2BinWriter<'a> {
     /// for determining the time by which the first data point is being written to file. This means
     /// that data points being dropped in processing should be accounted for.
     fn new(config: V2BinArg<'a>, start_time: jiff::Zoned) -> Self {
+        // Constant is currently hard-baked with reference to Archive/20250208, instead of
+        // being from config specification.
+        let m_overflow_total = (*config.num_samples as f64 * 0.00005).round() as usize;
+
         Self {
             start_time: Box::new(start_time),
             board_config: Box::new(config.board_config),
@@ -85,7 +86,6 @@ impl<'a> V2BinWriter<'a> {
             num_elements_per_file: *config.num_samples,
             num_elements_written: AtomicUsize::new(0),
             verbosity: *config.verbosity,
-            header_details: config.header_details.to_string(),
             filename_details: config.filename_details.to_string(),
             elements_to_write: Arc::new(Mutex::new(Vec::with_capacity(
                 FILE_LAZY_LEN.min(*config.num_samples),
@@ -95,10 +95,9 @@ impl<'a> V2BinWriter<'a> {
             ))),
             file_dir: config.save_dir.to_path_buf(),
             current_file_handle: Arc::new(Mutex::new(None)),
-            header_bytes: 0,
             num_elements_seen: AtomicUsize::new(0),
             m_offset: 0,
-            m_overflow_total: *config.m_overflow_total,
+            m_overflow_total,
             m_overflow_written: 0,
         }
     }
@@ -120,13 +119,18 @@ impl<'a> V2BinWriter<'a> {
         let file_start_time = self
             .start_time
             .checked_add(
+                self.board_config
+                    .time_between_VHF_start_and_first_element()?,
+            ) // First element written to file
+            .map_err(Error::Jiff)?
+            .checked_add(
                 *self.time_between_files
                     // Because the file has already been opened, we have to sub by 1.
                     * self.num_files_so_far
                         .load(Ordering::Acquire)
                         .checked_sub(1)
                         .unwrap() as i64,
-            )
+            ) // First element of subsequent file
             .map_err(Error::Jiff)?;
         let header_details = {
             let bin_header = V2BinHeader {
@@ -150,15 +154,37 @@ impl<'a> V2BinWriter<'a> {
         use byteorder::{NativeEndian, WriteBytesExt};
         use std::io::Write;
         if let Some(buf_file) = self.current_file_handle.lock().unwrap().as_mut() {
+            let mut written_so_far = 0;
             buf_file
                 .write(V2_MAGIC_HEADER.as_bytes())
                 .map_err(Error::Io)?; // Write magic in UTF.
+            written_so_far += V2_MAGIC_HEADER.len();
             buf_file
                 .write_u16::<NativeEndian>(0xFEFF)
                 .map_err(Error::Io)?; // Write BOM.
+            written_so_far += 2;
             buf_file
                 .write_i64::<NativeEndian>(file_start_unix.as_second())
                 .map_err(Error::Io)?; // Write UNIX time stamp.
+            written_so_far += 8;
+            buf_file
+                .write_u64::<NativeEndian>(header_details.len() as u64)
+                .map_err(Error::Io)?; // Write header length.
+            written_so_far += 8;
+            buf_file
+                .write_all(header_details.as_bytes())
+                .map_err(Error::Io)?; // Write header details.
+            written_so_far += header_details.len();
+            // Flush to next word.
+            let num_zero_bytes = written_so_far.div_ceil(8) * 8 - written_so_far;
+            buf_file
+                .write_all(&vec![0u8; num_zero_bytes])
+                .map_err(Error::Io)?;
+
+            // Write m_overflow_idx block.
+            buf_file
+                .write_all(&vec![0u8; self.m_overflow_total * 8])
+                .map_err(Error::Io)?;
         }
 
         Ok(())
@@ -212,10 +238,8 @@ pub(in super::super) struct V2BinArg<'a> {
     pub num_files: &'a usize,
     pub verbosity: &'a u8,
     pub file_timespan: Box<Span>,
-    pub header_details: String,
     pub filename_details: String,
     pub save_dir: &'a Path,
-    pub m_overflow_total: &'a usize,
 }
 
 #[derive(Serialize)]

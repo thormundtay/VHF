@@ -24,6 +24,11 @@ structure.
    *remaining* of the header is in bytes.
 5. The header MUST be written in UTF-8. The header shall specify:
    a. The filters used, in the sequence the filters were applied.
+   b. The time associated to the first data point, as given by key
+      `file_start`. This is not necessarily the same as the starting time of
+      the VHF board.
+   c. The number of elements in the file after the header used for storing
+      indices associated to m_overflow, given by key `m_overflow_total`.
 6. As m_offset is given by the header, software processing between data taken
    out of the FPGA and file writing MUST keep track of m_overflow, such that
    continuous files can have their first element be associated to the correct
