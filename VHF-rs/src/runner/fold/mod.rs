@@ -130,8 +130,10 @@ impl StreamFold {
         // word to determine if a rollover has occurred. As such, the 0th element has to be chosen
         // from the idx-1th page to ensure that the 0th window returns a sign of 0 change for the
         // 0th element in the stream.
-        fn overlapping_identity((idx, pages): <super::VHFIter as Iterator>::Item) -> WriteBlock {
-            if idx == 0 {
+        fn overlapping_identity(
+            (vhf_iter_idx, pages): <super::VHFIter as Iterator>::Item,
+        ) -> WriteBlock {
+            if vhf_iter_idx == 0 {
                 debug_assert!(matches!(pages[0], MmapPage::Empty));
                 debug_assert!(matches!(pages[1], MmapPage::Page(_)));
             } else {
@@ -148,16 +150,22 @@ impl StreamFold {
             let mut result = WriteBlock::new_from_iter(data_iter);
 
             fn idx_and_sign_for_filter_map(
-                (idx, (a, b)): (usize, (&RawVHFWord, &RawVHFWord)),
+                (element_idx, (a, b)): (usize, (&RawVHFWord, &RawVHFWord)),
+                vhf_iter_idx: usize,
             ) -> Option<(usize, i8)> {
                 let IQMTriplet(_, _, a) = a.into();
                 let IQMTriplet(_, _, b) = b.into();
                 if a.abs_diff(b) >= M_OVERFLOW {
+                    // It takes 200k years to generate
+                    // u64 elements even if there was no USB2.0 throttling; so it is safe to encode
+                    // the index of RawVHFWord by absolute index relative to first FPGA word.
+                    let offset = vhf_iter_idx.checked_mul(MMAP_PAGE_LEN).unwrap();
+
                     match b.cmp(&a) {
                         // The 2nd element of the window found to be less => overflow to negative
-                        Ordering::Less => Some((idx, 1)),
+                        Ordering::Less => Some((element_idx + offset, 1)),
                         // The 2nd element of the window found to be more => underflow to positive
-                        Ordering::Greater => Some((idx, -1)),
+                        Ordering::Greater => Some((element_idx + offset, -1)),
                         // Safety: M_OVERFLOW check above.
                         Ordering::Equal => unsafe { unreachable_unchecked() },
                     }
@@ -167,7 +175,7 @@ impl StreamFold {
             }
 
             use itertools::Itertools;
-            if idx == 0 {
+            if vhf_iter_idx == 0 {
                 // Let the 0th window be the first non-empty page's first element in the tuple 0th
                 // and first. This ensures that the enumerate method's 0th index will be return the
                 // 0 sign change.
@@ -177,7 +185,7 @@ impl StreamFold {
                         .chain(pages.iter().skip(PAGES_START).flat_map(Deref::deref))
                         .tuple_windows()
                         .enumerate()
-                        .filter_map(idx_and_sign_for_filter_map),
+                        .filter_map(|w| idx_and_sign_for_filter_map(w, vhf_iter_idx)),
                 );
             } else {
                 result.with_overflow_from_iter(
@@ -187,7 +195,7 @@ impl StreamFold {
                         .tuple_windows()
                         .skip(PAGES_START * MMAP_PAGE_LEN - 1) // Skip all but last element of 0th page
                         .enumerate()
-                        .filter_map(idx_and_sign_for_filter_map),
+                        .filter_map(|w| idx_and_sign_for_filter_map(w, vhf_iter_idx)),
                 )
             };
 

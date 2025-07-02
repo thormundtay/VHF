@@ -183,7 +183,7 @@ fn stepped_nonoverlapping_identity_b() {
         .flat_map(|x| x.data.into_iter())
         .collect();
 
-    let expected: Vec<RawVHFWord> = signal_expected.map(|x| x.into()).collect();
+    let expected: Vec<RawVHFWord> = signal_expected.collect();
 
     assert_eq!(result.len(), expected.len());
     result.into_iter().zip(expected).for_each(|(r, e)| {
@@ -272,14 +272,14 @@ fn stepped_overlapping_identity_b() {
     let params = StreamFold::identity_default();
     matches!(params.op, StreamFoldOp::Map(None));
 
-    let total_window_len = params.step_by;
+    let total_window_len = params.step_by * 5;
     let debug_vhf_conf = Config::default();
     let (debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
         &debug_vhf_conf,
         NonZeroUsize::new(total_window_len).unwrap(),
     );
     let total_elements = total_window_len * MMAP_PAGE_LEN;
-    log::info!("total_elements = {}", total_elements);
+    log::info!("total_elements = {total_elements}");
 
     // Define the signal we are testing for.
     let ampl = 5000f64;
@@ -342,18 +342,10 @@ fn stepped_overlapping_identity_b() {
         log::info!("result_overflow_idx[0] = {:?}", result_overflow_idx.first());
         let (i, sign) = result_overflow_idx.first().unwrap();
         let show: Vec<IQMTriplet> = (i - 1..=i + 1).map(|i| result_phase[i].into()).collect();
-        log::info!(
-            "Elements around the first sign change ({}) are: {:?}",
-            sign,
-            show
-        );
-        let (i, sign) = result_overflow_idx.iter().skip(1).next().unwrap();
+        log::info!("Elements around the first sign change ({sign}) are: {show:?}",);
+        let (i, sign) = result_overflow_idx.get(1).unwrap();
         let show: Vec<IQMTriplet> = (i - 1..=i + 1).map(|i| result_phase[i].into()).collect();
-        log::info!(
-            "Elements around the second sign change ({}) are: {:?}",
-            sign,
-            show
-        );
+        log::info!("Elements around the second sign change ({sign}) are: {show:?}",);
     }
 
     assert_eq!(result_phase.len(), expected_phase.len());

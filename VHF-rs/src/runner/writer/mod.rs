@@ -87,7 +87,6 @@ impl WriteBlock {
             Vec::new().into_iter().zip(Vec::new())
         } else {
             self.m_overflow_idx
-                // .clone()
                 .unwrap()
                 .into_iter()
                 .zip(self.m_overflow_value.unwrap())
