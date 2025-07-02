@@ -12,13 +12,7 @@ use crate::{
 };
 use repr::Representation;
 use serde::Serialize;
-use std::{
-    cmp::Ordering,
-    hint::unreachable_unchecked,
-    num::{NonZeroU64, NonZeroUsize},
-    ops::Deref,
-    sync::Arc,
-};
+use std::{cmp::Ordering, hint::unreachable_unchecked, num::NonZeroUsize, ops::Deref, sync::Arc};
 
 #[derive(Clone)]
 pub struct StreamFold {
@@ -75,7 +69,7 @@ pub enum StreamFoldOp {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct MapArg {
     /// This number summarizes the possibly multiple steps performed by [StreamFold::func].
-    pub effective_decimation: NonZeroU64,
+    pub effective_decimation: NonZeroUsize,
     /// This is the number of elements that are "dropped" before the first element is written to
     /// file.
     pub num_before_first_drop: NonZeroUsize,
@@ -212,15 +206,16 @@ impl StreamFold {
     }
 
     /// Determine if the process of [self] creates any sort of decimation.
-    /// Result because reduce would not make sense to call this.
-    pub fn effective_decimation_factor(&self) -> Result<u64> {
+    /// Related: [super::VHF] has to determine the number of elements to read.
+    pub(super) fn effective_decimation_factor(&self) -> NonZeroUsize {
         match self.op {
-            StreamFoldOp::None => Ok(1),
-            StreamFoldOp::Map(None) => Ok(1),
+            StreamFoldOp::None => unsafe { NonZeroUsize::new(1).unwrap_unchecked() },
+            StreamFoldOp::Map(None) => unsafe { NonZeroUsize::new(1).unwrap_unchecked() },
             StreamFoldOp::Map(Some(MapArg {
                 effective_decimation: e,
                 ..
-            })) => Ok(e.into()),
+            })) => e,
+            // StreamFoldOp::Reduce(_) => 1 //?
         }
     }
 
