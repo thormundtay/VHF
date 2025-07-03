@@ -4,7 +4,7 @@
 //! ```
 //! behaves to expectation.
 
-use super::super::fold::{StreamFold, StreamFoldOp};
+use super::super::fold::{MOverflowRaw, StreamFold, StreamFoldOp};
 use super::consts::MMAP_PAGE_LEN;
 use super::test_vhf::{debug_vhf_new, push_arc_pages};
 use super::*;
@@ -322,28 +322,28 @@ fn stepped_overlapping_identity_b() {
     let result_overflow_idx: Vec<_> = results.into_iter().flat_map(|x| x.overflow()).collect();
 
     let expected_phase: Vec<RawVHFWord> = signal_expected.collect();
-    let expected_overflow_idx: Vec<(usize, i8)> = {
+    let expected_overflow_idx: Vec<MOverflowRaw> = {
         // + signs
         let plus = (1..)
             .map(|i| (TAU * i as f64 - phase_offset) / ang_freq)
             .take_while(|&i| i < total_elements as f64)
-            .map(|idx| (idx.ceil() as usize, 1));
+            .map(|idx| MOverflowRaw(idx.ceil() as usize, 1));
         // - signs
         let minus = (0..)
             .map(|i| (TAU * i as f64 + PI - phase_offset) / ang_freq)
             .take_while(|&i| i < total_elements as f64)
-            .map(|idx| (idx.ceil() as usize, -1));
-        let mut result: Vec<(usize, i8)> = plus.chain(minus).collect();
+            .map(|idx| MOverflowRaw(idx.ceil() as usize, -1));
+        let mut result: Vec<_> = plus.chain(minus).collect();
         result.sort_by(|a, b| a.0.cmp(&b.0));
         result
     };
 
     {
         log::info!("result_overflow_idx[0] = {:?}", result_overflow_idx.first());
-        let (i, sign) = result_overflow_idx.first().unwrap();
+        let MOverflowRaw(i, sign) = result_overflow_idx.first().unwrap();
         let show: Vec<IQMTriplet> = (i - 1..=i + 1).map(|i| result_phase[i].into()).collect();
         log::info!("Elements around the first sign change ({sign}) are: {show:?}",);
-        let (i, sign) = result_overflow_idx.get(1).unwrap();
+        let MOverflowRaw(i, sign) = result_overflow_idx.get(1).unwrap();
         let show: Vec<IQMTriplet> = (i - 1..=i + 1).map(|i| result_phase[i].into()).collect();
         log::info!("Elements around the second sign change ({sign}) are: {show:?}",);
     }

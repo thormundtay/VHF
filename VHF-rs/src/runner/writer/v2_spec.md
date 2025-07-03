@@ -35,7 +35,7 @@ structure.
    m_overflow element.
 7. The header is then 0-flushed up to the next word boundary, similar to v1.
 8. The next `m_overflow_total` words are indices which `m_overflow` has
-   occured.
+   occured relative to the start of the file.
    a. If the most-significant-bit (in native-endian) is 0, a +1 `m_overflow`
       has occured. Zeroing this most-significant-bit gives the index which the
       overflow has occurred on.

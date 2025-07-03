@@ -30,6 +30,7 @@ pub struct V1Writer {
     time_between_files: Span,
     /// This is the number of [crate::runner::Config::num_samples] to be eventually be written to file.
     num_elements_per_file: usize,
+    /// This is the number of elements written to the current file.
     num_elements_written: AtomicUsize,
     verbosity: u8,
     header_details: String,
@@ -48,6 +49,7 @@ impl VHFWriter for V1Writer {
         let data: &mut Vec<_> = &mut words.data;
         'data_has_element: loop {
             if self.num_files_so_far.load(Ordering::Acquire) > self.num_files {
+                log::warn!("VHFIter has collected too many pages.");
                 return Err(Error::ExcessData);
             }
 

@@ -1,6 +1,7 @@
 //! Writer method with newer methods.
 
 use super::super::BoardConfig;
+use super::MOverflowRaw;
 use super::{FILE_LAZY_LEN, VHFWriter};
 use crate::{Error, Result, types::RawVHFWord};
 #[cfg(not(test))]
@@ -33,18 +34,15 @@ pub struct V2BinWriter<'a> {
     time_between_files: Box<Span>,
     /// This is the number of [crate::runner::Config::num_samples] to be eventually be written to file.
     num_elements_per_file: usize,
+    /// This is the number of elements written to the current file.
     num_elements_written: AtomicUsize,
     verbosity: u8,
     filename_details: String,
     /// Avoid writing to a file until we exceed some amount.
     elements_to_write: Arc<Mutex<Vec<RawVHFWord>>>,
-    m_overflow_to_write: Arc<Mutex<Vec<i8>>>,
+    m_overflow_to_write: Arc<Mutex<Vec<MOverflowRaw>>>,
     file_dir: PathBuf,
     current_file_handle: Arc<Mutex<Option<BufWriter<File>>>>,
-    /// This is the number of elements seen so far. This is necessary for ensuring that m_overflow
-    /// idx is correct. This differs from num_elements_written as this may be nonzero while nothing
-    /// has yet been written.
-    num_elements_seen: AtomicUsize,
     /// This is the overflow of i16 associated to `M` of the first data point.
     /// As such, m_offset = +1 denotes that the first data point have
     /// (phase / 2pi) = arctan(Q/I)/2pi + m + (m_offset * u16::MAX).
@@ -95,7 +93,6 @@ impl<'a> V2BinWriter<'a> {
             ))),
             file_dir: config.save_dir.to_path_buf(),
             current_file_handle: Arc::new(Mutex::new(None)),
-            num_elements_seen: AtomicUsize::new(0),
             m_offset: 0,
             m_overflow_total,
             m_overflow_written: 0,
@@ -188,6 +185,36 @@ impl<'a> V2BinWriter<'a> {
         }
 
         Ok(())
+    }
+
+    /// This differs from [self::num_elements_written] as this shows the number of elements in
+    /// relation to VHFIter start.
+    ///
+    /// # Assumptions
+    /// Assume all files written are exactly num_elements_per_file.
+    ///
+    /// # Returns
+    /// Ok: number of elements with respect to VHFIter start (and processed) written.
+    /// Err: usize overflow occured.
+    fn total_elements_written(&self) -> Result<usize> {
+        self.num_files_so_far
+            .load(Ordering::Acquire)
+            .saturating_sub(1)
+            .checked_mul(self.num_elements_per_file)
+            .and_then(|s| s.checked_add(self.num_elements_written.load(Ordering::Acquire)))
+            .ok_or(Error::ExcessData)
+    }
+
+    /// MOverflowRaw encodes the absolute position relative to start of [super::VHFIter]. However,
+    /// we sometimes instead want the absolute position relative to start of the file.
+    #[inline]
+    fn align_to_file_start(&self, m_raw: MOverflowRaw) -> MOverflowRaw {
+        m_raw.offset_neg(
+            self.num_files_so_far
+                .load(Ordering::Acquire)
+                .checked_mul(self.num_elements_per_file)
+                .expect("Error trying to get idx of file start relative to VHFIter."),
+        )
     }
 
     fn close_file(&mut self) -> Result<()> {

@@ -23,7 +23,7 @@ const M_OVERFLOW_IDX_MAX: usize = usize::MAX >> 1;
 pub(super) struct MOverflowRaw(pub usize, pub i8);
 /// Compacted representation of [MOverflowRaw] into 8 bytes for file-writing reasons.  
 /// See: [super::writer::V2BinWriter].
-type MOverflowWrite = i64;
+pub(super) type MOverflowWrite = i64;
 
 /// This fully describes and contains all relevant mechanisms for taking the iterator output of
 /// [super::VHFIter] for "in-flight processing."
@@ -298,6 +298,20 @@ impl TryFrom<&MOverflowRaw> for MOverflowWrite {
     }
 }
 
+impl TryFrom<MOverflowRaw> for MOverflowWrite {
+    type Error = Error;
+
+    /// Converts [MOverflowRaw] into a standardized representation of 64-bits. The most significant
+    /// bit (MSB) denotes the sign change, where 0 denotes +1 and 1 denotes -1. After zeroing the MSB, interpreting as index.
+    ///
+    /// # Errors
+    /// When the index of [MOverflowRaw.0] is too large.
+    #[inline(always)]
+    fn try_from(value: MOverflowRaw) -> Result<MOverflowWrite> {
+        (&value).try_into()
+    }
+}
+
 impl TryFrom<&MOverflowWrite> for MOverflowRaw {
     type Error = Error;
 
@@ -317,6 +331,23 @@ impl TryFrom<&MOverflowWrite> for MOverflowRaw {
                 .map_err(|_| Error::ExcessData)?,
             sign as i8,
         ))
+    }
+}
+
+impl From<(usize, i8)> for MOverflowRaw {
+    #[inline(always)]
+    fn from(value: (usize, i8)) -> Self {
+        Self(value.0, value.1)
+    }
+}
+
+impl MOverflowRaw {
+    /// Lowers the usize by offset amount, without being less than 0.
+    /// # Unexpected behaviour
+    /// If self.idx < offset, the function is meaningless, but returns 0.
+    #[inline]
+    pub(super) fn offset_neg(self, offset: usize) -> Self {
+        Self(self.0.saturating_sub(offset), self.1)
     }
 }
 
