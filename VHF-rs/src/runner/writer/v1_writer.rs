@@ -69,8 +69,7 @@ impl VHFWriter for V1Writer {
 
             // Check if to continue or break loop
             if self.num_elements_written.load(Ordering::Acquire) >= self.num_elements_per_file {
-                self.num_elements_written.fetch_min(0, Ordering::AcqRel);
-                self.close_file()?
+                self.close_file()?;
             }
 
             if data.is_empty() {
@@ -328,6 +327,7 @@ impl V1Writer {
             use std::io::Write;
             file.flush().map_err(Error::Io)?;
         }
+        self.num_elements_written.fetch_min(0, Ordering::AcqRel);
         *self.current_file_handle.lock().unwrap() = None;
         Ok(())
     }

@@ -222,6 +222,7 @@ impl<'a> V2BinWriter<'a> {
             use std::io::Write;
             file.flush().map_err(Error::Io)?;
         }
+        self.num_elements_written.fetch_min(0, Ordering::AcqRel);
         *self.current_file_handle.lock().unwrap() = None;
         Ok(())
     }
