@@ -1,6 +1,14 @@
-//! Writer method with newer methods.
+//! V2Writer is an improved file-format writer that follows the V2 spec.
+//!
+//! The V2 spec aims to resolve several problems involved with throughput of file reading,
+//! primarily due to having to check the entire file at first for any m_overflow phenomenom, before
+//! being able to read any relevant block of traces.
+//! This is done so by recording the location of m-overflow after the header of the file, but
+//! before the data section of the file, known as `m_overflow_idx` or similar to describe this
+//! section of data. For more information, see [MOverflowRaw].
 
 use super::super::BoardConfig;
+use super::super::fold::MOverflowWrite;
 use super::MOverflowRaw;
 use super::{FILE_LAZY_LEN, VHFWriter};
 use crate::{Error, Result, types::RawVHFWord};
@@ -8,10 +16,12 @@ use crate::{Error, Result, types::RawVHFWord};
 use jiff::SignedDuration;
 use jiff::{Span, Zoned};
 use serde::Serialize;
+use std::collections::VecDeque;
 use std::{
     fmt::Debug,
     fs::{File, OpenOptions},
     io::BufWriter,
+    num::NonZeroUsize,
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
@@ -40,9 +50,11 @@ pub struct V2BinWriter<'a> {
     filename_details: String,
     /// Avoid writing to a file until we exceed some amount.
     elements_to_write: Arc<Mutex<Vec<RawVHFWord>>>,
-    m_overflow_to_write: Arc<Mutex<Vec<MOverflowRaw>>>,
+    m_overflow_to_write: Arc<Mutex<VecDeque<MOverflowRaw>>>,
     file_dir: PathBuf,
     current_file_handle: Arc<Mutex<Option<BufWriter<File>>>>,
+    /// This is the number of bytes (rounded up to the nearest word) that is dedicated to header.
+    header_len: Option<NonZeroUsize>,
     /// This is the overflow of i16 associated to `M` of the first data point.
     /// As such, m_offset = +1 denotes that the first data point have
     /// (phase / 2pi) = arctan(Q/I)/2pi + m + (m_offset * u16::MAX).
@@ -51,7 +63,7 @@ pub struct V2BinWriter<'a> {
     /// We are allowed to overwrite the magic value.
     m_overflow_total: usize,
     /// This is the number of m_overflow elements written so far.
-    m_overflow_written: usize,
+    m_overflow_written: AtomicUsize,
 }
 
 impl<'a> VHFWriter for V2BinWriter<'a> {
@@ -88,14 +100,15 @@ impl<'a> V2BinWriter<'a> {
             elements_to_write: Arc::new(Mutex::new(Vec::with_capacity(
                 FILE_LAZY_LEN.min(*config.num_samples),
             ))),
-            m_overflow_to_write: Arc::new(Mutex::new(Vec::with_capacity(
+            m_overflow_to_write: Arc::new(Mutex::new(VecDeque::with_capacity(
                 FILE_LAZY_LEN.min(*config.num_samples),
             ))),
             file_dir: config.save_dir.to_path_buf(),
             current_file_handle: Arc::new(Mutex::new(None)),
+            header_len: None,
             m_offset: 0,
             m_overflow_total,
-            m_overflow_written: 0,
+            m_overflow_written: AtomicUsize::new(0),
         }
     }
 
@@ -105,7 +118,7 @@ impl<'a> V2BinWriter<'a> {
         todo!()
     }
 
-    fn write_header(&self) -> Result<()> {
+    fn write_header(&mut self) -> Result<()> {
         // Do not write into a file who has already had headers/data written.
         if self.current_file_handle.lock().unwrap().is_none()
             || self.num_elements_written.load(Ordering::Acquire) > 0
@@ -177,6 +190,12 @@ impl<'a> V2BinWriter<'a> {
             buf_file
                 .write_all(&vec![0u8; num_zero_bytes])
                 .map_err(Error::Io)?;
+            // This is to determine eventually how to offset into the appropriate location within
+            // m_idx_overflow block.
+            self.header_len = Some(unsafe {
+                // SAFETY: Nonzero is guranteed by V2_MAGIC_HEADER.
+                NonZeroUsize::new(written_so_far.div_ceil(8) * 8).unwrap_unchecked()
+            });
 
             // Write m_overflow_idx block.
             buf_file
@@ -207,22 +226,146 @@ impl<'a> V2BinWriter<'a> {
 
     /// MOverflowRaw encodes the absolute position relative to start of [super::VHFIter]. However,
     /// we sometimes instead want the absolute position relative to start of the file.
+    /// This iterator version avoids a repeated check file start index relative to VHFIter start.
     #[inline]
-    fn align_to_file_start(&self, m_raw: MOverflowRaw) -> MOverflowRaw {
-        m_raw.offset_neg(
-            self.num_files_so_far
-                .load(Ordering::Acquire)
-                .checked_mul(self.num_elements_per_file)
-                .expect("Error trying to get idx of file start relative to VHFIter."),
-        )
+    fn align_to_file_start_iter(
+        &self,
+        m_raws: impl Iterator<Item = MOverflowRaw>,
+    ) -> impl Iterator<Item = MOverflowRaw> {
+        let neg_offset = self
+            .num_files_so_far
+            .load(Ordering::Acquire)
+            .checked_mul(self.num_elements_per_file)
+            .expect("Error trying to get idx of file start relative to VHFIter.");
+        m_raws.map(move |m_raw| m_raw.offset_neg(neg_offset))
+    }
+
+    /// Takes the absolute index (index relative to VHFIter start) and pushes as is onto
+    /// self.m_overflow_to_write.
+    // Need to be careful as to when m_idxs crosses file boundaries.
+    // Store absolute index on self.m_overflow_to_write, write to file with offset handled.
+    fn push_onto_m_overflow_to_write(
+        &mut self,
+        mut m_idxs: impl Iterator<Item = MOverflowRaw>,
+    ) -> Result<()> {
+        // Acquire lock only when Iterator has anything
+        if let Some(first) = m_idxs.next() {
+            if let Ok(mut heap) = self.m_overflow_to_write.lock() {
+                heap.push_back(first);
+                m_idxs.for_each(|e| heap.push_back(e));
+            } else {
+                log::warn!("Failed to acquire lock to push onto heap. This should not happen!");
+                return Err(Error::InternalInconsistency);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Tries to read the length of m_overflow_to_write. If the current length is in excess of the
+    /// intended capacity X, returns true.
+    /// Returns false if lock cannot be acquired.
+    fn should_deplete_m_overflow_to_write(&self) -> bool {
+        if let Ok(m_idxs) = self.m_overflow_to_write.lock() {
+            m_idxs.len() > FILE_LAZY_LEN.min(self.num_elements_per_file) / 2
+        } else {
+            false
+        }
+    }
+
+    /// Determines if the final word in file's m_overflow_idx block has been written.
+    fn file_m_overflow_has_capacity(&self) -> bool {
+        self.m_overflow_written.load(Ordering::Acquire) < self.m_overflow_total
+    }
+
+    /// Gets the position of where the next byte in m_overflow_idx should be for writing to.
+    /// This is UB when header has not been written.
+    fn m_overflow_block_pos(&self) -> u64 {
+        let hl: usize = unsafe { self.header_len.unwrap_unchecked() }.into();
+        hl as u64 + self.m_overflow_written.load(Ordering::Acquire) as u64 * 8
+    }
+
+    /// Call this to remove from the heap and commit to file when either:
+    /// (1): There is too many elements on the heap, and should start being written to file;
+    /// (2): File is about to be closed.
+    /// Drains from self.m_overflow_to_write up to self.num_elements_written.
+    fn deplete_from_m_overflow_to_write(&mut self) -> Result<()> {
+        // 1. Current at the end of the file.
+        // 2. Jump to position within m_idx block to write m_idx with `idx <
+        //    self.num_elements_written`, where m_idx is offset to file_start.
+        //    a. Do not write past end of m_idx; continue to drain from self.m_overflow_to_write
+        //    b. Update self.m_offset.
+        // 3. Restore position to end of file.
+
+        // Get elements that have to be drained out of self.m_overflow_to_write
+        let mut m_idxs: Vec<_> = {
+            if let Ok(mut ms) = self.m_overflow_to_write.lock() {
+                let num_elem_written: usize = self.num_elements_written.load(Ordering::Acquire);
+                let deque_idx = match ms.binary_search_by(|v| v.0.cmp(&num_elem_written)) {
+                    Ok(i) => i.saturating_add(1),
+                    Err(i) => i,
+                };
+                ms.drain(0..deque_idx).collect()
+            } else {
+                log::error!("Could not obtain m_overflow_to_write.");
+                return Err(Error::InternalInconsistency);
+            }
+        };
+
+        if self.file_m_overflow_has_capacity() {
+            // Write only if there is remaining capacity.
+
+            use byteorder::{NativeEndian, WriteBytesExt};
+            use std::io::{Seek, SeekFrom, Write};
+            if let Some(file) = self.current_file_handle.lock().unwrap().as_mut() {
+                file.flush().map_err(Error::Io)?;
+                file.seek(SeekFrom::Start(self.m_overflow_block_pos()))
+                    .map_err(Error::Io)?;
+
+                // Write + drain from m_idxs
+                let mut m_cumulative = 0i64;
+                let num_to_drain = m_idxs.len().min(
+                    self.m_overflow_total
+                        .saturating_sub(self.m_overflow_written.load(Ordering::Acquire)),
+                ); // Drain only as many as writeable.
+                self.align_to_file_start_iter(m_idxs.drain(0..num_to_drain))
+                    .try_for_each(|m_idx| {
+                        m_cumulative += (m_idx.1) as i64;
+                        m_idx.try_into().and_then(|m_write: MOverflowWrite| {
+                            file.write_i64::<NativeEndian>(m_write).map_err(Error::Io)
+                        })
+                    })?;
+                self.m_overflow_written
+                    .fetch_add(num_to_drain, Ordering::AcqRel);
+                let m_cumulative = m_idxs
+                    .into_iter() // Drain the rest
+                    .fold(m_cumulative, |acc, m_idx| acc + (m_idx.1) as i64);
+                self.m_offset += m_cumulative; // Update m_offset finally
+
+                file.flush().map_err(Error::Io)?; // Seek back
+                file.seek(SeekFrom::End(0)).map_err(Error::Io)?;
+            } else {
+                log::error!("Could not obtain current_file_handle.");
+                return Err(Error::InternalInconsistency);
+            }
+        } else {
+            // File has no capacity, we just update self.m_offset.
+            self.m_offset += m_idxs
+                .into_iter() // Drain the rest
+                .fold(0i64, |acc, m_idx| acc + (m_idx.1) as i64);
+        }
+
+        Ok(())
     }
 
     fn close_file(&mut self) -> Result<()> {
+        self.deplete_from_m_overflow_to_write()?;
         if let Some(file) = self.current_file_handle.lock().unwrap().as_mut() {
             use std::io::Write;
             file.flush().map_err(Error::Io)?;
         }
         self.num_elements_written.fetch_min(0, Ordering::AcqRel);
+        self.header_len = None;
         *self.current_file_handle.lock().unwrap() = None;
         Ok(())
     }

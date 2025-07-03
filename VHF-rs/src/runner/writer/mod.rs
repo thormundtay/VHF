@@ -82,7 +82,6 @@ impl WriteBlock {
     }
 
     /// Gets (idx, overflow-sign) of WriteBlock.
-    #[allow(dead_code)]
     pub(super) fn overflow(self) -> impl Iterator<Item = MOverflowRaw> {
         if self.m_overflow_idx.is_none() {
             Vec::new().into_iter().zip(Vec::new())
