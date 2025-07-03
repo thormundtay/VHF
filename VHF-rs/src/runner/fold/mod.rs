@@ -14,6 +14,19 @@ use repr::Representation;
 use serde::Serialize;
 use std::{cmp::Ordering, hint::unreachable_unchecked, num::NonZeroUsize, ops::Deref, sync::Arc};
 
+/// Bounding [MOverflowWrite] limits.
+const M_OVERFLOW_IDX_MAX: usize = usize::MAX >> 1;
+/// [super::fold] often will record where in the stream does a `m_overflow` event occurs, i.e.:
+/// when the [IQMTriplet] has the `m` value have a over(under)flow occurence.
+/// See TryFrom implementation.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) struct MOverflowRaw(pub usize, pub i8);
+/// Compacted representation of [MOverflowRaw] into 8 bytes for file-writing reasons.  
+/// See: [super::writer::V2BinWriter].
+type MOverflowWrite = i64;
+
+/// This fully describes and contains all relevant mechanisms for taking the iterator output of
+/// [super::VHFIter] for "in-flight processing."
 #[derive(Clone)]
 pub struct StreamFold {
     /// This the function that has to be applied to every chunked window from [super::VHF].next.
@@ -146,7 +159,7 @@ impl StreamFold {
             fn idx_and_sign_for_filter_map(
                 (element_idx, (a, b)): (usize, (&RawVHFWord, &RawVHFWord)),
                 vhf_iter_idx: usize,
-            ) -> Option<(usize, i8)> {
+            ) -> Option<MOverflowRaw> {
                 let IQMTriplet(_, _, a) = a.into();
                 let IQMTriplet(_, _, b) = b.into();
                 if a.abs_diff(b) >= M_OVERFLOW {
@@ -157,9 +170,9 @@ impl StreamFold {
 
                     match b.cmp(&a) {
                         // The 2nd element of the window found to be less => overflow to negative
-                        Ordering::Less => Some((element_idx + offset, 1)),
+                        Ordering::Less => Some(MOverflowRaw(element_idx + offset, 1)),
                         // The 2nd element of the window found to be more => underflow to positive
-                        Ordering::Greater => Some((element_idx + offset, -1)),
+                        Ordering::Greater => Some(MOverflowRaw(element_idx + offset, -1)),
                         // Safety: M_OVERFLOW check above.
                         Ordering::Equal => unsafe { unreachable_unchecked() },
                     }
@@ -252,6 +265,61 @@ impl Serialize for StreamFold {
     }
 }
 
+impl TryFrom<&MOverflowRaw> for MOverflowWrite {
+    type Error = Error;
+
+    /// Converts [MOverflowRaw] into a standardized representation of 64-bits. The most significant
+    /// bit (MSB) denotes the sign change, where 0 denotes +1 and 1 denotes -1. After zeroing the MSB, interpreting as index.
+    ///
+    /// # Errors
+    /// When the index of [MOverflowRaw.0] is too large.
+    fn try_from(value: &MOverflowRaw) -> Result<MOverflowWrite> {
+        if value.0 > M_OVERFLOW_IDX_MAX {
+            return Err(Error::ExcessData);
+        }
+        match value.1 {
+            1 => {
+                let idx: u64 = value.0.try_into().unwrap(); // Safety: M_OVERFLOW_IDX_MAX
+                let idx = idx as i64;
+                debug_assert!(idx >> 63 == 0);
+                Ok(idx)
+            }
+            -1 => {
+                let idx: u64 = value.0.try_into().unwrap(); // Safety: M_OVERFLOW_IDX_MAX
+                let idx = idx as i64 + (1 << 63);
+                debug_assert!(idx >> 63 == 1);
+                Ok(idx)
+            }
+            #[cfg(test)]
+            _ => panic!("Unrecognised overflow-raw sign"),
+            #[cfg(not(test))]
+            _ => unsafe { unreachable_unchecked() },
+        }
+    }
+}
+
+impl TryFrom<&MOverflowWrite> for MOverflowRaw {
+    type Error = Error;
+
+    fn try_from(value: &MOverflowWrite) -> Result<MOverflowRaw> {
+        let sign = *value >> 63;
+        let sign = if sign == 0 {
+            Ok(1)
+        } else if sign == 1 {
+            Ok(-1)
+        } else {
+            return Err(Error::InternalInconsistency);
+        }?;
+
+        Ok(MOverflowRaw(
+            (*value & ((u64::MAX >> 1) as i64))
+                .try_into()
+                .map_err(|_| Error::ExcessData)?,
+            sign as i8,
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -263,5 +331,14 @@ mod tests {
         assert!(first == first);
         assert!(second == second);
         assert!(first != second);
+    }
+
+    #[test]
+    fn packing_m_overflow() {
+        let x = MOverflowRaw(2, 1);
+        let y: MOverflowWrite = (&x).try_into().unwrap();
+        let z: MOverflowRaw = (&y).try_into().unwrap();
+
+        assert_eq!(x, z);
     }
 }

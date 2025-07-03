@@ -34,3 +34,19 @@ structure.
    continuous files can have their first element be associated to the correct
    m_overflow element.
 7. The header is then 0-flushed up to the next word boundary, similar to v1.
+8. The next `m_overflow_total` words are indices which `m_overflow` has
+   occured.
+   a. If the most-significant-bit (in native-endian) is 0, a +1 `m_overflow`
+      has occured. Zeroing this most-significant-bit gives the index which the
+      overflow has occurred on.
+   b. If the most-significant-bit (in native-endian) is 1, a -1 `m_overflow`
+      has occured. Zeroing this most-significant-bit gives the index which the
+      overflow has occurred on.
+   c. Example: An index of `3` with a `m_overflow` of +1 indicates that the
+      phase located at index 3 has an m_offset that is +1 compared to the phase
+      located at index 3-1.  
+      Reference test: `runner::process::test_vhf_step_fold::stepped_overlapping_identity_b`.
+   d. There SHALL not be any indices within the "`m_overflow` block" that is
+      not present in the file.
+9. If the final word in the "`m_overflow` block" is non-zero, the parser
+   shall determine the remaining of the sign changes.

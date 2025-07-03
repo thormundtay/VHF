@@ -11,6 +11,7 @@ pub use v1_writer::V1Writer;
 pub use v2_bin_writer::V2BinWriter;
 
 use super::super::types::RawVHFWord;
+use super::fold::MOverflowRaw;
 use crate::Result;
 
 /// In the event that the [VHFWriter] receives less than this amount of data, no file will be
@@ -68,9 +69,9 @@ impl WriteBlock {
     /// relative to the start of write-block data, as from an iterator.
     pub(super) fn with_overflow_from_iter(
         &mut self,
-        index_signs: impl Iterator<Item = (usize, i8)>,
+        index_signs: impl Iterator<Item = MOverflowRaw>,
     ) {
-        index_signs.into_iter().for_each(|(idx, val)| {
+        index_signs.into_iter().for_each(|MOverflowRaw(idx, val)| {
             self.m_overflow_idx
                 .get_or_insert(Vec::with_capacity(512))
                 .push(idx);
