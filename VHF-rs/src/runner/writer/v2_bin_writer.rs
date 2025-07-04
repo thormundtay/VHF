@@ -122,7 +122,7 @@ impl<'a> V2BinWriter<'a> {
     /// enough information about the runtime, the `main()` function should instead be responsible
     /// for determining the time by which the first data point is being written to file. This means
     /// that data points being dropped in processing should be accounted for.
-    fn new(config: V2BinArg<'a>, start_time: jiff::Zoned) -> Self {
+    pub fn new(config: V2BinArg<'a>, start_time: jiff::Zoned) -> Self {
         debug_assert_ne!(*config.verbosity & 0b100, 0);
 
         // Constant is currently hard-baked with reference to Archive/20250208, instead of
@@ -590,7 +590,7 @@ impl Debug for V2BinWriter<'_> {
 }
 
 #[derive(Debug, Clone)]
-pub(in super::super) struct V2BinArg<'a> {
+pub struct V2BinArg<'a> {
     pub board_config: BoardConfig<'a>,
     pub num_samples: &'a usize,
     pub num_files: &'a usize,
