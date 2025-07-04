@@ -170,7 +170,7 @@ impl<'a> V2BinWriter<'a> {
             .start_time
             .checked_add(
                 self.board_config
-                    .time_between_VHF_start_and_first_element()?,
+                    .time_between_vhf_start_and_first_element()?,
             ) // First element written to file
             .map_err(Error::Jiff)?
             .checked_add(
@@ -236,7 +236,7 @@ impl<'a> V2BinWriter<'a> {
             .start_time
             .checked_add(
                 self.board_config
-                    .time_between_VHF_start_and_first_element()?,
+                    .time_between_vhf_start_and_first_element()?,
             ) // First element written to file
             .map_err(Error::Jiff)?
             .checked_add(
@@ -325,6 +325,7 @@ impl<'a> V2BinWriter<'a> {
     /// # Returns
     /// Ok: number of elements with respect to VHFIter start (and processed) written.
     /// Err: usize overflow occured.
+    #[allow(dead_code)]
     fn total_elements_written(&self) -> Result<usize> {
         self.num_files_so_far
             .load(Ordering::Acquire)

@@ -250,7 +250,7 @@ fn creates_correct_multithreaded_files() {
 
     match body {
         Ok(_) => log::info!("Run completed"),
-        Err(e) => log::error!("Main loop occurred with error = {:?}", e),
+        Err(e) => log::error!("Main loop occurred with error = {e:?}"),
     };
 
     // Check that this is a correct number of files.

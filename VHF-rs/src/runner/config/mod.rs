@@ -865,7 +865,7 @@ impl<'a> BoardConfig<'a> {
                 .unwrap()
     }
 
-    pub fn time_between_VHF_start_and_first_element(&self) -> Result<jiff::Span> {
+    pub fn time_between_vhf_start_and_first_element(&self) -> Result<jiff::Span> {
         let num_drop = self.stream_fold.words_dropped_before_first_write()?;
         // let ns: f64 = (num_drop * 1_000_000_000) as f64 / self.sampling_frequency();
         let ns: f64 = {

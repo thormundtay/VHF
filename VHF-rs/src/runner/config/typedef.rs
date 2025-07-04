@@ -67,6 +67,7 @@ impl SamplingSpeed {
 pub enum Encode {
     Binary,
     Hexadecimal,
+    #[allow(clippy::upper_case_acronyms)]
     ASCII,
 }
 
