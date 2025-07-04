@@ -68,11 +68,51 @@ pub struct V2BinWriter<'a> {
 
 impl<'a> VHFWriter for V2BinWriter<'a> {
     fn write_data(&mut self, words: super::WriteBlock) -> Result<()> {
-        todo!()
+        // Clone needed because [WriteBlock::overflow] is consuming
+        let data: &mut Vec<_> = &mut words.data.clone();
+
+        self.push_onto_m_overflow_to_write(words.overflow())?;
+
+        'data_has_element: loop {
+            if self.num_files_so_far.load(Ordering::Acquire) > self.num_files {
+                log::warn!("VHFIter has collected too many pages.");
+                return Err(Error::ExcessData);
+            }
+
+            // If no elements have yet been written, we fill the internal buffer instead.
+            if self.num_elements_written.load(Ordering::Acquire) == 0 {
+                self.write_data_maybe_buffer(data)
+            } else {
+                self.write_data_passed_buffer(data)
+            }?;
+
+            if self.should_deplete_m_overflow_to_write() {
+                self.deplete_from_m_overflow_to_write()?;
+            }
+
+            if !data.is_empty() {
+                log::trace!(
+                    "One round of drain occurred with elements left = {}",
+                    data.len()
+                )
+            }
+
+            // Check if to continue or break loop
+            if self.num_elements_written.load(Ordering::Acquire) >= self.num_elements_per_file {
+                self.close_file()?;
+            }
+
+            if data.is_empty() {
+                break 'data_has_element;
+            }
+            log::trace!("write_data loop continue");
+        }
+
+        Ok(())
     }
 
     fn close(&mut self) -> Result<()> {
-        todo!()
+        self.close_file()
     }
 }
 
@@ -121,7 +161,67 @@ impl<'a> V2BinWriter<'a> {
     /// Tries to open a file in the specified location with the required name. Fails if file
     /// already exists.
     fn open_file(&mut self) -> Result<BufWriter<File>> {
-        todo!()
+        if self.current_file_handle.lock().unwrap().is_some() {
+            log::error!("A file is being requested to open when it has already been opened.");
+            return Err(Error::InternalInconsistency);
+        }
+
+        let file_time = self
+            .start_time
+            .checked_add(
+                self.board_config
+                    .time_between_VHF_start_and_first_element()?,
+            ) // First element written to file
+            .map_err(Error::Jiff)?
+            .checked_add(
+                self.num_files_so_far.load(Ordering::Acquire) as i64 * *self.time_between_files,
+            ) // First element of subsequent file
+            .map_err(Error::Jiff)?;
+        let path = {
+            let mut tmp = self.file_dir.clone();
+            // Since this function opens the file, we can take this as the offset.
+            tmp.push(match self.filename_details.len() {
+                0 => file_time.strftime("%FT%T%.f%z").to_string() + ".vhf.bin",
+                _ => format!(
+                    "{}_{}.vhf.bin",
+                    file_time.strftime("%FT%T%.f%z"),
+                    self.filename_details
+                ),
+            });
+            tmp
+        };
+
+        #[cfg(not(test))]
+        {
+            let now = Zoned::now();
+            if file_time.duration_since(&now) > SignedDuration::new(10, 0)
+                || now.duration_since(&file_time) > SignedDuration::new(10, 0)
+            {
+                log::error!("Created file time differs significantly from current time!");
+                return Err(Error::InternalInconsistency);
+            }
+        }
+
+        if std::fs::exists(path.clone()).map_err(Error::Io)? {
+            log::error!("Created file name found to already exist in location, path = {path:?}");
+            log::error!(
+                "self.start_time = {}, self.time_between_files = {}, num_files_so_far = {}",
+                self.start_time,
+                self.time_between_files,
+                self.num_files_so_far.load(Ordering::Acquire)
+            );
+            return Err(Error::InternalInconsistency);
+        }
+
+        log::info!("Creating file with name {:?}", &path);
+        let f = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(path)
+            .map_err(Error::Io)?;
+        self.num_files_so_far.fetch_add(1, Ordering::AcqRel);
+        Ok(BufWriter::new(f))
     }
 
     fn write_header(&mut self) -> Result<()> {
@@ -366,6 +466,83 @@ impl<'a> V2BinWriter<'a> {
         }
 
         Ok(())
+    }
+
+    /// In the case where the buffer has not yet been filled.
+    fn write_data_maybe_buffer(&mut self, data: &mut Vec<RawVHFWord>) -> Result<()> {
+        let buf_len = self.elements_to_write.lock().unwrap().len();
+        let words_len = data.len();
+
+        if buf_len + words_len < FILE_LAZY_LEN.min(self.num_elements_per_file) {
+            // Fill into temporary buffer;
+            self.elements_to_write.lock().unwrap().append(data);
+            return Ok(());
+        }
+
+        // Temporary buffer [self.elements_to_write] is full.
+        // We now open the file and write the header.
+        let file_handle = self.open_file()?;
+        *self.current_file_handle.lock().unwrap() = Some(file_handle);
+        self.write_header()?;
+
+        // Write the data
+        use byteorder::{NativeEndian, WriteBytesExt};
+        if let Some(file) = self.current_file_handle.lock().unwrap().as_mut() {
+            if !self.elements_to_write.lock().unwrap().is_empty() {
+                self.elements_to_write
+                    .lock()
+                    .unwrap()
+                    .drain(0..)
+                    .try_for_each(|word| file.write_u64::<NativeEndian>(word))
+                    .map_err(Error::Io)?;
+                self.num_elements_written
+                    .fetch_add(buf_len, Ordering::Release);
+            };
+            // Note! This can be be zero if the internal buffer was just nice the size
+            // of the file.
+            data.drain(
+                ..self
+                    .num_elements_per_file
+                    .saturating_sub(self.num_elements_written.load(Ordering::Acquire))
+                    .min(data.len()),
+            )
+            .try_for_each(|word| file.write_u64::<NativeEndian>(word))
+            .map_err(Error::Io)?;
+
+            self.num_elements_written
+                .fetch_add(words_len, Ordering::Release);
+        } else {
+            // File should have been created.
+            log::error!("File should have been created!");
+            return Err(Error::InternalInconsistency);
+        };
+        Ok(())
+    }
+
+    /// The amount of written data no longer necessitates writing into the internal buffer.
+    fn write_data_passed_buffer(&mut self, data: &mut Vec<RawVHFWord>) -> Result<()> {
+        // Elements have been written, we instead just pass straight to the file.
+        let words_len = data.len();
+
+        use byteorder::{LittleEndian, WriteBytesExt};
+        if let Some(file) = self.current_file_handle.lock().unwrap().as_mut() {
+            data.drain(
+                0..self
+                    .num_elements_per_file
+                    .saturating_sub(self.num_elements_written.load(Ordering::Acquire))
+                    .min(data.len()),
+            )
+            .try_for_each(move |word| file.write_u64::<LittleEndian>(word))
+            .map_err(Error::Io)?;
+
+            self.num_elements_written
+                .fetch_add(words_len, Ordering::Release);
+            Ok(())
+        } else {
+            // File should have been created.
+            log::error!("File should have been created!");
+            Err(Error::InternalInconsistency)
+        }
     }
 
     fn close_file(&mut self) -> Result<()> {

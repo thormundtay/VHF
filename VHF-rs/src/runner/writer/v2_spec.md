@@ -2,11 +2,11 @@
 
 ## Scope
 
-* Specify the *VHF* `.vhf-bin` (V2) file structure.
+* Specify the *VHF* `.vhf.bin` (V2) file structure.
 
 ## Non-goals
 
-* This document does not aim to define the *VHF* `.vhf-hex` (V2) file
+* This document does not aim to define the *VHF* `.vhf.hex` (V2) file
 structure.
 
 ## Definitions
