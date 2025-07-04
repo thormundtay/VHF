@@ -83,9 +83,15 @@ impl<'a> V2BinWriter<'a> {
     /// for determining the time by which the first data point is being written to file. This means
     /// that data points being dropped in processing should be accounted for.
     fn new(config: V2BinArg<'a>, start_time: jiff::Zoned) -> Self {
+        debug_assert_ne!(*config.verbosity & 0b100, 0);
+
         // Constant is currently hard-baked with reference to Archive/20250208, instead of
         // being from config specification.
-        let m_overflow_total = (*config.num_samples as f64 * 0.00005).round() as usize;
+        let m_overflow_total = if *config.verbosity & 0b1000 != 0 {
+            (*config.num_samples as f64 * 0.00005).round() as usize
+        } else {
+            0
+        };
 
         Self {
             start_time: Box::new(start_time),
@@ -198,9 +204,13 @@ impl<'a> V2BinWriter<'a> {
             });
 
             // Write m_overflow_idx block.
-            buf_file
-                .write_all(&vec![0u8; self.m_overflow_total * 8])
-                .map_err(Error::Io)?;
+            if self.verbosity & 0b1000 != 0 {
+                buf_file
+                    .write_all(&vec![0u8; self.m_overflow_total * 8])
+                    .map_err(Error::Io)?;
+            } else {
+                debug_assert_eq!(self.m_overflow_total, 0);
+            }
         }
 
         Ok(())
