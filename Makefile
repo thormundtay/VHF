@@ -1,4 +1,4 @@
-.PHONY: init test
+.PHONY: init test python_test
 init:
 	g++ VHF/board_init/set_device_mode.cpp -O3 -o VHF/board_init/set_device_mode
 	sudo chown root:root VHF/board_init/set_device_mode
@@ -14,3 +14,7 @@ test:
 	cargo build --bin stream
 	cargo build --bin clear-fifo --features clear-fifo
 	cargo test -q
+
+python_test:
+	# There are out of tree tests we are ignoring. Then we ignore long-lived tests.
+	pytest --ignore-glob=Archive --ignore=test/test_parseBinaryVHFTrace.py --ignore=test/test_IdentifiedProcess.py --ignore=test/test_VHFPool.py
