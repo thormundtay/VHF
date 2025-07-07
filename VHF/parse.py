@@ -628,6 +628,7 @@ class VHFparser:
         # sparse representation of necessary to not multiply reparse all of
         # m-array again to determine how much m-offset is necessary for
         # arbitrary window.
+        self._pre_trace_parsing_called: bool = False
 
         # To avoid AttributeErrors, we initialise them here
         self._data = None
@@ -692,7 +693,7 @@ class VHFparser:
         # derived properties
 
         # post-init/pre-trace: check for manifold rollovers
-        self._pre_trace_parsing()
+        self.resolve_m_overflow_idxs()
 
         # post-init: Populate body "data" to within (start_time, end_time)
         # Available data in file in contrast to header['s']'s expected
@@ -700,7 +701,7 @@ class VHFparser:
 
         # init: get (I, Q, M)
         # these are a function of the specified plot window
-        self.read_words()
+        self._read_words()
 
     def __create_logger(self):
         self.logger = logging.getLogger("vhfparser")
@@ -733,7 +734,7 @@ class VHFparser:
         self._num_head_bytes += header_count  # this is the claimed headersize
         self.headerraw: bytes = buffer.read(header_count - self._bytes_per_word)  # read continues stream position
         self.headerraw = self.headerraw.rstrip(b"\x00")
-        self.parse_header(self.headerraw)
+        self._parse_header(self.headerraw)
 
     def _init_timing_info(self):
         """Populate file timing information.
@@ -749,7 +750,7 @@ class VHFparser:
             self._num_trc_bytes
         )
 
-    def parse_header(self, header_raw: bytes):
+    def _parse_header(self, header_raw: bytes):
         """Convert binary file header into a header property."""
         if header_raw is None or header_raw == b'':
             self.logger.error("parse_header invoked with empty argument: header_raw")
@@ -866,10 +867,13 @@ class VHFparser:
         if result.sparse_m_delta_idx.size > 0:
             self._m_mgr = result
 
-    def _pre_trace_parsing(self):
-        """Procedures that have to be done prior to parsing a trace window."""
-        # 1. Checking for manifold rollovers.
-        self._obtain_m_deltas()
+    def resolve_m_overflow_idxs(self):
+        """Update the class to be aware of all m-overflow indices."""
+        if not self._pre_trace_parsing_called:
+            # 1. Checking for manifold rollovers.
+            self._obtain_m_deltas()
+
+            self._pre_trace_parsing_called = True
         self.logger.debug("Pre-trace parsers all completed.")
 
     # Updating all properties that follow from _data and (I, Q, M)
@@ -919,8 +923,12 @@ class VHFparser:
                               self._data.shape)
         return self._data
 
-    def read_words(self) -> None:
-        """Converts binary words found within VHF Trace data into arrays."""
+    def _read_words(self) -> None:
+        """Converts binary words found within VHF Trace data into arrays.
+
+        This is primarily for fetching from disk and populating into
+        self._i_arr, ....
+        """
         self.logger.debug("read_words called.")
         self._read_words_numpy(self.data)
 
@@ -944,7 +952,7 @@ class VHFparser:
 
         # pre-trace is needed if we only done headers
         if not self._m_mgr_obtained:
-            self._pre_trace_parsing()
+            self.resolve_m_overflow_idxs()
         # we now perform m-overflow fix only if necessary
         if not self._m_mgr_obtained:
             raise RuntimeError(
@@ -964,7 +972,7 @@ class VHFparser:
     @property
     def i_arr(self) -> NDArray[BinaryVHFTrace.i_arr_type]:
         if self._i_arr is None:
-            self.read_words()
+            self._read_words()
         if self._i_arr is None:
             raise RuntimeError  # Suppress returnTypeError
         return self._i_arr
@@ -972,7 +980,7 @@ class VHFparser:
     @property
     def q_arr(self) -> NDArray[BinaryVHFTrace.q_arr_type]:
         if self._q_arr is None:
-            self.read_words()
+            self._read_words()
         if self._q_arr is None:
             raise RuntimeError  # Suppress returnTypeError
         return self._q_arr
@@ -980,7 +988,7 @@ class VHFparser:
     @property
     def m_arr(self) -> NDArray[BinaryVHFTrace.m_arr_type]:
         if self._m_arr is None:
-            self.read_words()
+            self._read_words()
         if self._m_arr is None:
             raise RuntimeError  # Suppress returnTypeError
         return self._m_arr

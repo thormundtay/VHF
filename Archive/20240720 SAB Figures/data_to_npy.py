@@ -91,7 +91,7 @@ def get_parsed(managed_list: DictProxy, name: Path):
     if name not in managed_list.keys():
         logger.info("Not in memo for path = %s", name)
         result = VHFparser(name, headers_only=True)
-        result._pre_trace_parsing()
+        result.resolve_m_overflow_idxs()
         managed_list.update({name: result})
     else:
         logger.info("In memo for path = %s", name)

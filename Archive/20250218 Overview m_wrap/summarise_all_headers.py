@@ -48,7 +48,7 @@ def fetch_out_parser(fname: Path) -> VHFparser:
     result = VHFparser(
         fname, headers_only=True,  # plot_duration=timedelta(seconds=0.1)
     )
-    result._pre_trace_parsing()
+    result.resolve_m_overflow_idxs()
     return result
 
 
