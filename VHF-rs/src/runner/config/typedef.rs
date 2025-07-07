@@ -1,8 +1,9 @@
 use crate::{Error, Result};
+use serde::Serialize;
 use std::str::FromStr;
 
 /// VHF Board collecting data in 10MHz or 20MHz mode.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Serialize)]
 pub enum SamplingSpeed {
     Low,
     High,
@@ -66,6 +67,7 @@ impl SamplingSpeed {
 pub enum Encode {
     Binary,
     Hexadecimal,
+    #[allow(clippy::upper_case_acronyms)]
     ASCII,
 }
 

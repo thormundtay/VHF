@@ -86,15 +86,17 @@ impl<'a> VHF<'a> {
 
         assert_eq!(config.stream_fold_parameters(), params);
 
-        let time_between_pages: Span = pages::time_between_pages_in_ns(&config.speed)?;
-        log::debug!("Time between pages = {}", time_between_pages);
+        let time_between_pages: Span = pages::time_between_pages_in_ns(config.speed)?;
+        log::debug!("Time between pages = {time_between_pages}");
 
         let wake_mmap = Arc::new(RwLock::new(Instant::now()));
 
         // This will have to be changed as filtering etc means data points are not being passed to
         // file writer.
-        let total_elements_to_read =
-            unsafe { NonZeroUsize::new(config.total_elements_to_read()).unwrap_unchecked() };
+        let total_elements_to_read: NonZeroUsize =
+            unsafe { NonZeroUsize::new(config.total_elements_to_read()).unwrap_unchecked() }
+                .checked_mul(params.effective_decimation_factor())
+                .ok_or(Error::ExcessData)?;
         let total_pages_to_read: NonZeroUsize = unsafe {
             NonZeroUsize::new(usize::from(total_elements_to_read).div_ceil(MMAP_PAGE_LEN))
                 .unwrap_unchecked()
@@ -127,10 +129,7 @@ impl<'a> VHF<'a> {
                 .try_into()
                 .map_err(Error::Jiff)?;
             debug_assert!(number_of_pages_between_stream_resume < DEQUE_CAP as i64 / 2);
-            log::debug!(
-                "MMapReader time_between_stream_resume = {:?}",
-                time_between_stream_resume
-            );
+            log::debug!("MMapReader time_between_stream_resume = {time_between_stream_resume:?}");
             let next_collect_time = wake_mmap.clone();
             let streamfold = params.clone();
             thread::Builder::new()
@@ -204,7 +203,8 @@ impl<'a> VHF<'a> {
                     acc += x as u64;
                     acc
                 });
-            log::debug!("Prepopulating mmap summed to: {}", tmp);
+            // Use of variable to not optimize out.
+            log::debug!("Prepopulating mmap summed to: {tmp}");
         }
 
         Ok(result)
@@ -475,7 +475,7 @@ impl std::iter::Iterator for VHFIter<'_> {
                     let now = Instant::now();
                     if now < target_wakeup {
                         let sleep_for = target_wakeup.saturating_duration_since(now);
-                        log::trace!("Sleeping within 'get_wake for {:?}", sleep_for);
+                        log::trace!("Sleeping within 'get_wake for {sleep_for:?}");
                         thread::sleep(sleep_for);
 
                         // Wait 1 page of time for condvar

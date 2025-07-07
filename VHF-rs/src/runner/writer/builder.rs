@@ -6,17 +6,19 @@ use super::super::{Config, config::typedef::Encode};
 use super::VHFWriter;
 use super::{V1StdOut, v1_stdout::V1StdOutArg};
 use super::{V1Writer, v1_writer::V1Arg};
+use super::{V2BinWriter, v2_bin_writer::V2BinArg};
 use crate::{Error, Result};
 use jiff::Zoned;
 
 /// Please see [WriterBuilder].
 #[derive(Debug, Clone)]
-pub enum Writers<'a> {
+pub(in super::super) enum Writers<'a> {
     /// This uses the same structure as V1Writer, but has the complications associated with issue
     /// #23. [Config] should not invoke Stdout writer to the best of its ability.
     V1Stdout(V1StdOutArg<'a>),
     /// V1Output, but to more than 1 file with file-size guarantees.
     V1(V1Arg<'a>),
+    V2Bin(V2BinArg<'a>),
 }
 
 /// Parameters and validation checking associated with getting the appropriate file writer
@@ -27,7 +29,7 @@ pub struct WriterBuilder<'a> {
     /// Example: [V1Writer::start_time]
     start_time: Option<Zoned>,
     /// The variant to be determined shall be the responsibility of [Config].
-    pub writer_type: Writers<'a>,
+    pub(in super::super) writer_type: Writers<'a>,
 }
 
 impl<'a> WriterBuilder<'a> {
@@ -47,7 +49,16 @@ impl<'a> WriterBuilder<'a> {
                 verbosity: 4..=15,
                 ..
             } => {
-                unimplemented!("V2Writer not yet implemented.")
+                let board_config = conf.build_board_config()?;
+                Ok(Writers::V2Bin(V2BinArg {
+                    board_config: conf.build_board_config().unwrap(),
+                    num_samples: &conf.num_samples,
+                    num_files: &conf.num_files,
+                    verbosity: &conf.verbosity,
+                    file_timespan: Box::new(board_config.file_timespan()),
+                    filename_details: conf.details(),
+                    save_dir: &conf.save_dir,
+                }))
             }
             Config {
                 num_files: 0..=1,
@@ -82,16 +93,19 @@ impl<'a> WriterBuilder<'a> {
                 verbosity: 0..=3,
                 encode: Encode::Binary,
                 ..
-            } => Ok(Writers::V1(V1Arg {
-                num_samples: &conf.num_samples,
-                num_files: &conf.num_files,
-                encode: &conf.encode,
-                verbosity: &conf.verbosity,
-                file_timespan: Box::new(conf.file_timespan()),
-                header_details: conf.details(),
-                filename_details: conf.filename(),
-                save_dir: &conf.save_dir,
-            })),
+            } => {
+                let board_config = conf.build_board_config()?;
+                Ok(Writers::V1(V1Arg {
+                    num_samples: &conf.num_samples,
+                    num_files: &conf.num_files,
+                    encode: &conf.encode,
+                    verbosity: &conf.verbosity,
+                    file_timespan: Box::new(board_config.file_timespan()),
+                    header_details: conf.details(),
+                    filename_details: conf.filename(),
+                    save_dir: &conf.save_dir,
+                }))
+            }
             Config {
                 num_files: 0..,
                 save_to_file: true,
@@ -158,11 +172,14 @@ impl<'a> WriterBuilder<'a> {
     /// Gets a FileWriter.
     /// # Panics
     /// If any required field has not yet been inserted.
-    pub fn build(self) -> Box<dyn VHFWriter> {
+    pub fn build(self) -> Box<dyn VHFWriter + 'a> {
         match self.writer_type {
-            Writers::V1(v1arg) => Box::new(V1Writer::new(v1arg, self.start_time.unwrap().clone())),
+            Writers::V2Bin(v2binarg) => {
+                Box::new(V2BinWriter::new(v2binarg, self.start_time.unwrap()))
+            }
+            Writers::V1(v1arg) => Box::new(V1Writer::new(v1arg, self.start_time.unwrap())),
             Writers::V1Stdout(v1stdoutarg) => {
-                Box::new(V1StdOut::new(v1stdoutarg, self.start_time.unwrap().clone()))
+                Box::new(V1StdOut::new(v1stdoutarg, self.start_time.unwrap()))
             }
         }
     }

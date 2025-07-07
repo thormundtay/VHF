@@ -24,6 +24,8 @@ dependencies = [
  "pariter",
  "prettytable-rs",
  "regex",
+ "serde",
+ "serde_json",
  "tempfile",
  "test-log",
 ]

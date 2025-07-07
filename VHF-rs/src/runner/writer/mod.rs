@@ -3,13 +3,15 @@ pub use builder::WriterBuilder;
 // mod netcdf_writer;
 mod v1_stdout;
 mod v1_writer;
-// mod v2_writer;
+mod v2_bin_writer;
 
 pub use v1_stdout::V1StdOut;
 use v1_writer::V1_MAGIC_HEADER;
 pub use v1_writer::V1Writer;
+pub use v2_bin_writer::V2BinWriter;
 
 use super::super::types::RawVHFWord;
+use super::fold::MOverflowRaw;
 use crate::Result;
 
 /// In the event that the [VHFWriter] receives less than this amount of data, no file will be
@@ -67,9 +69,9 @@ impl WriteBlock {
     /// relative to the start of write-block data, as from an iterator.
     pub(super) fn with_overflow_from_iter(
         &mut self,
-        index_signs: impl Iterator<Item = (usize, i8)>,
+        index_signs: impl Iterator<Item = MOverflowRaw>,
     ) {
-        index_signs.into_iter().for_each(|(idx, val)| {
+        index_signs.into_iter().for_each(|MOverflowRaw(idx, val)| {
             self.m_overflow_idx
                 .get_or_insert(Vec::with_capacity(512))
                 .push(idx);
@@ -80,17 +82,16 @@ impl WriteBlock {
     }
 
     /// Gets (idx, overflow-sign) of WriteBlock.
-    #[allow(dead_code)]
-    pub(super) fn overflow(self) -> impl Iterator<Item = (usize, i8)> {
+    pub(super) fn overflow(self) -> impl Iterator<Item = MOverflowRaw> {
         if self.m_overflow_idx.is_none() {
             Vec::new().into_iter().zip(Vec::new())
         } else {
             self.m_overflow_idx
-                // .clone()
                 .unwrap()
                 .into_iter()
                 .zip(self.m_overflow_value.unwrap())
         }
+        .map(MOverflowRaw::from)
     }
 }
 

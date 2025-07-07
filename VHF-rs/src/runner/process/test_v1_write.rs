@@ -152,10 +152,7 @@ fn creates_multiple_files() {
         .try_for_each(|write_block| writer.write_data(write_block))
         .expect("Writing to v1_writer failed");
 
-    assert_eq!(
-        std::fs::read_dir(config.save_dir).unwrap().count(),
-        num_file
-    );
+    assert_eq!(std::fs::read_dir(&tmp_dir).unwrap().count(), num_file);
     tmp_dir.close().expect("Could not close temp_dir.");
     push_arc_pages_thread.join().expect("Failed to join");
 }
@@ -253,14 +250,11 @@ fn creates_correct_multithreaded_files() {
 
     match body {
         Ok(_) => log::info!("Run completed"),
-        Err(e) => log::error!("Main loop occurred with error = {:?}", e),
+        Err(e) => log::error!("Main loop occurred with error = {e:?}"),
     };
 
     // Check that this is a correct number of files.
-    assert_eq!(
-        std::fs::read_dir(config.save_dir).unwrap().count(),
-        num_file
-    );
+    assert_eq!(std::fs::read_dir(&tmp_dir).unwrap().count(), num_file);
 
     tmp_dir.close().expect("Could not close temp_dir.");
     push_arc_pages_thread.join().expect("Failed to join");

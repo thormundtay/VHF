@@ -4,7 +4,7 @@
 //! ```
 //! behaves to expectation.
 
-use super::super::fold::{StreamFoldOp, StreamFold};
+use super::super::fold::{MOverflowRaw, StreamFold, StreamFoldOp};
 use super::consts::MMAP_PAGE_LEN;
 use super::test_vhf::{debug_vhf_new, push_arc_pages};
 use super::*;
@@ -183,7 +183,7 @@ fn stepped_nonoverlapping_identity_b() {
         .flat_map(|x| x.data.into_iter())
         .collect();
 
-    let expected: Vec<RawVHFWord> = signal_expected.map(|x| x.into()).collect();
+    let expected: Vec<RawVHFWord> = signal_expected.collect();
 
     assert_eq!(result.len(), expected.len());
     result.into_iter().zip(expected).for_each(|(r, e)| {
@@ -201,7 +201,7 @@ fn stepped_nonoverlapping_identity_b() {
 #[test]
 fn stepped_overlapping_identity_a() {
     let params = StreamFold::identity_default();
-    matches!(params.op, StreamFoldOp::Map);
+    matches!(params.op, StreamFoldOp::Map(None));
 
     let debug_vhf_total_len = 4 * params.step_by;
     let total_window_len = debug_vhf_total_len + params.step_by;
@@ -270,16 +270,16 @@ fn stepped_overlapping_identity_a() {
 #[test]
 fn stepped_overlapping_identity_b() {
     let params = StreamFold::identity_default();
-    matches!(params.op, StreamFoldOp::Map);
+    matches!(params.op, StreamFoldOp::Map(None));
 
-    let total_window_len = params.step_by;
+    let total_window_len = params.step_by * 5;
     let debug_vhf_conf = Config::default();
     let (debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
         &debug_vhf_conf,
         NonZeroUsize::new(total_window_len).unwrap(),
     );
     let total_elements = total_window_len * MMAP_PAGE_LEN;
-    log::info!("total_elements = {}", total_elements);
+    log::info!("total_elements = {total_elements}");
 
     // Define the signal we are testing for.
     let ampl = 5000f64;
@@ -322,38 +322,30 @@ fn stepped_overlapping_identity_b() {
     let result_overflow_idx: Vec<_> = results.into_iter().flat_map(|x| x.overflow()).collect();
 
     let expected_phase: Vec<RawVHFWord> = signal_expected.collect();
-    let expected_overflow_idx: Vec<(usize, i8)> = {
+    let expected_overflow_idx: Vec<MOverflowRaw> = {
         // + signs
         let plus = (1..)
             .map(|i| (TAU * i as f64 - phase_offset) / ang_freq)
             .take_while(|&i| i < total_elements as f64)
-            .map(|idx| (idx.ceil() as usize, 1));
+            .map(|idx| MOverflowRaw(idx.ceil() as usize, 1));
         // - signs
         let minus = (0..)
             .map(|i| (TAU * i as f64 + PI - phase_offset) / ang_freq)
             .take_while(|&i| i < total_elements as f64)
-            .map(|idx| (idx.ceil() as usize, -1));
-        let mut result: Vec<(usize, i8)> = plus.chain(minus).collect();
+            .map(|idx| MOverflowRaw(idx.ceil() as usize, -1));
+        let mut result: Vec<_> = plus.chain(minus).collect();
         result.sort_by(|a, b| a.0.cmp(&b.0));
         result
     };
 
     {
         log::info!("result_overflow_idx[0] = {:?}", result_overflow_idx.first());
-        let (i, sign) = result_overflow_idx.first().unwrap();
+        let MOverflowRaw(i, sign) = result_overflow_idx.first().unwrap();
         let show: Vec<IQMTriplet> = (i - 1..=i + 1).map(|i| result_phase[i].into()).collect();
-        log::info!(
-            "Elements around the first sign change ({}) are: {:?}",
-            sign,
-            show
-        );
-        let (i, sign) = result_overflow_idx.iter().skip(1).next().unwrap();
+        log::info!("Elements around the first sign change ({sign}) are: {show:?}",);
+        let MOverflowRaw(i, sign) = result_overflow_idx.get(1).unwrap();
         let show: Vec<IQMTriplet> = (i - 1..=i + 1).map(|i| result_phase[i].into()).collect();
-        log::info!(
-            "Elements around the second sign change ({}) are: {:?}",
-            sign,
-            show
-        );
+        log::info!("Elements around the second sign change ({sign}) are: {show:?}",);
     }
 
     assert_eq!(result_phase.len(), expected_phase.len());
