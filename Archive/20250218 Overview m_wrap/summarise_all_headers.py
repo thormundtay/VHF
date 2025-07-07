@@ -11,7 +11,7 @@ from typing import Iterable
 module_path = str(Path(__file__).parents[2])
 if module_path not in sys.path:
     sys.path.append(module_path)
-from VHF.parse import VHFparser
+from VHF.parse import VHF_v1_parser as VHFparser
 
 
 find_files_process = subprocess.check_output(["fd", "-tfile", "-E", r"'**/*{tmp,test}*'", "--extension", "bin", ".", "/mnt/nas-fibre-sensing"])

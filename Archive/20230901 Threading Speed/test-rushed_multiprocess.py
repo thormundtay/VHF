@@ -22,7 +22,7 @@ import tempfile
 from time import sleep
 import threading
 from typing import Union
-from VHF.parse import VHFparser
+from VHF.parse import VHF_v1_parser as VHFparser
 from VHF.runner import VHFRunner
 
 _PATH = Union[str, bytes, PathLike, Path]
@@ -51,7 +51,7 @@ def vhf_proc(comm: Connection, id: int, vhf_config_path: _PATH):
     Inputs
     ------
     comm: Connection
-        Pipe from parent process to recieve data from.
+        Pipe from parent process to receive data from.
     id: int
         Logging identifier.
     vhf_config_path: PathLike
@@ -76,7 +76,7 @@ def vhf_proc(comm: Connection, id: int, vhf_config_path: _PATH):
     # Signal Ready
     comm.send_bytes(b'0')
     while data := comm.recv():
-        logging.debug("[VHF %s] recieved %s", id, data)
+        logging.debug("[VHF %s] received %s", id, data)
         action, direction, sam_id, current = data
         direction = direction.decode()  # "Ascending/Descending text used for filename"
         sam_id = int(sam_id.decode())  # n-th sample iteration
@@ -173,7 +173,7 @@ def vhf_proc(comm: Connection, id: int, vhf_config_path: _PATH):
                         try:
                             os.unlink(fname)
                         except FileNotFoundError:
-                            None
+                            pass
                         print(f"[VHF {id}] {datetime.datetime.now().strftime('%H:%M:%S')} f.close()")
 
             case b'2':
@@ -182,7 +182,7 @@ def vhf_proc(comm: Connection, id: int, vhf_config_path: _PATH):
                 return
 
             case _:
-                print(f"[VHF {id}] Unrecognised message recieved!")
+                print(f"[VHF {id}] Unrecognised message received!")
                 comm.send_bytes(b'1')
                 return
 

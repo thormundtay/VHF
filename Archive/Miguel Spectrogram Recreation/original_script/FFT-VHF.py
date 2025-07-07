@@ -16,7 +16,7 @@ from obspy.signal.trigger import classic_sta_lta
 from obspy.signal.trigger import z_detect
 from obspy.signal.trigger import carl_sta_trig
 from obspy.signal.trigger import trigger_onset
-from VHF.parse import VHFparser
+from VHF.parse import VHF_v1_parser as VHFparser
 
 
 def helper(sampless, avg, sample_rate, skip):
