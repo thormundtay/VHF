@@ -1,0 +1,23 @@
+[package]
+name = "VHF-parse"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "vhf_parse"
+path = "lib.rs"
+
+[features]
+default = []
+
+[dependencies]
+jiff = { version = "0.2.13", features = ["alloc"] }
+log = { version = "0.4.22" }
+ndarray = { version = "0.16.1" }
+numpy = { version = "0.25.0" }
+pyo3 = { version = "0.25.1", features = ["jiff-02"] }
+
+[dev-dependencies]
+approx = { version = "0.5.1" }
+test-log = { version = "0.2.17", features = ["trace", "color"] }
+tempfile = { version = "3.19.1", features = ["default"] }

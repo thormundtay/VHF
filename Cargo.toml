@@ -1,5 +1,6 @@
 [workspace]
 members = [
     "VHF-rs",
+    "VHF-rs/src/parser",
 ]
 resolver = "2"

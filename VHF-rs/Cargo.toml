@@ -37,6 +37,7 @@ prettytable-rs = { version = "0.10.0", default-features = false, optional = true
 regex = { version = "1.11.1" }
 serde = { version = "1.0.219" }
 serde_json = { version = "1.0.140" }
+VHF-parse = { path = "src/parser" }
 
 [dev-dependencies]
 approx = { version = "0.5.1" }
