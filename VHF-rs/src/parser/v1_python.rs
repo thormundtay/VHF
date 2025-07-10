@@ -1,6 +1,8 @@
 //! This file uses the Python parsing through PyO3 for v1 file types. As such, it is dependent on
 //! it being in the correct environment.
 
+use super::{ParseError, ParseResult, RelTime, StartTime, VHFparse};
+use pyo3::Bound;
 use pyo3::prelude::Py;
 use pyo3::prelude::PyAny;
 use pyo3::prelude::PyAnyMethods;
@@ -40,5 +42,46 @@ impl VHFparser {
     pub fn new<'b>(file: &'b Path, headers_only: bool) -> PyResult<Self> {
         let parser = Python::with_gil(|py| parser(py, file, headers_only))?;
         Ok(Self { parser })
+    }
+}
+
+impl VHFparse for VHFparser {
+    fn resolve_m_overflow_idxs(&self) -> ParseResult<()> {
+        Python::with_gil(|py| -> PyResult<()> {
+            self.parser
+                .bind(py)
+                .call_method("resolve_m_overflow_idxs", (), None)?;
+
+            Ok(())
+        })?;
+
+        Ok(())
+    }
+
+    fn update_plot_timing(
+        &mut self,
+        start: StartTime,
+        duration: RelTime,
+        lazy: bool,
+    ) -> ParseResult<()> {
+        Python::with_gil(|py| -> ParseResult<()> {
+            let kwargs = {
+                let kv: [(&str, Bound<PyAny>); 2] = [
+                    ("start", start.into_pyobject(py)?),
+                    ("duration", duration.into_pyobject(py)?),
+                ];
+                kv.into_py_dict(py)?
+            };
+
+            self.parser.bind(py).call_method(
+                "update_plot_timing",
+                (match lazy {
+                    false => "False",
+                    true => "True",
+                },),
+                Some(&kwargs),
+            )?;
+            Ok(())
+        })
     }
 }
