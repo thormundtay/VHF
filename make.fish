@@ -4,8 +4,14 @@ set bold "\e[1m"
 set un "\e[4m"
 set reset "\e[0m"
 
+set pyenv_venv_ver "3.12.1"
+set pyenv_venv_name "o3"
+
 function main
-  switch $argv
+  set cmd $argv[1]
+  set -e $argv[1]
+
+  switch "$cmd"
     case "help" "--help" "-h"
       show_help
     case "init"
@@ -14,6 +20,10 @@ function main
       test_cargo
     case "test_python" "python_test"
       python_test
+    case "delete_venv"
+      delete_virtualenv
+    case "run_bind"
+      run_bind $argv[2..]
     case '*'
       echo "Unrecognised command: $argv"
       printf "Consider running `$bold./make.fish help$reset`\n"
@@ -31,6 +41,9 @@ function show_help
   echo ""
   printf $un"Environment Variables$reset\n"
   echo "RUSTFLAGS: $RUSTFLAGS"
+  echo "PYENV_VIRTUAL_ENV: $PYENV_VIRTUAL_ENV"
+  echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
+  echo "PYTHONPATH: $PYTHONPATH"
 end
 
 function init
@@ -54,6 +67,61 @@ end
 function python_test
   # There are out of tree tests we are ignoring. Then we ignore long-lived tests.
   pytest --ignore-glob=Archive --ignore=test/test_parseBinaryVHFTrace.py --ignore=test/test_IdentifiedProcess.py --ignore=test/test_VHFPool.py
+end
+
+function delete_virtualenv
+  pyenv shell $pyenv_venv_ver
+  sleep 0.1
+  yes | pyenv virtualenv-delete $pyenv_venv_name
+end
+
+function create_pyenvvirtualenv
+  pyenv shell $pyenv_venv_ver
+  if test $status -ne 0
+    echo "Failed to activate pyenv shell"
+    exit 2
+  end
+  sleep 0.2
+  pyenv virtualenv $pyenv_venv_name
+  if test $status -ne 0
+    echo "Failed to created pyenv"
+    exit 2
+  end
+  sleep 0.2
+  pyenv activate o3
+  if test $status -ne 0
+    echo "Failed to activate pyenv"
+    exit 2
+  end
+  sleep 0.2
+  python -m pip install -r requirements.txt
+  if test $status -ne 0
+    echo "Warning: Installation of requirements failed"
+  end
+end
+
+function run_bind
+  pyenv activate $pyenv_venv_name
+  if test $status -ne 0
+    echo "Could not find pyenv. Trying to build..."
+    create_pyenvvirtualenv
+  end
+  sleep 0.2
+  set -l pyo3ld (dirname (dirname $PYENV_VIRTUAL_ENV))
+  if not test -d $pyo3ld
+    echo "Could not find lib as parent of pvenv"
+    exit 1
+  end
+  set -x LD_LIBRARY_PATH $pyo3ld/lib
+  set -x PYO3_PYTHON $PYENV_ROOT/shims/python
+  set -x PYTHONPATH $PWD
+  switch $argv[1]
+    case "help" "--help" "-h"
+      echo "Help invoked in run_bind"
+      show_help
+      return 0
+  end
+  cargo run --bin bind-py
 end
 
 main $argv
