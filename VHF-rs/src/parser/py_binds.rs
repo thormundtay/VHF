@@ -6,8 +6,8 @@ use std::cmp::Ordering;
 
 /// Absolute Time (Civil)
 /// Work still to be done to check if timezone is required during parsing.
-#[derive(PartialEq, Eq)]
-pub struct AbsTime(pub jiff::civil::DateTime);
+#[derive(PartialEq, Eq, Clone)]
+pub struct AbsTime(pub jiff::Zoned);
 
 impl AbsTime {
     pub(crate) fn into_pyobject<'py>(self, py: Python<'py>) -> ParseResult<Bound<'py, PyAny>> {
@@ -19,13 +19,14 @@ impl AbsTime {
     }
 }
 
-impl From<jiff::civil::DateTime> for AbsTime {
-    fn from(value: jiff::civil::DateTime) -> Self {
+impl From<jiff::Zoned> for AbsTime {
+    fn from(value: jiff::Zoned) -> Self {
         AbsTime(value)
     }
 }
 
 /// Relative Time
+#[derive(Clone)]
 pub struct RelTime(pub jiff::Span);
 
 impl RelTime {

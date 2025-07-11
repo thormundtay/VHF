@@ -2,6 +2,7 @@
 //! it being in the correct environment.
 
 use super::{AbsTime, ParseError, ParseResult, RelTime, StartTime, VHFWord, VHFparse};
+use jiff::Zoned;
 use ndarray::Array1;
 use numpy::PyArray1;
 use pyo3::Bound;
@@ -12,6 +13,8 @@ use pyo3::prelude::PyModule;
 use pyo3::prelude::PyResult;
 use pyo3::prelude::Python;
 use pyo3::types::IntoPyDict;
+use pyo3::types::PyDateTime;
+use pyo3::types::PyDict;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
@@ -38,6 +41,7 @@ fn parser<'py, 'b>(py: Python<'py>, file: &'b Path, headers_only: bool) -> PyRes
 /// Rust representation of Python v1 parser.
 pub struct VHFparser {
     parser: Py<PyAny>,
+    file_start: Box<Zoned>,
     /// Rust specified user previous start, for managing [self::data_rs].
     start: Box<Option<AbsTime>>,
     /// Rust specified user previous duration, for managing [self::data_rs].
@@ -50,12 +54,30 @@ impl VHFparser {
     /// Get an instance of v1 VHF parser from Python.
     pub fn new<'b>(file: &'b Path, headers_only: bool) -> PyResult<Self> {
         let parser = Python::with_gil(|py| parser(py, file, headers_only))?;
+        // start = VHFparser(file).header["Time start"]  # <class 'datetime.datetime'> -> PyDateTime
+        let file_start = Box::new(Python::with_gil(|py| -> PyResult<Zoned> {
+            let header: Bound<'_, PyDict> = parser
+                .bind(py)
+                .getattr("header")?
+                .downcast_into::<PyDict>()?;
+
+            use pyo3::types::PyDictMethods;
+            let val: Bound<'_, PyDateTime> = header
+                .get_item("Time start")?
+                .expect("No 'Time start' found in keys of header")
+                .downcast_into::<PyDateTime>()?;
+
+            let unb: Py<PyDateTime> = val.unbind();
+            let e: Zoned = unb.extract(py)?;
+            Ok(e)
+        })?);
         let start = Box::new(None);
         let duration = Box::new(None);
         let data_rs = RefCell::new(None);
 
         Ok(Self {
             parser,
+            file_start,
             start,
             duration,
             data_rs,
@@ -84,18 +106,26 @@ impl VHFparse for VHFparser {
         duration: RelTime,
         lazy: bool,
     ) -> ParseResult<()> {
-        let start_abs: AbsTime = todo!();
+        let start_abs: AbsTime = {
+            match start {
+                StartTime::Abs(ref v) => v.clone(),
+                StartTime::Rel(ref r) => (*self.file_start)
+                    .checked_add(r.0)
+                    .map_err(ParseError::JiffError)?
+                    .into(),
+            }
+        };
 
         // If input was not changed, early exit.
-        if self.start.is_some_and(|s| s == start_abs)
-            && self.duration.is_some_and(|d| d == duration)
+        if self.start.clone().is_some_and(|s| s == start_abs)
+            && self.duration.clone().is_some_and(|d| d == duration)
         {
             return Ok(());
         }
 
         // Otherwise, invalidate and call into Python.
         self.start = Box::new(Some(start_abs));
-        self.duration = Box::new(Some(duration));
+        self.duration = Box::new(Some(duration.clone()));
         *self.data_rs.borrow_mut() = None;
 
         Python::with_gil(|py| -> ParseResult<()> {
