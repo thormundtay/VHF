@@ -17,6 +17,7 @@ use pyo3::types::PyDateTime;
 use pyo3::types::PyDict;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::path::Path;
 
 /// Gets instantised v1_parser class.
@@ -183,5 +184,20 @@ impl VHFparse for VHFparser {
             .clone()
             .ok_or(ParseError::InternalError);
         arr
+    }
+}
+
+impl Debug for VHFparser {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("V1_VHFparser")
+            .field("parser", &self.parser)
+            .field("file_start", &self.file_start)
+            .field("start", &self.start)
+            .field("duration", &self.duration)
+            .field(
+                "data_rs.len()",
+                &self.data_rs.borrow().clone().map(|l| l.len()).unwrap_or(0),
+            )
+            .finish()
     }
 }

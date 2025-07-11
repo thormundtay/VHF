@@ -6,7 +6,7 @@ use std::cmp::Ordering;
 
 /// Absolute Time (Civil)
 /// Work still to be done to check if timezone is required during parsing.
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct AbsTime(pub jiff::Zoned);
 
 impl AbsTime {
@@ -26,7 +26,7 @@ impl From<jiff::Zoned> for AbsTime {
 }
 
 /// Relative Time
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RelTime(pub jiff::Span);
 
 impl RelTime {
