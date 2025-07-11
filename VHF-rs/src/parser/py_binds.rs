@@ -2,9 +2,11 @@ use super::{ParseError, ParseResult};
 use pyo3::prelude::Python;
 use pyo3::types::PyAnyMethods;
 use pyo3::{Bound, IntoPyObject, PyAny};
+use std::cmp::Ordering;
 
 /// Absolute Time (Civil)
 /// Work still to be done to check if timezone is required during parsing.
+#[derive(PartialEq, Eq)]
 pub struct AbsTime(pub jiff::civil::DateTime);
 
 impl AbsTime {
@@ -40,6 +42,20 @@ impl RelTime {
 impl From<jiff::Span> for RelTime {
     fn from(value: jiff::Span) -> Self {
         Self(value)
+    }
+}
+
+impl PartialEq for RelTime {
+    fn eq(&self, other: &Self) -> bool {
+        match self.0.compare(other.0) {
+            Ok(Ordering::Less) => false,
+            Ok(Ordering::Equal) => true,
+            Ok(Ordering::Greater) => false,
+            Err(_) => {
+                log::warn!("RelTime comparison failed!");
+                false
+            }
+        }
     }
 }
 

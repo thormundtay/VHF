@@ -1,6 +1,6 @@
 /// Methods for translating between Rust types to how some of our Python functions are written.
 pub mod py_binds;
-use py_binds::{RelTime, StartTime};
+use py_binds::{AbsTime, RelTime, StartTime};
 
 pub mod types;
 
@@ -15,6 +15,7 @@ pub enum ParseError {
     ValueError,
     PyError(PyErr),
     PyO3Downcast(String),
+    BorrowError(numpy::BorrowError),
     JiffError(jiff::Error),
     InternalError,
 }
@@ -25,8 +26,16 @@ impl From<PyErr> for ParseError {
     }
 }
 
+// Expectation for Data Types returned by parse methods.
+/// Raw VHF word prior to any parsing.
+type VHFWord = types::RawVHFWord;
+
 /// Expected methods of any VHF parser. Mirrors Python's expectations.
 pub trait VHFparse {
+    /// v1 Writer unfortunately has to return as an Owned Array, but it is quite likely that v2
+    /// will return as a View Array.
+    type DataReturn;
+
     /// Update the class to be aware of all m-overflow indices. This is in the event that the
     /// parser tries to be lazy at init time.
     fn resolve_m_overflow_idxs(&self) -> ParseResult<()>;
@@ -44,6 +53,9 @@ pub trait VHFparse {
         duration: RelTime,
         lazy: bool,
     ) -> ParseResult<()>;
+
+    /// Block of binary trace in accordance with plot window specified.
+    fn data(&self) -> ParseResult<Self::DataReturn>;
 }
 
 pub mod v1_python;
