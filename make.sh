@@ -3,6 +3,8 @@
 shopt -s nocasematch
 
 function main() {
+  set_env_vars
+
   case $1 in
     "help" | "--help" | "-h")
       show_help
@@ -21,6 +23,19 @@ function main() {
   esac
 }
 
+function set_env_vars() {
+  if [ -z $LD_LIBRARY_PATH ]; then
+    if [ -n "$PYENV_VIRTUAL_ENV" ]; then
+      venv_parent="$(dirname $PYENV_VIRTUAL_ENV)"
+      export LD_LIBRARY_PATH="$(dirname $venv_parent)/lib"
+    fi
+  fi
+
+  if [ -z $PYTHONPATH ]; then
+    export PYTHONPATH=$PWD
+  fi
+}
+
 function show_help() {
   bold=$(tput bold)
   un=$(tput smul)
@@ -36,6 +51,9 @@ function show_help() {
   echo ""
   echo "${un}Environment Variables${reset}"
   echo "RUSTFLAGS: $RUSTFLAGS"
+  echo "PYENV_VIRTUAL_ENV: $PYENV_VIRTUAL_ENV"
+  echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
+  echo "PYTHONPATH: $PYTHONPATH"
 }
 
 function init() {
@@ -47,7 +65,7 @@ function init() {
 	mkdir Data &
 	cargo build --release --bin stream && ln -sf target/release/stream run_vhf
 	cargo build --release --bin clear-fifo --features clear-fifo && ln -sf target/release/clear-fifo clear_FIFO
-	ln -sf target/release/clear-fifo teststream.exec
+	ln -sf target/release/stream teststream.exec
 }
 
 function test_cargo() {

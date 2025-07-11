@@ -55,7 +55,7 @@ function init
 	mkdir Data &
 	cargo build --release --bin stream && ln -sf target/release/stream run_vhf
 	cargo build --release --bin clear-fifo --features clear-fifo && ln -sf target/release/clear-fifo clear_FIFO
-	ln -sf target/release/clear-fifo teststream.exec
+	ln -sf target/release/stream teststream.exec
 end
 
 function test_cargo
