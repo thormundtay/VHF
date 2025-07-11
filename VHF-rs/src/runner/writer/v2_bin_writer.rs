@@ -1,7 +1,7 @@
 //! V2Writer is an improved file-format writer that follows the V2 spec.
 //!
 //! The V2 spec aims to resolve several problems involved with throughput of file reading,
-//! primarily due to having to check the entire file at first for any m_overflow phenomenom, before
+//! primarily due to having to check the entire file at first for any m_overflow phenomenon, before
 //! being able to read any relevant block of traces.
 //! This is done so by recording the location of m-overflow after the header of the file, but
 //! before the data section of the file, known as `m_overflow_idx` or similar to describe this
@@ -299,7 +299,7 @@ impl<'a> V2BinWriter<'a> {
             // This is to determine eventually how to offset into the appropriate location within
             // m_idx_overflow block.
             self.header_len = Some(unsafe {
-                // SAFETY: Nonzero is guranteed by V2_MAGIC_HEADER.
+                // SAFETY: Nonzero is guaranteed by V2_MAGIC_HEADER.
                 NonZeroUsize::new(written_so_far.div_ceil(8) * 8).unwrap_unchecked()
             });
 
@@ -316,7 +316,7 @@ impl<'a> V2BinWriter<'a> {
         Ok(())
     }
 
-    /// This differs from [self::num_elements_written] as this shows the number of elements in
+    /// This differs from [self]::num_elements_written as this shows the number of elements in
     /// relation to VHFIter start.
     ///
     /// # Assumptions
@@ -324,7 +324,7 @@ impl<'a> V2BinWriter<'a> {
     ///
     /// # Returns
     /// Ok: number of elements with respect to VHFIter start (and processed) written.
-    /// Err: usize overflow occured.
+    /// Err: usize overflow occurred.
     #[allow(dead_code)]
     fn total_elements_written(&self) -> Result<usize> {
         self.num_files_so_far

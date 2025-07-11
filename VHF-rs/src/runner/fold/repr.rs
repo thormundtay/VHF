@@ -1,4 +1,4 @@
-//! For fold functions such as [StreamFold::identity_default] to describe what the function is
+//! For fold functions such as [super::StreamFold::identity_default] to describe what the function is
 //! doing.
 
 use serde::Serialize;

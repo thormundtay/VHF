@@ -17,7 +17,7 @@ use std::{cmp::Ordering, hint::unreachable_unchecked, num::NonZeroUsize, ops::De
 /// Bounding [MOverflowWrite] limits.
 const M_OVERFLOW_IDX_MAX: usize = usize::MAX >> 1;
 /// [super::fold] often will record where in the stream does a `m_overflow` event occurs, i.e.:
-/// when the [IQMTriplet] has the `m` value have a over(under)flow occurence.
+/// when the [IQMTriplet] has the `m` value have a over(under)flow occurrence.
 /// See TryFrom implementation.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct MOverflowRaw(pub usize, pub i8);
