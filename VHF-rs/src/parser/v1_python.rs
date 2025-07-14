@@ -53,7 +53,7 @@ pub struct VHFparser {
 
 impl VHFparser {
     /// Get an instance of v1 VHF parser from Python.
-    pub fn new<'b>(file: &'b Path, headers_only: bool) -> PyResult<Self> {
+    pub fn new<'b>(file: &'b Path, headers_only: bool) -> ParseResult<Self> {
         let parser = Python::with_gil(|py| parser(py, file, headers_only))?;
         // start = VHFparser(file).header["Time start"]  # <class 'datetime.datetime'> -> PyDateTime
         let file_start = Box::new(Python::with_gil(|py| -> PyResult<Zoned> {
@@ -76,13 +76,18 @@ impl VHFparser {
         let duration = Box::new(None);
         let data_rs = RefCell::new(None);
 
-        Ok(Self {
+        let s = Self {
             parser,
             file_start,
             start,
             duration,
             data_rs,
-        })
+        };
+        if !headers_only {
+            s.data()?;
+        }
+
+        Ok(s)
     }
 }
 
