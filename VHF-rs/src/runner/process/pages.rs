@@ -1,10 +1,10 @@
 //! Map mmap fetched items into Heap-allocated chunks.
 
 use super::consts::MMAP_PAGE_LEN;
-// The individual elements as obtained from [super::board_ioctl_consts::ioctl_read].
-use crate::types::{IQMTriplet, RawVHFWord};
 use crate::{Error, Result};
 use std::{fmt::Debug, ops::Deref, sync::Arc};
+// The individual elements as obtained from [super::board_ioctl_consts::ioctl_read].
+use vhf_common::data_types::{IQMTriplet, RawVHFWord};
 
 /// All possible pages placed in to the buffer of [super::VHF].
 #[derive(Clone)]

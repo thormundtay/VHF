@@ -11,7 +11,7 @@ use super::super::BoardConfig;
 use super::super::fold::MOverflowWrite;
 use super::MOverflowRaw;
 use super::{FILE_LAZY_LEN, VHFWriter};
-use crate::{Error, Result, types::RawVHFWord};
+use crate::{Error, Result};
 #[cfg(not(test))]
 use jiff::SignedDuration;
 use jiff::{Span, Zoned};
@@ -29,6 +29,7 @@ use std::{
     },
     thread,
 };
+use vhf_common::data_types::RawVHFWord;
 
 pub(super) const V2_MAGIC_HEADER: &str = "VHFV2BIN";
 

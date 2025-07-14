@@ -2,7 +2,7 @@
 
 use super::super::config::typedef::Encode;
 use super::{FILE_LAZY_LEN, VHFWriter};
-use crate::{Error, Result, types::RawVHFWord};
+use crate::{Error, Result};
 #[cfg(not(test))]
 use jiff::SignedDuration;
 use jiff::{Span, Zoned};
@@ -17,6 +17,7 @@ use std::{
     },
     thread,
 };
+use vhf_common::data_types::RawVHFWord;
 
 pub(super) const V1_MAGIC_HEADER: u64 = 0x123456ABCDEF0000;
 

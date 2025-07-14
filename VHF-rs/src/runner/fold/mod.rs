@@ -5,14 +5,11 @@ use super::process::{
     pages::MmapPage,
 };
 use super::writer::WriteBlock;
-use crate::{
-    Error, Result,
-    parser::consts::M_OVERFLOW,
-    types::{IQMTriplet, RawVHFWord},
-};
+use crate::{Error, Result, parser::consts::M_OVERFLOW};
 use repr::Representation;
 use serde::Serialize;
 use std::{cmp::Ordering, hint::unreachable_unchecked, num::NonZeroUsize, ops::Deref, sync::Arc};
+use vhf_common::data_types::{IQMTriplet, RawVHFWord};
 
 /// Bounding [MOverflowWrite] limits.
 const M_OVERFLOW_IDX_MAX: usize = usize::MAX >> 1;
@@ -78,7 +75,7 @@ pub enum StreamFoldOp {
 /// With the context of [super::Config::skip_num], [StreamFold] will lead to a decrease in number of
 /// elements between the FPGA and what is written to the file.
 /// This struct contains all arguments specific to [StreamFoldOp::Map] that would otherwise
-/// definetly not make sense to be in [StreamFoldOp::None].
+/// definitely not make sense to be in [StreamFoldOp::None].
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct MapArg {
     /// This number summarizes the possibly multiple steps performed by [StreamFold::func].

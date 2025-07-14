@@ -20,8 +20,8 @@ log = { version = "0.4.22" }
 ndarray = { version = "0.16.1" }
 numpy = { version = "0.25.0" }
 pyo3 = { version = "0.25.1", features = ["jiff-02"] }
+VHF-common = { path = "../../common" }
 
 [dev-dependencies]
-approx = { version = "0.5.1" }
 test-log = { version = "0.2.17", features = ["trace", "color"] }
 tempfile = { version = "3.19.1", features = ["default"] }

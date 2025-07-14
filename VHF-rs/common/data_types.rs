@@ -1,4 +1,4 @@
-//! Types shared across both VHF and VHF-parse crates.
+//! Types associated to data created by VHF board.
 use std::f64::consts::{PI, TAU};
 
 /// This is one word of VHF data.

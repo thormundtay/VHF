@@ -9,8 +9,8 @@ pub use v1_stdout::V1StdOut;
 use v1_writer::V1_MAGIC_HEADER;
 pub use v1_writer::V1Writer;
 pub use v2_bin_writer::V2BinWriter;
+use vhf_common::data_types::RawVHFWord;
 
-use super::super::types::RawVHFWord;
 use super::fold::MOverflowRaw;
 use crate::Result;
 

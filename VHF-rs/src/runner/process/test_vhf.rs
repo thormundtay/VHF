@@ -1,7 +1,7 @@
 use super::consts::MMAP_PAGE_LEN;
 use super::pages::*;
 use super::*;
-use crate::types::RawVHFWord;
+use vhf_common::data_types::RawVHFWord;
 
 use heapless::Deque;
 use std::{

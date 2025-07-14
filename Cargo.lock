@@ -6,6 +6,7 @@ version = 4
 name = "VHF"
 version = "0.1.0"
 dependencies = [
+ "VHF-common",
  "VHF-parse",
  "approx",
  "bytemuck",
@@ -32,10 +33,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "VHF-parse"
+name = "VHF-common"
 version = "0.1.0"
 dependencies = [
  "approx",
+ "log",
+ "serde",
+ "test-log",
+]
+
+[[package]]
+name = "VHF-parse"
+version = "0.1.0"
+dependencies = [
+ "VHF-common",
  "jiff",
  "log",
  "ndarray",

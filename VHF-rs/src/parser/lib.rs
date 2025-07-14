@@ -2,8 +2,6 @@
 pub mod py_binds;
 use py_binds::{AbsTime, RelTime, StartTime};
 
-pub mod types;
-
 /// Result associated to parsing of VHF file format.
 pub type ParseResult<T> = core::result::Result<T, ParseError>;
 
@@ -28,7 +26,7 @@ impl From<PyErr> for ParseError {
 
 // Expectation for Data Types returned by parse methods.
 /// Raw VHF word prior to any parsing.
-type VHFWord = types::RawVHFWord;
+type VHFWord = vhf_common::data_types::RawVHFWord;
 
 /// Expected methods of any VHF parser. Mirrors Python's expectations.
 pub trait VHFparse {
