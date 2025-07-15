@@ -2,13 +2,14 @@
 //! These can be configured through the `.ini` file configuration, or with command line arguments.
 //! For more details, please see [crate::runner::Config].
 
-use super::super::{Config, config::typedef::Encode};
+use super::super::Config;
 use super::VHFWriter;
 use super::{V1StdOut, v1_stdout::V1StdOutArg};
 use super::{V1Writer, v1_writer::V1Arg};
 use super::{V2BinWriter, v2_bin_writer::V2BinArg};
 use crate::{Error, Result};
 use jiff::Zoned;
+use vhf_common::config_types::Encode;
 
 /// Please see [WriterBuilder].
 #[derive(Debug, Clone)]

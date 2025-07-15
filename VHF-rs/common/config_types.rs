@@ -1,3 +1,5 @@
+//! Types associated to configuration of VHF board.
+
 use crate::{Error, Result};
 use serde::Serialize;
 use std::str::FromStr;
@@ -21,7 +23,7 @@ impl ToString for SamplingSpeed {
 }
 
 impl FromStr for SamplingSpeed {
-    type Err = crate::Error;
+    type Err = Error;
     fn from_str(value: &str) -> Result<Self> {
         match value.chars().next() {
             None => Err(Error::ParseEmpty),
@@ -54,7 +56,7 @@ impl SamplingSpeed {
     }
 
     /// This is for being in the header
-    pub(crate) fn as_char(&self) -> &str {
+    pub fn as_char(&self) -> &str {
         match self {
             SamplingSpeed::High => "h",
             SamplingSpeed::Low => "l",
@@ -100,7 +102,7 @@ impl FromStr for Encode {
 }
 
 impl Encode {
-    pub(crate) fn as_char(&self) -> &str {
+    pub fn as_char(&self) -> &str {
         match self {
             Self::Binary => "b",
             Self::Hexadecimal => "x",

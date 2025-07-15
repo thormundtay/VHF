@@ -37,6 +37,7 @@ name = "VHF-common"
 version = "0.1.0"
 dependencies = [
  "approx",
+ "jiff",
  "log",
  "serde",
  "test-log",

@@ -319,7 +319,7 @@ impl TryFrom<&MOverflowWrite> for MOverflowRaw {
         } else if sign == 1 {
             Ok(-1)
         } else {
-            return Err(Error::InternalInconsistency);
+            Err(Error::InternalInconsistency)
         }?;
 
         Ok(MOverflowRaw(

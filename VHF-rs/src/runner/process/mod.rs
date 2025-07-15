@@ -7,7 +7,6 @@ pub(super) mod pages;
 
 use super::Config;
 use super::config::BoardConfig;
-use super::config::typedef::SamplingSpeed;
 use super::fold::StreamFold;
 use crate::{Error, Result};
 use consts::{MMAP_PAGE_LEN, VHF_MMAP_WINDOW_LEN};
@@ -29,6 +28,7 @@ use std::sync::{
 };
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
+use vhf_common::config_types::SamplingSpeed;
 
 /// This is the size in bytes of the Mmap that is backed by the VHF device.
 const MMAP_BYTES_LEN: usize = 1 << 22;

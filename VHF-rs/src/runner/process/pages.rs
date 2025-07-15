@@ -62,7 +62,7 @@ impl Debug for MmapPage {
 }
 
 pub fn time_between_pages_in_ns(
-    speed: &super::super::config::typedef::SamplingSpeed,
+    speed: &vhf_common::config_types::SamplingSpeed,
 ) -> Result<jiff::Span> {
     speed
         .in_ns()

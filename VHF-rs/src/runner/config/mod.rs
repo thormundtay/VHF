@@ -1,9 +1,6 @@
 /// Convenience functions associated with the parsing of INI and CLI arguments.
 mod utils;
 
-/// Convenience Type definitions associated with properties during the lifetime of the experiment.
-pub(crate) mod typedef;
-
 use super::fold::StreamFold;
 use super::writer::WriterBuilder;
 use crate::{Error, Result};
@@ -16,8 +13,8 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
-use typedef::*;
 use utils::PythonMath;
+use vhf_common::config_types::{Encode, SamplingSpeed};
 
 /// Parameters used to run VHF board.
 ///
@@ -144,7 +141,7 @@ impl Configs {
                 log::warn!("Board speed not found in config; Using default.");
                 Error::ParseEmpty
             })
-            .and_then(|e| SamplingSpeed::from_str(e.as_str()))
+            .and_then(|e| SamplingSpeed::from_str(e.as_str()).map_err(Error::from))
             .unwrap_or(Self::default().speed);
 
         self.encode = config
@@ -153,7 +150,7 @@ impl Configs {
                 log::warn!("Board encode not found in config; Using default.");
                 Error::ParseEmpty
             })
-            .and_then(|e| Encode::from_str(e.as_str()))
+            .and_then(|e| Encode::from_str(e.as_str()).map_err(Error::from))
             .unwrap_or(Self::default().encode);
 
         self.gain = utils::if_enabled_value(&config, "Board", "vga_num", |v| v <= 8)?;

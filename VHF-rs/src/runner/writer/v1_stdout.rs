@@ -1,7 +1,6 @@
 //! Writer method meant to be as identical as possible to the original C file writer, but designed
 //! specifically for stdout writing.
 
-use super::super::config::typedef::Encode;
 use super::{V1_MAGIC_HEADER, VHFWriter};
 use crate::{Error, Result};
 use jiff::Zoned;
@@ -9,6 +8,7 @@ use std::{
     io::{BufWriter, Stdout},
     sync::atomic::{AtomicBool, Ordering},
 };
+use vhf_common::config_types::Encode;
 
 /// This has not been well-tested! Please consider using [super::V1Writer]!
 pub struct V1StdOut {
