@@ -13,6 +13,7 @@ use pyo3::prelude::PyModule;
 use pyo3::prelude::PyResult;
 use pyo3::prelude::Python;
 use pyo3::types::IntoPyDict;
+use pyo3::types::PyBytes;
 use pyo3::types::PyDateTime;
 use pyo3::types::PyDict;
 use std::cell::RefCell;
@@ -42,6 +43,8 @@ fn parser<'py, 'b>(py: Python<'py>, file: &'b Path, headers_only: bool) -> PyRes
 /// Rust representation of Python v1 parser.
 pub struct VHFparser {
     parser: Py<PyAny>,
+    header: Py<PyDict>,
+    headerraw: Vec<u8>,
     file_start: Box<Zoned>,
     /// Rust specified user previous start, for managing [self::data_rs].
     start: Box<Option<AbsTime>>,
@@ -75,9 +78,12 @@ impl VHFparser {
         let start = Box::new(None);
         let duration = Box::new(None);
         let data_rs = RefCell::new(None);
+        let (headerraw, header) = Self::fetch_header(&parser)?;
 
         let s = Self {
             parser,
+            header,
+            headerraw,
             file_start,
             start,
             duration,
@@ -88,6 +94,37 @@ impl VHFparser {
         }
 
         Ok(s)
+    }
+
+    /// Get parser.header and parser.headerraw
+    fn fetch_header(parser: &Py<PyAny>) -> ParseResult<(Vec<u8>, Py<PyDict>)> {
+        Python::with_gil(|py| -> ParseResult<_> {
+            let h_str: Vec<_> = parser
+                .getattr(py, "headerraw")
+                .map_err(ParseError::PyError)?
+                .downcast_bound::<PyBytes>(py)
+                .map_err(|e| ParseError::PyO3Downcast(e.to_string()))?
+                .clone()
+                .unbind()
+                .as_bytes(py)
+                .into_iter()
+                .cloned()
+                .collect();
+            let dict = parser
+                .getattr(py, "header")
+                .map_err(ParseError::PyError)?
+                .downcast_bound::<PyDict>(py)
+                .map_err(|e| ParseError::PyO3Downcast(e.to_string()))?
+                .clone()
+                .unbind();
+
+            Ok((h_str, dict))
+        })
+    }
+
+    /// Gets the header "dictionary" associated with the file.
+    pub fn header(&self) -> VHFheader {
+        VHFheader::new(&self.headerraw, &self.header)
     }
 }
 
@@ -165,7 +202,7 @@ impl VHFparse for VHFparser {
     ///
     /// WARN: To preserve the idiomatic Rust code, data has to be allocated on to the Rust heap
     /// on top of the Python heap.
-    fn data<'a>(&'a self) -> ParseResult<Self::DataReturn> {
+    fn data(&self) -> ParseResult<Self::DataReturn> {
         // Fetch from Python.
         if self.data_rs.borrow().is_none() {
             let array = Python::with_gil(|py| -> ParseResult<Array1<VHFWord>> {
@@ -204,5 +241,19 @@ impl Debug for VHFparser {
                 &self.data_rs.borrow().clone().map(|l| l.len()).unwrap_or(0),
             )
             .finish()
+    }
+}
+
+pub struct VHFheader<'a> {
+    pub header_raw: &'a [u8],
+    pub header_dict: &'a Py<PyDict>,
+}
+
+impl<'a> VHFheader<'a> {
+    fn new(header_str: &'a [u8], header_dict: &'a Py<PyDict>) -> Self {
+        Self {
+            header_raw: header_str,
+            header_dict,
+        }
     }
 }
