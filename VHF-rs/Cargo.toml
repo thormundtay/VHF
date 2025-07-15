@@ -16,6 +16,7 @@ name = "vhf"
 [features]
 default = []
 clear-fifo = ["nix/user", "prettytable-rs"]
+o3 = ["VHF-parse/o3"]
 
 [dependencies]
 bytemuck = { version = "1.23.0" }

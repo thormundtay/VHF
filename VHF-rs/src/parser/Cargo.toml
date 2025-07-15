@@ -13,6 +13,7 @@ path = "bin/bind-py.rs"
 
 [features]
 default = []
+o3 = ["pyo3/auto-initialize"]
 
 [dependencies]
 jiff = { version = "0.2.13", features = ["alloc"] }

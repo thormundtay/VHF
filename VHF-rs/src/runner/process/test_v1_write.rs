@@ -76,6 +76,10 @@ fn writes_correct_header() {
         .expect("Writing to v1_writer failed");
 
     // TODO: Check for correctness of written data.
+    #[cfg(feature = "o3")]
+    {
+        log::error!("o3 feature entered!");
+    }
 
     tmp_dir.close().expect("Could not close temp_dir.");
     push_arc_pages_thread.join().expect("Failed to join");

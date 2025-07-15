@@ -22,8 +22,14 @@ function main
       python_test
     case "delete_venv"
       delete_virtualenv
+    case "create_venv"
+      create_pyenvvirtualenv
     case "run_bind"
       run_bind $argv[2..]
+    case "test_full"
+      activate_venv
+      test_cargo --features=o3
+      python_test
     case '*'
       echo "Unrecognised command: $argv"
       printf "Consider running `$bold./make.fish help$reset`\n"
@@ -61,7 +67,7 @@ end
 function test_cargo
 	cargo build --bin stream
 	cargo build --bin clear-fifo --features clear-fifo
-	cargo test -q
+	cargo test --color=always -q $argv
 end
 
 function python_test
@@ -100,7 +106,7 @@ function create_pyenvvirtualenv
   end
 end
 
-function run_bind
+function activate_venv
   pyenv activate $pyenv_venv_name
   if test $status -ne 0
     echo "Could not find pyenv. Trying to build..."
@@ -112,15 +118,19 @@ function run_bind
     echo "Could not find lib as parent of pvenv"
     exit 1
   end
-  set -x LD_LIBRARY_PATH $pyo3ld/lib
-  set -x PYO3_PYTHON $PYENV_ROOT/shims/python
-  set -x PYTHONPATH $PWD
+  set -gx LD_LIBRARY_PATH $pyo3ld/lib
+  set -gx PYO3_PYTHON $PYENV_ROOT/shims/python
+  set -gx PYTHONPATH $PWD
   switch $argv[1]
     case "help" "--help" "-h"
-      echo "Help invoked in run_bind"
+      echo "Help invoked in activate_venv"
       show_help
       return 0
   end
+end
+
+function run_bind
+  activate_venv $argv
   cargo run --bin bind-py
 end
 
