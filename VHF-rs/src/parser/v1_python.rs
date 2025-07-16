@@ -16,10 +16,13 @@ use pyo3::types::IntoPyDict;
 use pyo3::types::PyBytes;
 use pyo3::types::PyDateTime;
 use pyo3::types::PyDict;
+use pyo3::types::PyInt;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::num::NonZeroU64;
 use std::path::Path;
+use vhf_common::config_types::SamplingSpeed;
 
 /// For VHF package to check if inited properly.
 #[cfg(feature = "o3")]
@@ -253,13 +256,73 @@ impl Debug for VHFparser {
 pub struct VHFheader<'a> {
     pub header_raw: &'a [u8],
     pub header_dict: &'a Py<PyDict>,
+    pub verbosity: u8,
+    /// Base sampling speed. None indicates it was not set. Implicitly, None should be treated as
+    /// high frequency.
+    pub speed: Option<SamplingSpeed>,
+    pub start_time: Option<Box<Zoned>>,
+    skip_factor: Option<u16>,
 }
 
 impl<'a> VHFheader<'a> {
     fn new(header_str: &'a [u8], header_dict: &'a Py<PyDict>) -> Self {
+        let (verbosity, speed, start_time, skip_factor) = Python::with_gil(|py| {
+            let dict = header_dict.bind(py);
+
+            let v: u8 = match dict.get_item("v") {
+                Ok(d) => d
+                    .downcast_into::<PyInt>()
+                    .ok()
+                    .and_then(|p| p.extract().ok())
+                    .unwrap_or(0),
+                Err(_) => 0,
+            };
+            let speed = match v {
+                0 => None,
+                _ => {
+                    if let Ok(_) = dict.get_item("l") {
+                        Some(SamplingSpeed::Low)
+                    } else if let Ok(_) = dict.get_item("h") {
+                        Some(SamplingSpeed::High)
+                    } else {
+                        None
+                    }
+                }
+            };
+            let start: Option<Zoned> = match v {
+                0 => None,
+                _ => {
+                    let t = dict.get_item("Time start");
+                    log::trace!("Time start = {:?}", t);
+                    t.ok().and_then(|t| t.extract().ok())
+                }
+            };
+            let skip: Option<u16> = match v {
+                0 => None,
+                _ => dict.get_item("s").ok().and_then(|p| p.extract().ok()),
+            };
+
+            (v, speed, start.map(Box::new), skip)
+        });
+
         Self {
             header_raw: header_str,
             header_dict,
+            verbosity,
+            speed,
+            start_time,
+            skip_factor,
+        }
+    }
+
+    /// This gives the effective skip factor after taking into account software filters. This is
+    /// used for determining the effective frequency of the data written to file.
+    ///
+    /// Note: V1 files should not contain any software filters.
+    pub fn effective_decimation_factor(&'a self) -> NonZeroU64 {
+        log::trace!("skip_factor = {:?}", self.skip_factor);
+        unsafe {
+            NonZeroU64::new(self.skip_factor.unwrap_or(0u16) as u64 + 1u64).unwrap_unchecked()
         }
     }
 }
