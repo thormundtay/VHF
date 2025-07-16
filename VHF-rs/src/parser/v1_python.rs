@@ -21,6 +21,12 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::path::Path;
 
+/// For VHF package to check if inited properly.
+#[cfg(feature = "o3")]
+pub fn test_import() -> bool {
+    Python::with_gil(|py| PyModule::import(py, "VHF").is_ok())
+}
+
 /// Gets instantised v1_parser class.
 fn parser<'py, 'b>(py: Python<'py>, file: &'b Path, headers_only: bool) -> PyResult<Py<PyAny>> {
     let v1_mod = PyModule::import(py, "VHF._parse.v1")?; // Fails if PYTHONPATH is wrong

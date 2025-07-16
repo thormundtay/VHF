@@ -17,7 +17,7 @@ function main
     case "init"
       init
     case "test"
-      test_cargo
+      test_cargo $argv[2..]
     case "test_python" "python_test"
       python_test
     case "delete_venv"
@@ -27,12 +27,14 @@ function main
     case "run_bind"
       run_bind $argv[2..]
     case "test_full"
+      test_cargo $argv[2..]
       activate_venv
-      test_cargo --features=o3
+      test_cargo --features=o3 $argv[2..]
       python_test
     case '*'
       echo "Unrecognised command: $argv"
       printf "Consider running `$bold./make.fish help$reset`\n"
+      return 1
   end
 end
 
