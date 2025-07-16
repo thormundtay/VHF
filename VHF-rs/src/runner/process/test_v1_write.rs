@@ -16,10 +16,42 @@ use std::time::Duration;
 use tempfile::TempDir;
 use test_log::test;
 
+#[cfg(feature = "o3")]
+use jiff::ZonedRound;
+#[cfg(feature = "o3")]
+use std::num::NonZeroU64;
+#[cfg(feature = "o3")]
+use std::path::{Path, PathBuf};
+#[cfg(feature = "o3")]
+use vhf_parse::{VHFparse, v1::VHFparser as V1parser};
+
+/// For a temp dir, check that there has only been a single file in it. Thereafter, yield the path
+/// to it.
+#[cfg(feature = "o3")]
+fn get_only_file(tmpdir: &Path) -> Result<PathBuf> {
+    if !tmpdir.is_dir() {
+        return Err(Error::InternalInconsistency);
+    }
+    let files: Vec<_> = tmpdir
+        .read_dir()
+        .expect("Dir could not be read")
+        .filter_map(|d| d.ok())
+        .collect();
+    if files.len() != 1 {
+        return Err(Error::InternalInconsistency);
+    }
+
+    files
+        .into_iter()
+        .next()
+        .map(|d| d.path())
+        .ok_or(Error::InternalInconsistency)
+}
+
 /// Write a file that has data with m-overflow.
 /// This test will fail if [super::test_vhf_step_fold::stepped_nonoverlapping_identity_b] fails.
 #[test]
-fn writes_correct_header() {
+fn writes_correct_file() {
     let debug_vhf_total_len = 4 * VHF_MMAP_WINDOW_LEN;
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
     let debug_vhf_conf = Configs::default();
@@ -60,13 +92,13 @@ fn writes_correct_header() {
     let tmp_dir = TempDir::new().expect("Could not create temp_dir");
     config.save_to_file = true;
     config.save_dir = (*tmp_dir.path()).into();
-    config.num_samples = 1 << 18;
+    config.num_samples = total_elements;
     config.verbosity = 3;
     log::info!("save_dir = {:?}", &config.save_dir);
 
     let builder = config.file_writer().unwrap();
     matches!(builder.writer_type, Writers::V1(_));
-    let mut writer = builder.with_start_time(time_start).build();
+    let mut writer = builder.with_start_time(time_start.clone()).build();
 
     debug_vhf
         .iter()
@@ -75,10 +107,48 @@ fn writes_correct_header() {
         .try_for_each(|write_block| writer.write_data(write_block))
         .expect("Writing to v1_writer failed");
 
-    // TODO: Check for correctness of written data.
     #[cfg(feature = "o3")]
     {
-        log::error!("o3 feature entered!");
+        // Check data length
+        let tmp_file = get_only_file(tmp_dir.path()).expect("Temp File not found");
+        let parser = V1parser::new(&tmp_file, false).expect("Could not parse tmp file");
+        parser
+            .resolve_m_overflow_idxs()
+            .expect("Could not fix m_overflow.");
+        assert_eq!(
+            parser.data().expect("Data could not be obtained").len(),
+            config.num_samples
+        );
+
+        // Check header
+        let header = parser.header();
+        log::debug!(
+            "header_raw = {}",
+            String::from_utf8(header.header_raw.to_vec()).expect("Could not read utf8")
+        );
+
+        assert_eq!(header.verbosity, config.verbosity);
+
+        let zone_round = ZonedRound::new().smallest(jiff::Unit::Microsecond); // Python accuracy
+        let file_start = header
+            .start_time
+            .clone()
+            .expect("No start time")
+            .round(zone_round)
+            .expect("Rounding failed");
+        let our_start = time_start.round(zone_round).expect("Rounding failed");
+        let diff = file_start
+            .until(&our_start)
+            .expect("Difference not obtained")
+            .total(jiff::Unit::Microsecond)
+            .expect("Could not make as only microseconds");
+        assert!(diff <= 1f64);
+
+        assert_eq!(
+            header.effective_decimation_factor(),
+            NonZeroU64::new(1u64 + Configs::default().skip_num as u64)
+                .expect("Could not read default")
+        );
     }
 
     tmp_dir.close().expect("Could not close temp_dir.");

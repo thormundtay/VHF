@@ -69,7 +69,13 @@ end
 function test_cargo
 	cargo build --bin stream
 	cargo build --bin clear-fifo --features clear-fifo
-	cargo test --color=always -q $argv
+	if test -z "$argv"
+    cargo test -q
+	else if test "$argv" = "--features=o3"
+    cargo test -q --features=o3
+  else
+	  cargo test --color=always $argv
+  end
 end
 
 function python_test

@@ -7,9 +7,10 @@ import math
 import numpy as np
 from numpy.typing import NDArray
 import os
-from .v1_binary_core import BinaryVHFTrace
+from .board_const import LOW_BASE_FREQ, HIGH_BASE_FREQ
 from .trait import _PlotTimingArg
 from .trait import VHFparser_trait
+from .v1_binary_core import BinaryVHFTrace
 
 __all__ = [
     "VHFparser",
@@ -769,14 +770,14 @@ class VHFparser(VHFparser_trait):
 
         # generate explicit params
         if 'l' in self.header:
-            self.header["base sampling freq"] = 10e6
+            self.header["base sampling freq"] = LOW_BASE_FREQ
         elif 'h' in self.header:
-            self.header["base sampling freq"] = 20e6
+            self.header["base sampling freq"] = HIGH_BASE_FREQ
         else:
             self.logger.warning(
                 "Sampling frequency was not explicitly given in header. "
                 "Defaulting to 20 MHz.")
-            self.header["base sampling freq"] = 20e6
+            self.header["base sampling freq"] = HIGH_BASE_FREQ
 
         if 's' in self.header and self.header['s'] is not None:
             self.header["sampling freq"] = (self.header["base sampling freq"]
