@@ -218,7 +218,7 @@ impl V1Writer {
                             * self.num_files_so_far.load(Ordering::Acquire).checked_sub(1).unwrap() as i64,
                     )
                     .map_err(Error::Jiff)?
-                    .strftime("%FT%T%z")
+                    .strftime("%FT%T%.f%z")
                     .to_string(),
                 "\n".to_string(),
             ]);
