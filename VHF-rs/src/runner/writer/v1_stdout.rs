@@ -38,7 +38,7 @@ impl VHFWriter for V1StdOut {
         words
             .data
             .into_iter()
-            .try_for_each(move |word| self.stdout.write_u64::<LittleEndian>(word))
+            .try_for_each(move |word| self.stdout.write_u64::<LittleEndian>(word.into()))
             .map_err(Error::Io)
     }
 }

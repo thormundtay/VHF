@@ -108,7 +108,7 @@ impl Iterator for ZeroArr {
             None
         } else {
             self.current_idx.fetch_add(1, Ordering::Relaxed);
-            Some(0)
+            Some(RawVHFWord::from(0))
         }
     }
 }
@@ -138,7 +138,7 @@ fn vhf_drops_arc() {
     );
 
     // We now add a weakpointer to the first object.
-    let testing_page = Arc::new([0; MMAP_PAGE_LEN]);
+    let testing_page = Arc::new([RawVHFWord::from(0); MMAP_PAGE_LEN]);
     let to_drop = Arc::downgrade(&testing_page);
 
     // We now add data into the buffer.
@@ -159,7 +159,7 @@ fn vhf_drops_arc() {
         first_window.into_iter().for_each(|page| {
             assert!(matches!(page, MmapPage::Page(_)));
             match page {
-                MmapPage::Page(x) => assert_eq!(x.deref(), &[0; MMAP_PAGE_LEN]),
+                MmapPage::Page(x) => assert_eq!(x.deref(), &[RawVHFWord::from(0); MMAP_PAGE_LEN]),
                 _ => unreachable!(),
             };
         });
@@ -184,7 +184,8 @@ impl Iterator for LinearArr {
             self.engine_running.fetch_and(false, Ordering::AcqRel);
             None
         } else {
-            Some(self.current_idx.fetch_add(1, Ordering::AcqRel))
+            let prev = self.current_idx.fetch_add(1, Ordering::AcqRel);
+            Some(RawVHFWord::from(prev))
         }
     }
 }
@@ -223,10 +224,13 @@ fn next_window_linear() {
     let mut debug_vhf_iter = debug_vhf.iter();
     for _ in 0..debug_vhf_total_len {
         if let Some((idx, window)) = debug_vhf_iter.next() {
-            let expected_first: RawVHFWord = (idx * MMAP_PAGE_LEN).try_into().unwrap();
-            let expected_last: RawVHFWord = ((idx + VHF_MMAP_WINDOW_LEN) * MMAP_PAGE_LEN - 1)
+            let expected_first: u64 = (idx * MMAP_PAGE_LEN).try_into().unwrap();
+            let expected_last: u64 = ((idx + VHF_MMAP_WINDOW_LEN) * MMAP_PAGE_LEN - 1)
                 .try_into()
                 .unwrap();
+
+            let expected_first = RawVHFWord::from(expected_first);
+            let expected_last = RawVHFWord::from(expected_last);
             assert_eq!(
                 *window.first().unwrap().deref().first().unwrap(),
                 expected_first
@@ -244,8 +248,8 @@ fn next_window_linear() {
     let actual = debug_vhf_iter.next();
     if let Some(x) = actual.clone() {
         log::warn!(
-            "Got page from vhf where none was expected: page[0]/MMAP_PAGE_LEN = {}; page[-1] = {}",
-            x.1.first().unwrap().deref().first().unwrap() / (MMAP_PAGE_LEN as RawVHFWord),
+            "Got page from vhf where none was expected: page[0]/MMAP_PAGE_LEN = {}; page[-1] = {:?}",
+            x.1.first().unwrap().deref().first().unwrap().as_u64() / (MMAP_PAGE_LEN as u64),
             x.1.last().unwrap().deref().last().unwrap()
         );
     }

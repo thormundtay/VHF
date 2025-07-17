@@ -271,7 +271,7 @@ impl V1Writer {
                     .lock()
                     .unwrap()
                     .drain(0..)
-                    .try_for_each(|word| file.write_u64::<LittleEndian>(word))
+                    .try_for_each(|word| file.write_u64::<LittleEndian>(word.into()))
                     .map_err(Error::Io)?;
                 self.num_elements_written
                     .fetch_add(buf_len, Ordering::Release);
@@ -284,7 +284,7 @@ impl V1Writer {
                     .saturating_sub(self.num_elements_written.load(Ordering::Acquire))
                     .min(data.len()),
             )
-            .try_for_each(|word| file.write_u64::<LittleEndian>(word))
+            .try_for_each(|word| file.write_u64::<LittleEndian>(word.into()))
             .map_err(Error::Io)?;
 
             self.num_elements_written
@@ -310,7 +310,7 @@ impl V1Writer {
                     .saturating_sub(self.num_elements_written.load(Ordering::Acquire))
                     .min(data.len()),
             )
-            .try_for_each(move |word| file.write_u64::<LittleEndian>(word))
+            .try_for_each(move |word| file.write_u64::<LittleEndian>(word.into()))
             .map_err(Error::Io)?;
 
             self.num_elements_written

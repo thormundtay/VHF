@@ -16,6 +16,7 @@ use std::sync::{
 };
 use std::thread;
 use std::time::{Duration, Instant};
+use vhf_common::data_types::RawVHFWord;
 
 /// Bottom 12 bytes of [super::board_ioctl_consts::ioctl_read] should be zero'd to align to [MmapPage::Page].
 pub const ALIGN_VHF_OUTPUT_TO_PAGES: usize = 9 + 3;
@@ -186,7 +187,7 @@ impl MMapReader {
                 self.get_mmap_iter(self.prev_bytes, next_bytes)
                     .chunks(MMAP_PAGE_LEN)
                     .into_iter()
-                    .map(|x| x.copied().collect_array().unwrap())
+                    .map(|x| x.copied().map(RawVHFWord::from).collect_array().unwrap())
                     .map(Arc::new)
                     .map(MmapPage::Page)
                     .try_for_each(|x| {

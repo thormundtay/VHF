@@ -26,7 +26,7 @@ impl From<PyErr> for ParseError {
 
 // Expectation for Data Types returned by parse methods.
 /// Raw VHF word prior to any parsing.
-type VHFWord = vhf_common::data_types::RawVHFWord;
+pub use vhf_common::data_types::RawVHFWord as VHFWord;
 
 /// Expected methods of any VHF parser. Mirrors Python's expectations.
 pub trait VHFparse {

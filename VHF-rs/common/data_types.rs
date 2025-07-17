@@ -2,7 +2,35 @@
 use std::f64::consts::{PI, TAU};
 
 /// This is one word of VHF data.
-pub type RawVHFWord = u64;
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct RawVHFWord(u64);
+
+impl From<u64> for RawVHFWord {
+    fn from(value: u64) -> Self {
+        Self(value)
+    }
+}
+
+impl Into<u64> for RawVHFWord {
+    fn into(self) -> u64 {
+        self.0
+    }
+}
+
+impl RawVHFWord {
+    pub fn as_u64(&self) -> u64 {
+        self.0
+    }
+}
+
+impl std::ops::Deref for RawVHFWord {
+    type Target = u64;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 /// Unpacking a [RawVHFWord].
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -21,25 +49,20 @@ impl std::fmt::Debug for IQMTriplet {
 impl From<RawVHFWord> for IQMTriplet {
     #[inline(always)]
     fn from(value: RawVHFWord) -> Self {
-        raw_to_triplet(value)
+        raw_to_triplet(&value)
     }
 }
 
 impl From<&RawVHFWord> for IQMTriplet {
     #[inline(always)]
     fn from(value: &RawVHFWord) -> Self {
-        // Deref &u64 -> u64 is not const. Have to otherwise clone to use `raw_to_triplet`.
-        let i = (value >> 24) & 0xFFFFFF;
-        let i = (i.wrapping_sub((i >> 23) * (1 << 24))) as i32;
-        let q = value & 0xFFFFFF;
-        let q = (q.wrapping_sub((q >> 23) * (1 << 24))) as i32;
-        let m = (value >> 48) as i16;
-        Self(i, q, m)
+        raw_to_triplet(value)
     }
 }
 
 #[inline(always)]
-const fn raw_to_triplet(value: RawVHFWord) -> IQMTriplet {
+const fn raw_to_triplet(value: &RawVHFWord) -> IQMTriplet {
+    let value = value.0;
     let i = (value >> 24) & 0xFFFFFF;
     let i = (i.wrapping_sub((i >> 23) * (1 << 24))) as i32;
     let q = value & 0xFFFFFF;
@@ -92,7 +115,7 @@ const fn triplet_to_raw(value: &IQMTriplet) -> RawVHFWord {
     let i = ((-(1 << 24) + value.0) & 0xFFFFFF) as u64;
     let q = ((-(1 << 24) + value.1) & 0xFFFFFF) as u64;
     let m = (value.2 as u16) as u64;
-    (m << 48) | (i << 24) | (q << 0)
+    RawVHFWord((m << 48) | (i << 24) | (q << 0))
 }
 
 impl From<&Polar> for RawVHFWord {
@@ -198,18 +221,18 @@ mod tests {
 
     #[test]
     fn iqm_triplet_decode_encode() {
-        let raw = 0x7FFF7FFFFF7FFFFF;
+        let raw: RawVHFWord = 0x7FFF7FFFFF7FFFFF.into();
         let expected = IQMTriplet((1 << 23) - 1, (1 << 23) - 1, (1i16 << 15).wrapping_sub(1));
         assert_eq!(IQMTriplet::from(raw), expected);
-        log::trace!("raw = {raw:x}");
+        log::trace!("raw = {:x}", &raw.0);
         assert_eq!(RawVHFWord::from(expected), raw);
 
-        let raw = 0x8000800000800000;
+        let raw: RawVHFWord = 0x8000800000800000.into();
         let expected = IQMTriplet(-(1 << 23), -(1 << 23), 1i16 << 15);
         assert_eq!(IQMTriplet::from(raw), expected);
         assert_eq!(RawVHFWord::from(expected), raw);
 
-        let raw = 0x7FFF800000800000;
+        let raw: RawVHFWord = 0x7FFF800000800000.into();
         let expected = IQMTriplet(-(1 << 23), -(1 << 23), (1i16 << 15).wrapping_sub(1));
         assert_eq!(IQMTriplet::from(raw), expected);
         assert_eq!(RawVHFWord::from(expected), raw);

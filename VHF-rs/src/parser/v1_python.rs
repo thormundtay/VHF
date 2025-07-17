@@ -214,10 +214,10 @@ impl VHFparse for VHFparser {
     fn data(&self) -> ParseResult<Self::DataReturn> {
         // Fetch from Python.
         if self.data_rs.borrow().is_none() {
-            let array = Python::with_gil(|py| -> ParseResult<Array1<VHFWord>> {
+            let array = Python::with_gil(|py| -> ParseResult<Array1<u64>> {
                 let result = self.parser.bind(py).getattr("data")?;
                 let result = result
-                    .downcast::<PyArray1<VHFWord>>()
+                    .downcast::<PyArray1<u64>>()
                     .map_err(|e| ParseError::PyO3Downcast(e.to_string()))?;
 
                 use numpy::PyArrayMethods;
@@ -225,7 +225,9 @@ impl VHFparse for VHFparser {
                 let array = readonly.as_array().to_owned(); // Clone to outlive GIL
 
                 Ok(array)
-            })?;
+            })?
+            .mapv(VHFWord::from);
+
             *self.data_rs.borrow_mut() = Some(array);
         }
 
