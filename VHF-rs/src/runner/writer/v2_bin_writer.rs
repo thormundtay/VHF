@@ -9,7 +9,6 @@
 
 use super::super::BoardConfig;
 use super::super::fold::MOverflowWrite;
-use super::MOverflowRaw;
 use super::{FILE_LAZY_LEN, VHFWriter};
 use crate::{Error, Result};
 #[cfg(not(test))]
@@ -29,7 +28,7 @@ use std::{
     },
     thread,
 };
-use vhf_common::data_types::RawVHFWord;
+use vhf_common::data_types::{MOverflowRaw, RawVHFWord};
 
 pub(super) const V2_MAGIC_HEADER: &str = "VHFV2BIN";
 
@@ -444,7 +443,7 @@ impl<'a> V2BinWriter<'a> {
                     .try_for_each(|m_idx| {
                         m_cumulative += (m_idx.1) as i64;
                         m_idx.try_into().and_then(|m_write: MOverflowWrite| {
-                            file.write_i64::<NativeEndian>(m_write).map_err(Error::Io)
+                            file.write_i64::<NativeEndian>(m_write.0).map_err(Error::Io)
                         })
                     })?;
                 self.m_overflow_written

@@ -9,9 +9,8 @@ pub use v1_stdout::V1StdOut;
 use v1_writer::V1_MAGIC_HEADER;
 pub use v1_writer::V1Writer;
 pub use v2_bin_writer::V2BinWriter;
-use vhf_common::data_types::RawVHFWord;
+use vhf_common::data_types::{MOverflowRaw, RawVHFWord};
 
-use super::fold::MOverflowRaw;
 use crate::Result;
 
 /// In the event that the [VHFWriter] receives less than this amount of data, no file will be

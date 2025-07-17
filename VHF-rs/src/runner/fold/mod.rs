@@ -9,18 +9,15 @@ use crate::{Error, Result, parser::consts::M_OVERFLOW};
 use repr::Representation;
 use serde::Serialize;
 use std::{cmp::Ordering, hint::unreachable_unchecked, num::NonZeroUsize, ops::Deref, sync::Arc};
-use vhf_common::data_types::{IQMTriplet, RawVHFWord};
+use vhf_common::data_types::{IQMTriplet, MOverflowRaw, RawVHFWord};
 
 /// Bounding [MOverflowWrite] limits.
 const M_OVERFLOW_IDX_MAX: usize = usize::MAX >> 1;
-/// [super::fold] often will record where in the stream does a `m_overflow` event occurs, i.e.:
-/// when the [IQMTriplet] has the `m` value have a over(under)flow occurrence.
-/// See TryFrom implementation.
-#[derive(Debug, PartialEq, Eq)]
-pub(super) struct MOverflowRaw(pub usize, pub i8);
+
 /// Compacted representation of [MOverflowRaw] into 8 bytes for file-writing reasons.  
 /// See: [super::writer::V2BinWriter].
-pub(super) type MOverflowWrite = i64;
+#[repr(transparent)]
+pub(super) struct MOverflowWrite(pub i64);
 
 /// This fully describes and contains all relevant mechanisms for taking the iterator output of
 /// [super::VHFIter] for "in-flight processing."
@@ -278,14 +275,13 @@ impl TryFrom<&MOverflowRaw> for MOverflowWrite {
             1 => {
                 let idx: u64 = value.0.try_into().unwrap(); // Safety: M_OVERFLOW_IDX_MAX
                 let idx = idx as i64;
-                debug_assert!(idx >> 63 == 0);
-                Ok(idx)
+                Ok(MOverflowWrite(idx))
             }
             -1 => {
                 let idx: u64 = value.0.try_into().unwrap(); // Safety: M_OVERFLOW_IDX_MAX
                 let idx = idx as i64 + (1 << 63);
                 debug_assert!(idx >> 63 == 1);
-                Ok(idx)
+                Ok(MOverflowWrite(idx))
             }
             #[cfg(test)]
             _ => panic!("Unrecognised overflow-raw sign"),
@@ -313,7 +309,8 @@ impl TryFrom<&MOverflowWrite> for MOverflowRaw {
     type Error = Error;
 
     fn try_from(value: &MOverflowWrite) -> Result<MOverflowRaw> {
-        let sign = *value >> 63;
+        let value = value.0;
+        let sign = value >> 63;
         let sign = if sign == 0 {
             Ok(1)
         } else if sign == 1 {
@@ -323,28 +320,11 @@ impl TryFrom<&MOverflowWrite> for MOverflowRaw {
         }?;
 
         Ok(MOverflowRaw(
-            (*value & ((u64::MAX >> 1) as i64))
+            (value & ((u64::MAX >> 1) as i64))
                 .try_into()
                 .map_err(|_| Error::ExcessData)?,
             sign as i8,
         ))
-    }
-}
-
-impl From<(usize, i8)> for MOverflowRaw {
-    #[inline(always)]
-    fn from(value: (usize, i8)) -> Self {
-        Self(value.0, value.1)
-    }
-}
-
-impl MOverflowRaw {
-    /// Lowers the usize by offset amount, without being less than 0.
-    /// # Unexpected behaviour
-    /// If self.idx < offset, the function is meaningless, but returns 0.
-    #[inline]
-    pub(super) fn offset_neg(self, offset: usize) -> Self {
-        Self(self.0.saturating_sub(offset), self.1)
     }
 }
 

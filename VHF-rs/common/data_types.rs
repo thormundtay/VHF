@@ -169,6 +169,28 @@ impl From<IQMTriplet> for Polar {
     }
 }
 
+/// Folding or Processing often will record where in the stream does a `m_overflow` event occurs, i.e.:
+/// when the [IQMTriplet] has the `m` value have a over(under)flow occurrence.
+#[derive(Debug, PartialEq, Eq)]
+pub struct MOverflowRaw(pub usize, pub i8);
+
+impl MOverflowRaw {
+    /// Lowers the usize by offset amount, without being less than 0.
+    /// # Unexpected behaviour
+    /// If self.idx < offset, the function is meaningless, but returns 0.
+    #[inline]
+    pub fn offset_neg(self, offset: usize) -> Self {
+        Self(self.0.saturating_sub(offset), self.1)
+    }
+}
+
+impl From<(usize, i8)> for MOverflowRaw {
+    #[inline(always)]
+    fn from(value: (usize, i8)) -> Self {
+        Self(value.0, value.1)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
