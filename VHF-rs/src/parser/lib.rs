@@ -27,12 +27,17 @@ impl From<PyErr> for ParseError {
 // Expectation for Data Types returned by parse methods.
 /// Raw VHF word prior to any parsing.
 pub use vhf_common::data_types::RawVHFWord as VHFWord;
+/// Unwrapped reduced phase of [VHFWord].
+type ReducedPhase = f64;
 
 /// Expected methods of any VHF parser. Mirrors Python's expectations.
 pub trait VHFparse {
     /// v1 Writer unfortunately has to return as an Owned Array, but it is quite likely that v2
     /// will return as a View Array.
     type DataReturn;
+
+    // /// This changes in accordance with if Map is collected, or if taken from Python etc.
+    type TransformReturn<T>;
 
     /// Update the class to be aware of all m-overflow indices. This is in the event that the
     /// parser tries to be lazy at init time.
@@ -54,6 +59,9 @@ pub trait VHFparse {
 
     /// Block of binary trace in accordance with plot window specified.
     fn data(&self) -> ParseResult<Self::DataReturn>;
+
+    /// Block of binary trace with unwrapped phase / 2pi.
+    fn reduced_phase(&self) -> ParseResult<Self::TransformReturn<ReducedPhase>>;
 }
 
 pub mod v1_python;

@@ -2,6 +2,7 @@
 //! it being in the correct environment.
 
 use super::{AbsTime, ParseError, ParseResult, RelTime, StartTime, VHFWord, VHFparse};
+use crate::ReducedPhase;
 use jiff::Zoned;
 use ndarray::Array1;
 use numpy::PyArray1;
@@ -61,6 +62,8 @@ pub struct VHFparser {
     duration: Box<Option<RelTime>>,
     /// Rust owned reflection of Python's data for GIL reasons.
     data_rs: RefCell<Option<Array1<VHFWord>>>,
+    /// Rust owned reflection of Python's data for GIL reasons.
+    phase_rs: RefCell<Option<Array1<ReducedPhase>>>,
 }
 
 impl VHFparser {
@@ -87,6 +90,7 @@ impl VHFparser {
         let start = Box::new(None);
         let duration = Box::new(None);
         let data_rs = RefCell::new(None);
+        let phase_rs = RefCell::new(None);
         let (headerraw, header) = Self::fetch_header(&parser)?;
 
         let s = Self {
@@ -97,6 +101,7 @@ impl VHFparser {
             start,
             duration,
             data_rs,
+            phase_rs,
         };
         if !headers_only {
             s.data()?;
@@ -139,6 +144,7 @@ impl VHFparser {
 
 impl VHFparse for VHFparser {
     type DataReturn = Array1<VHFWord>;
+    type TransformReturn<T> = Array1<T>;
 
     fn resolve_m_overflow_idxs(&self) -> ParseResult<()> {
         Python::with_gil(|py| -> PyResult<()> {
@@ -179,6 +185,7 @@ impl VHFparse for VHFparser {
         self.start = Box::new(Some(start_abs));
         self.duration = Box::new(Some(duration.clone()));
         *self.data_rs.borrow_mut() = None;
+        *self.phase_rs.borrow_mut() = None;
 
         Python::with_gil(|py| -> ParseResult<()> {
             let kwargs = {
@@ -237,6 +244,31 @@ impl VHFparse for VHFparser {
             .clone()
             .ok_or(ParseError::InternalError);
         arr
+    }
+
+    /// For now, fetches from Python; Will chang to using Rust Mapv.
+    fn reduced_phase(&self) -> ParseResult<Self::TransformReturn<ReducedPhase>> {
+        // Fetch from Python.
+        if self.phase_rs.borrow().is_none() {
+            let array = Python::with_gil(|py| -> ParseResult<Array1<ReducedPhase>> {
+                let result = self.parser.bind(py).getattr("reduced_phase")?;
+                let result = result
+                    .downcast::<PyArray1<ReducedPhase>>()
+                    .map_err(|e| ParseError::PyO3Downcast(e.to_string()))?;
+
+                use numpy::PyArrayMethods;
+                let readonly = result.try_readonly().map_err(ParseError::BorrowError)?;
+                let array = readonly.as_array().to_owned(); // Clone to outlive GIL
+
+                Ok(array)
+            })?;
+            *self.phase_rs.borrow_mut() = Some(array);
+        }
+
+        self.phase_rs
+            .borrow()
+            .clone()
+            .ok_or(ParseError::InternalError)
     }
 }
 
