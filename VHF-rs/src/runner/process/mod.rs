@@ -518,9 +518,13 @@ mod test_vhf_step_fold;
 #[cfg(test)]
 #[cfg(feature = "o3")]
 mod o3_test_setup {
+    use std::env;
+    use test_log::test;
+
     /// This test should not occur if o3 feature is not activated in the test.
     #[test]
     fn correct_pwd() {
+        log::info!("PYTHONPATH = {:?}", env::var("PYTHONPATH"));
         assert!(vhf_parse::v1_python::test_import())
     }
 }

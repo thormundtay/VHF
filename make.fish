@@ -76,6 +76,10 @@ function test_cargo
   else
 	  cargo test --color=always $argv
   end
+  if test $status -ne 0
+    echo "Cargo test errored"
+    exit $status
+  end
 end
 
 function python_test
