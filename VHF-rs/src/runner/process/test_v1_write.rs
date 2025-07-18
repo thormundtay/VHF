@@ -420,3 +420,129 @@ fn creates_correct_multithreaded_files() {
     tmp_dir.close().expect("Could not close temp_dir.");
     push_arc_pages_thread.join().expect("Failed to join");
 }
+
+#[ignore = "python logic"]
+#[test]
+fn python_v1_edgecase() {
+    let debug_vhf_total_len = 4 * VHF_MMAP_WINDOW_LEN;
+    let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
+    let debug_vhf_conf = Configs::default();
+    let (debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
+        &debug_vhf_conf,
+        NonZeroUsize::new(debug_vhf_total_len).unwrap(),
+    );
+
+    let total_elements = total_window_len * MMAP_PAGE_LEN;
+    let params = StreamFold::none_default();
+    matches!(params.op, StreamFoldOp::None);
+
+    // Define the signal we are testing for.
+    let ampl = 5000f64;
+    let ang_freq = TAU / (4.); // The very high frequency here means that if the end of offset zone
+    // is also involved in the next offset zone (such as when the zone is only 2 wide back to back,
+    // is when all the issues occur.)
+    let phase_offset = 2.2f64;
+    let signal_radius = 5000f64;
+
+    let signal = SineArr::new(
+        total_elements,
+        eng.clone(),
+        (
+            ampl,
+            ang_freq,
+            phase_offset,
+            signal_radius,
+            TAU * 0x7FFF as f64,
+        ),
+    );
+    let mut signal_expected = signal.clone(); // This will lose the engine
+
+    // Add signal into pages. We now add data into the buffer.
+    let push_arc_pages_thread = push_arc_pages(dbg_vhf_sender, signal, Duration::new(0, 100), eng)
+        .expect("push_arc_pages failed");
+
+    let time_start = Zoned::now();
+    let mut config = Configs::new(None).expect("Config struct could not be made");
+    let tmp_dir = TempDir::new().expect("Could not create temp_dir");
+    config.save_to_file = true;
+    config.save_dir = (*tmp_dir.path()).into();
+    config.num_samples = total_elements;
+    config.verbosity = 3;
+    log::info!("save_dir = {:?}", &config.save_dir);
+
+    let builder = config.file_writer().unwrap();
+    matches!(builder.writer_type, Writers::V1(_));
+    let mut writer = builder.with_start_time(time_start.clone()).build();
+
+    debug_vhf
+        .iter()
+        .step_by(params.step_by)
+        .map(|x| (*params.func)(x))
+        .try_for_each(|write_block| writer.write_data(write_block))
+        .expect("Writing to v1_writer failed");
+
+    #[cfg(feature = "o3")]
+    {
+        // Check data length
+        let tmp_file = get_only_file(tmp_dir.path()).expect("Temp File not found");
+        // copy to /dev/shm/sine.bin;
+        // std::fs::copy(&tmp_file, "/dev/shm/sine.bin").expect("failed_to copy");
+
+        let parser = V1parser::new(&tmp_file, false).expect("Could not parse tmp file");
+        parser
+            .resolve_m_overflow_idxs()
+            .expect("Could not fix m_overflow.");
+        assert_eq!(
+            parser.data().expect("Data could not be obtained").len(),
+            config.num_samples
+        );
+
+        // Check header
+        let header = parser.header();
+        log::debug!(
+            "header_raw = {}",
+            String::from_utf8(header.header_raw.to_vec()).expect("Could not read utf8")
+        );
+
+        assert_eq!(header.verbosity, config.verbosity);
+
+        let zone_round = ZonedRound::new().smallest(jiff::Unit::Microsecond); // Python accuracy
+        let file_start = header
+            .start_time
+            .clone()
+            .expect("No start time")
+            .round(zone_round)
+            .expect("Rounding failed");
+        let our_start = time_start.round(zone_round).expect("Rounding failed");
+        let diff = file_start
+            .until(&our_start)
+            .expect("Difference not obtained")
+            .total(jiff::Unit::Microsecond)
+            .expect("Could not make as only microseconds");
+        assert!(diff <= 1f64);
+
+        assert_eq!(
+            header.effective_decimation_factor(),
+            NonZeroU64::new(1u64 + Configs::default().skip_num as u64)
+                .expect("Could not read default")
+        );
+
+        // Check that the reduced phase is the same.
+        let actual_reduced_phases = parser
+            .reduced_phase()
+            .expect("Could not get reduced phases");
+        assert_eq!(actual_reduced_phases.len(), total_elements);
+
+        use vhf_parse::unwrap_phase::VHFWordToUnwrappedPhaseByIter;
+        let expected_reduced_phases = signal_expected.to_unwrapped_phase(0);
+        expected_reduced_phases
+            .zip(actual_reduced_phases)
+            .enumerate()
+            .for_each(|(_i, (e, a))| {
+                assert_relative_eq!(e, a);
+            });
+    }
+
+    tmp_dir.close().expect("Could not close temp_dir.");
+    push_arc_pages_thread.join().expect("Failed to join");
+}
