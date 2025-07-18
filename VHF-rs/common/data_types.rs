@@ -22,6 +22,16 @@ impl RawVHFWord {
     pub fn as_u64(&self) -> u64 {
         self.0
     }
+
+    /// This gives the phase / 2pi between i8::MAX and i8::MIN.
+    pub fn wrapped_phase(&self) -> f64 {
+        let Polar { radius: _, phase } = self.into();
+        phase
+    }
+
+    pub fn as_triplet(&self) -> IQMTriplet {
+        self.into()
+    }
 }
 
 impl std::ops::Deref for RawVHFWord {

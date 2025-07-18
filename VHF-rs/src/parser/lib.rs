@@ -1,3 +1,5 @@
+mod consts;
+
 /// Methods for translating between Rust types to how some of our Python functions are written.
 pub mod py_binds;
 use py_binds::{AbsTime, RelTime, StartTime};
@@ -27,6 +29,8 @@ impl From<PyErr> for ParseError {
 // Expectation for Data Types returned by parse methods.
 /// Raw VHF word prior to any parsing.
 pub use vhf_common::data_types::RawVHFWord as VHFWord;
+/// M component of [VHFWord].
+type M = i32;
 /// Unwrapped reduced phase of [VHFWord].
 type ReducedPhase = f64;
 
@@ -63,6 +67,8 @@ pub trait VHFparse {
     /// Block of binary trace with unwrapped phase / 2pi.
     fn reduced_phase(&self) -> ParseResult<Self::TransformReturn<ReducedPhase>>;
 }
+
+pub mod unwrap_phase;
 
 pub mod v1_python;
 pub use v1_python as v1;
