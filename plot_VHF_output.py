@@ -167,7 +167,7 @@ def main():
         logger = logging.getLogger()
 
     if args.file is not None:
-        files = args.file
+        files = Path(args.file)
         logger.info("File selected: %s", files)
     else:
         print("Please select files intended for plotting.")

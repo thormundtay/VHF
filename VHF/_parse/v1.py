@@ -388,7 +388,7 @@ class ManifoldRollover:
         )  # TODO: type casting here needs to be tested better.
         idx = np.ravel(np.argwhere(deltas))  # assumes 1D
         rollover: ManifoldRollover.sparse_m_delta_type = deltas[idx]
-        idx = idx + self._trace_blk_id * self._blk_size
+        idx = idx + self._trace_blk_id * self._blk_size + 1
         return idx, rollover
 
     def update(self, trace_block: NDArray[BinaryVHFTrace.raw_word_type]):
@@ -960,9 +960,9 @@ class VHFparser(VHFparser_trait):
         phase is obtained by atan(Q/I).
         """
         if self._phase is None:
-            p = -np.arctan2(self.i_arr, self.q_arr)
+            p = np.arctan2(self.i_arr, self.q_arr)
             p /= 2*np.pi
-            p -= self.m_arr
+            p += self.m_arr
             self._phase = p
         return self._phase
 
