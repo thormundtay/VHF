@@ -375,6 +375,7 @@ fn creates_correct_multithreaded_files() {
     config.num_samples = VHF_MMAP_WINDOW_LEN * MMAP_PAGE_LEN * file_save_size;
     config.verbosity = 3;
     config.skip_num = i16::MAX as u16;
+    config.save_to_file = true;
     let num_file = total_elements.div_ceil(config.num_samples);
     log::info!("save_dir = {:?}", &config.save_dir);
     log::info!("num_files = {:?}", &num_file);
@@ -400,6 +401,7 @@ fn creates_correct_multithreaded_files() {
     matches!(builder.writer_type, Writers::V1(_));
     let mut writer = builder.with_start_time(time_start).build();
     let vhf_iter = debug_vhf.iter();
+
     use pariter::IteratorExt;
     let body = pariter::scope(|scope| {
         vhf_iter
