@@ -320,13 +320,6 @@ impl<'a> VHF<'a> {
         result
     }
 
-    /// Assumes the USB Machine has started.
-    /// Gets the next index to read up to as given by ioctl
-    #[inline(always)]
-    pub fn ioctl_next(&self) -> Result<libc::c_int> {
-        board_ioctl_consts::ioctl_read(self.handle)
-    }
-
     /// Returns an iterable over VHF's buffer.
     pub fn iter(&self) -> VHFIter<'_> {
         VHFIter {
