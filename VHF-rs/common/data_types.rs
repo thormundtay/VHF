@@ -1,5 +1,5 @@
 //! Types associated to data created by VHF board.
-use std::f64::consts::{PI, TAU};
+use std::f64::consts::TAU;
 
 /// This is one word of VHF data.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -84,18 +84,20 @@ const fn raw_to_triplet(value: &RawVHFWord) -> IQMTriplet {
 impl From<&Polar> for IQMTriplet {
     #[inline]
     fn from(value: &Polar) -> Self {
-        let (m, rem_phase) = (
-            ((value.phase / TAU).round() as i64 & 0xFFFF) as i16,
-            value.phase % TAU,
-        );
+        let rem_phase = value.phase.rem_euclid(TAU); // [0, TAU)
         let (i, q) = (
             // Despite the name, I(n-phase) acts as y-coordinate across all definitions.
             (value.radius * rem_phase.sin()).round() as i32,
             // Despite the name Q(uadrature-phase) act as x-coordinate across all definitions.
             (value.radius * rem_phase.cos()).round() as i32,
-        );
+        ); // Need to force to i32 before making new_phase otherwise m will be broken
+        let new_phase = (i as f64).atan2(q as f64); // (-Pi, Pi]
 
-        IQMTriplet(i, q, m)
+        // rounding of (I, Q) can trip up the generation of m
+        let diff = value.phase / TAU - new_phase / TAU;
+        let m = diff.round();
+
+        IQMTriplet(i, q, (m as i64 & 0xFFFF) as i16)
     }
 }
 
@@ -152,22 +154,38 @@ pub struct Polar {
 }
 
 impl Polar {
-    /// This gives the wrapped phase in [-Pi, Pi).
-    #[allow(dead_code)]
+    /// This gives the wrapped phase in (0, 2Pi].
+    /// This is to align with atan2 for nonzero radius, which has a codomain of (-Pi, Pi].
+    #[cfg(test)]
     #[inline]
     fn projected_phase(&self) -> f64 {
-        let unwrapped = self.phase;
-        if unwrapped >= PI {
-            let t = (unwrapped - PI) / TAU;
-            let t = t.floor() + 1.;
-            -(t.mul_add(TAU, -unwrapped))
-        } else if unwrapped < -PI {
-            let u = (unwrapped + PI) / TAU;
-            let u = u.ceil();
-            u.mul_add(TAU, unwrapped)
-        } else {
-            unwrapped
-        }
+        let reduced_unwrapped = self.phase / TAU;
+        //     fract    :add:         mod
+        // (-X.f) -> -0.f -> 1. - 0.f -> 1. - 0.f
+        // ( X.f) ->  0.f ->      1.f ->      0.f
+        let fract = reduced_unwrapped.fract();
+        let reduced_projected_phase = (fract + 1.) % 1.;
+        let reduced_projected_phase_forced =
+            (reduced_projected_phase == 0.0) as u8 as f64 + reduced_projected_phase;
+        reduced_projected_phase_forced * TAU
+    }
+
+    /// Test for approximate equivalence while accounting for wrapping around pi.
+    #[cfg(test)]
+    fn approx_eq(&self, other: &Self) -> bool {
+        let sp = self.projected_phase();
+        let op = other.projected_phase();
+
+        debug_assert!(0. < sp && sp <= TAU);
+        debug_assert!(0. < op && op <= TAU);
+
+        let radius = self.radius.min(other.radius);
+        let e = 2. * (1. / radius).atan();
+
+        use approx::relative_eq;
+        relative_eq!(sp, op, epsilon = e)
+            || relative_eq!(sp, op + TAU, epsilon = e)
+            || relative_eq!(sp + TAU, op, epsilon = e)
     }
 }
 
@@ -260,31 +278,64 @@ mod tests {
 
     #[test]
     fn triplet_to_from_polar() {
-        use approx::assert_relative_eq;
+        let num_pts = 1000;
+        let phase_multiple = TAU / 64.;
+
         for radius in [10., 200., 1000., i32::MAX as f64 / 2.] {
-            for phase in -20..=20 {
-                let phase = phase as f64;
+            for p_i in -num_pts..=num_pts {
+                for m_offsets in [0f64, -1., 1.] {
+                    let phase = p_i as f64 * phase_multiple;
 
-                let polar = Polar { radius, phase };
-                let triplet: IQMTriplet = (&polar).into();
-                let result: Polar = triplet.into();
+                    let polar = Polar {
+                        radius,
+                        phase: phase + u16::MAX as f64 * m_offsets,
+                    };
+                    let triplet: IQMTriplet = (&polar).into();
+                    let result: Polar = triplet.into();
 
-                assert!(triplet.2.abs_diff((phase / TAU) as i16) <= 1);
-                assert!((result.radius - polar.radius).abs() <= 1.5);
-                assert_relative_eq!(
-                    result.projected_phase(),
-                    polar.projected_phase(),
-                    epsilon = 2. * (1. / radius).atan()
-                );
+                    assert!((result.radius - polar.radius).abs() <= 1.5);
+                    assert!(result.approx_eq(&polar));
+                }
             }
         }
     }
 
     #[test]
     fn polar_to_from_triplet() {
-        for i in (0..(1 << 13)).into_iter().step_by(2000) {
-            for q in (0..(1 << 13)).into_iter().step_by(3000) {
-                for m in (0..(1 << 10)).into_iter().step_by(100) {
+        log::info!("Testing known problematic cases");
+        for i in [-7000, 0, 7000] {
+            for q in [-7000, 0, 7000] {
+                for m in [-10, -5, -4, 0, 4, 5, 10] {
+                    if i == 0 && q == 0 {
+                        continue;
+                    };
+                    let triplet = IQMTriplet(i, q, m);
+                    let polar: Polar = triplet.into();
+                    assert_eq!(triplet, polar.into());
+                }
+            }
+        }
+
+        use rand::Rng;
+        use rand::distr::Uniform;
+
+        let mut rng1 = rand::rng();
+        let mut rng2 = rand::rng();
+        let mut rng3 = rand::rng();
+        let uni = Uniform::try_from(i32::MIN..i32::MAX).expect("Could not make uniform dist");
+        let m_uni = Uniform::try_from(-(1 << 10)..(1 << 10)).expect("Could not make uniform dist");
+        let num_points = 100;
+
+        log::info!("Testing by random sample");
+        let is = (&mut rng1).sample_iter(uni).take(num_points).into_iter();
+        for i in is {
+            let qs = (&mut rng2).sample_iter(uni).take(num_points).into_iter();
+            for q in qs {
+                let ms = (&mut rng3).sample_iter(m_uni).take(30).into_iter();
+                for m in ms {
+                    if i == 0 && q == 0 {
+                        continue;
+                    }
                     let triplet = IQMTriplet(i, q, m);
                     let polar: Polar = triplet.into();
                     assert_eq!(triplet, polar.into());
