@@ -12,9 +12,11 @@ use jiff::Zoned;
 use std::collections::HashMap;
 use std::f64::consts::TAU;
 use std::ffi::CString;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tempfile::TempDir;
 use test_log::test;
+use vhf_common::data_types::{Polar, RawVHFWord};
 
 #[cfg(feature = "o3")]
 use approx::assert_relative_eq;
@@ -423,7 +425,170 @@ fn creates_correct_multithreaded_files() {
     push_arc_pages_thread.join().expect("Failed to join");
 }
 
-#[ignore = "python logic"]
+pub(super) struct LinearPhaseArr {
+    total_len: u64,
+    current_idx: AtomicU64,
+    c: f64,
+    m: f64,
+    radius: f64,
+    engine_running: Arc<AtomicBool>,
+}
+
+impl Iterator for LinearPhaseArr {
+    type Item = RawVHFWord;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_idx.load(Ordering::Acquire) >= self.total_len {
+            self.engine_running.fetch_and(false, Ordering::AcqRel);
+            None
+        } else {
+            let j = self.current_idx.fetch_add(1, Ordering::AcqRel) as f64;
+            let curr_phase = self.m * j + self.c;
+
+            let polar = Polar {
+                radius: self.radius,
+                phase: curr_phase * TAU,
+            };
+
+            Some(polar.into())
+        }
+    }
+}
+
+impl LinearPhaseArr {
+    /// Arguments:
+    ///
+    /// - total_len: Number of elements in iterator.
+    /// - initial_params: (radius, initial_reduced_phase, reduced_gradient)
+    ///   Radius is the value of the signal.
+    ///   Reduced phase translates to Unwrapped phase / TAU.
+    pub(super) fn new(
+        total_len: usize,
+        initial_params: (f64, f64, f64),
+        engine_running: Arc<AtomicBool>,
+    ) -> Self {
+        if total_len % MMAP_PAGE_LEN != 0 {
+            log::warn!("LinearArr did not receive an integer multiple of MMAP_PAGE_LEN");
+        }
+        Self {
+            total_len: total_len.try_into().unwrap(),
+            current_idx: AtomicU64::new(0),
+            radius: initial_params.0,
+            c: initial_params.1,
+            m: initial_params.2,
+            engine_running,
+        }
+    }
+}
+
+impl Clone for LinearPhaseArr {
+    /// XXX: This will detach from the [`engine_running`].
+    fn clone(&self) -> Self {
+        Self {
+            current_idx: AtomicU64::new(self.current_idx.load(Ordering::Acquire)),
+            engine_running: Arc::new(AtomicBool::new(false)),
+            ..*self
+        }
+    }
+}
+
+/// Test the basic case of Python parsing first with Linear, and how that checks out against the
+/// "trivial" Rust implementation
+#[test]
+fn python_v1_linear() {
+    let debug_vhf_total_len = 12 * VHF_MMAP_WINDOW_LEN;
+    let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
+    let debug_vhf_conf = Configs::default();
+    let (debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
+        &debug_vhf_conf,
+        NonZeroUsize::new(debug_vhf_total_len).unwrap(),
+    );
+
+    let total_elements = total_window_len * MMAP_PAGE_LEN;
+    let params = StreamFold::none_default();
+
+    // We want to force an unwrapping to occur at least once.
+    assert!(total_elements > u16::MAX as usize + 3);
+    let signal_radius = 7000.;
+    // let initial_reduced_phase = i16::MAX as f64 - 240.9;
+    let initial_reduced_phase = 0.;
+    let reduced_phase_gradient = 0.21;
+    let linear = LinearPhaseArr::new(
+        total_elements,
+        (signal_radius, initial_reduced_phase, reduced_phase_gradient),
+        eng.clone(),
+    );
+
+    // Add signal into pages. We now add data into the buffer.
+    let push_arc_pages_thread = push_arc_pages(dbg_vhf_sender, linear, Duration::new(0, 100), eng)
+        .expect("push_arc_pages failed");
+
+    let time_start = Zoned::now();
+    let mut config = Configs::new(None).expect("Config struct could not be made");
+    let tmp_dir = TempDir::new().expect("Could not create temp_dir");
+    config.save_to_file = true;
+    config.save_dir = (*tmp_dir.path()).into();
+    config.num_samples = total_elements;
+    config.verbosity = 3;
+    log::info!("save_dir = {:?}", &config.save_dir);
+
+    let builder = config.file_writer().unwrap();
+    matches!(builder.writer_type, Writers::V1(_));
+    let mut writer = builder.with_start_time(time_start.clone()).build();
+
+    debug_vhf
+        .iter()
+        .step_by(params.step_by)
+        .map(|x| (*params.func)(x))
+        .try_for_each(|write_block| writer.write_data(write_block))
+        .expect("Writing to v1_writer failed");
+
+    // Test that the unwrapped phase is identical
+    #[cfg(feature = "o3")]
+    {
+        use pyo3_pylogger;
+        pyo3_pylogger::register("py");
+
+        let tmp_file = get_only_file(tmp_dir.path()).expect("Temp File not found");
+
+        let parser = V1parser::new(&tmp_file, false).expect("VHF v1 parser could not be created");
+        use vhf_parse::VHFparse;
+        parser
+            .resolve_m_overflow_idxs()
+            .expect("Could not fix m_overflow.");
+        let result_reduced_phase = parser
+            .reduced_phase()
+            .expect("Could not get resultant phase");
+        let expected_linear = (0..total_elements)
+            .map(|v| (v as f64).mul_add(reduced_phase_gradient, initial_reduced_phase));
+
+        use approx::assert_relative_eq;
+        use approx::relative_eq;
+        assert_eq!(result_reduced_phase.len(), total_elements);
+        expected_linear
+            .zip(result_reduced_phase)
+            .enumerate()
+            .for_each(|(_i, (e, a))| {
+                use vhf_common::data_types::IQMTriplet;
+                let e_triplet: IQMTriplet = Polar {
+                    radius: signal_radius,
+                    phase: e * TAU,
+                }
+                .into();
+
+                // if !relative_eq!(e, a, max_relative = 1e-6, epsilon = 5e-5) {
+                // log::trace!(
+                //     "idx = {i}, expected_triplet = {e_triplet:?}, expected = {e}, actual = {a}"
+                // );
+                // };
+                assert_relative_eq!(e, a, max_relative = 1e-6, epsilon = 5e-5);
+            });
+    }
+
+    tmp_dir.close().expect("Could not close temp_dir.");
+    push_arc_pages_thread.join().expect("Failed to join");
+}
+
+#[ignore = "python logical bug"]
 #[test]
 fn python_v1_edgecase() {
     let debug_vhf_total_len = 4 * VHF_MMAP_WINDOW_LEN;

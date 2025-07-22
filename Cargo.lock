@@ -27,6 +27,7 @@ dependencies = [
  "pariter",
  "prettytable-rs",
  "pyo3",
+ "pyo3-pylogger",
  "regex",
  "serde",
  "serde_json",
@@ -1096,6 +1097,16 @@ dependencies = [
  "pyo3-build-config",
  "quote",
  "syn 2.0.101",
+]
+
+[[package]]
+name = "pyo3-pylogger"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "820eb66d5e894df8dac4afda4859d22e3d2b47d2b54f33ae53fb3195e3f53cb0"
+dependencies = [
+ "log",
+ "pyo3",
 ]
 
 [[package]]

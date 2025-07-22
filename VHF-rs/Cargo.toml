@@ -45,5 +45,6 @@ VHF-parse = { path = "src/parser" }
 approx = { version = "0.5.1" }
 numpy = { version = "0.25.0" }
 pyo3 = { version = "0.25.1", features = ["jiff-02"] }
+pyo3-pylogger = { version = "0.5.0" }
 tempfile = { version = "3.19.1", features = ["default"] }
 test-log = { version = "0.2.17", features = ["trace", "color"] }
