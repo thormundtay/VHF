@@ -1,8 +1,9 @@
 //! This file uses the Python parsing through PyO3 for v1 file types. As such, it is dependent on
 //! it being in the correct environment.
 
-use super::{AbsTime, ParseError, ParseResult, RelTime, StartTime, VHFWord, VHFparse};
+use super::{ParseError, ParseResult, RelTime, StartTime, VHFWord, VHFparse};
 use crate::ReducedPhase;
+use crate::py_binds::AbsTime;
 use jiff::Zoned;
 use ndarray::Array1;
 use numpy::PyArray1;

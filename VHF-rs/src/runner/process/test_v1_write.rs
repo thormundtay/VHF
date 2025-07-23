@@ -85,6 +85,7 @@ fn writes_correct_file() {
             TAU * 0x7FFF as f64,
         ),
     );
+    #[allow(unused)]
     let mut signal_expected = signal.clone(); // This will lose the engine
 
     // Add signal into pages. We now add data into the buffer.
@@ -562,19 +563,19 @@ fn python_v1_linear() {
             .map(|v| (v as f64).mul_add(reduced_phase_gradient, initial_reduced_phase));
 
         use approx::assert_relative_eq;
-        use approx::relative_eq;
         assert_eq!(result_reduced_phase.len(), total_elements);
         expected_linear
             .zip(result_reduced_phase)
             .enumerate()
             .for_each(|(_i, (e, a))| {
-                use vhf_common::data_types::IQMTriplet;
-                let e_triplet: IQMTriplet = Polar {
-                    radius: signal_radius,
-                    phase: e * TAU,
-                }
-                .into();
+                // use vhf_common::data_types::IQMTriplet;
+                // let e_triplet: IQMTriplet = Polar {
+                //     radius: signal_radius,
+                //     phase: e * TAU,
+                // }
+                // .into();
 
+                // use approx::relative_eq;
                 // if !relative_eq!(e, a, max_relative = 1e-6, epsilon = 5e-5) {
                 // log::trace!(
                 //     "idx = {i}, expected_triplet = {e_triplet:?}, expected = {e}, actual = {a}"
@@ -622,6 +623,7 @@ fn python_v1_edgecase() {
             TAU * 0x7FFF as f64,
         ),
     );
+    #[allow(unused)]
     let mut signal_expected = signal.clone(); // This will lose the engine
 
     // Add signal into pages. We now add data into the buffer.

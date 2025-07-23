@@ -1,7 +1,7 @@
+#[cfg(feature = "o3")]
 use super::{ParseError, ParseResult};
-use pyo3::prelude::Python;
-use pyo3::types::PyAnyMethods;
-use pyo3::{Bound, IntoPyObject, PyAny};
+#[cfg(feature = "o3")]
+use pyo3::{Bound, IntoPyObject, PyAny, prelude::Python, types::PyAnyMethods};
 use std::cmp::Ordering;
 
 /// Absolute Time (Civil)
@@ -10,6 +10,7 @@ use std::cmp::Ordering;
 pub struct AbsTime(pub jiff::Zoned);
 
 impl AbsTime {
+    #[cfg(feature = "o3")]
     pub(crate) fn into_pyobject<'py>(self, py: Python<'py>) -> ParseResult<Bound<'py, PyAny>> {
         self.0
             .into_pyobject(py)?
@@ -30,6 +31,7 @@ impl From<jiff::Zoned> for AbsTime {
 pub struct RelTime(pub jiff::Span);
 
 impl RelTime {
+    #[cfg(feature = "o3")]
     pub(crate) fn into_pyobject<'py>(self, py: Python<'py>) -> ParseResult<Bound<'py, PyAny>> {
         jiff::SignedDuration::try_from(self.0)
             .map_err(ParseError::JiffError)?
@@ -68,6 +70,7 @@ pub enum StartTime {
 }
 
 impl StartTime {
+    #[cfg(feature = "o3")]
     pub(crate) fn into_pyobject<'py>(self, py: Python<'py>) -> ParseResult<Bound<'py, PyAny>> {
         match self {
             StartTime::Abs(v) => v.into_pyobject(py),

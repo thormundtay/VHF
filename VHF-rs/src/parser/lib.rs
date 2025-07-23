@@ -2,24 +2,28 @@ mod consts;
 
 /// Methods for translating between Rust types to how some of our Python functions are written.
 pub mod py_binds;
-use py_binds::{AbsTime, RelTime, StartTime};
+use py_binds::{RelTime, StartTime};
 
 /// Result associated to parsing of VHF file format.
 pub type ParseResult<T> = core::result::Result<T, ParseError>;
 
+#[cfg(feature = "o3")]
 use pyo3::PyErr;
 
 /// Errors associated during parsing of VHF file format.
 #[derive(Debug)]
 pub enum ParseError {
     ValueError,
+    #[cfg(feature = "o3")]
     PyError(PyErr),
     PyO3Downcast(String),
+    #[cfg(feature = "o3")]
     BorrowError(numpy::BorrowError),
     JiffError(jiff::Error),
     InternalError,
 }
 
+#[cfg(feature = "o3")]
 impl From<PyErr> for ParseError {
     fn from(value: PyErr) -> Self {
         ParseError::PyError(value)
@@ -70,5 +74,7 @@ pub trait VHFparse {
 
 pub mod unwrap_phase;
 
+#[cfg(feature = "o3")]
 pub mod v1_python;
+#[cfg(feature = "o3")]
 pub use v1_python as v1;
