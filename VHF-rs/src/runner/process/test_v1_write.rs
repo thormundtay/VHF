@@ -118,6 +118,8 @@ fn writes_correct_file() {
         let tmp_file = get_only_file(tmp_dir.path()).expect("Temp File not found");
         // // copy to /dev/shm/sine.bin;
         // std::fs::copy(&tmp_file, "/dev/shm/sine.bin").expect("failed_to copy");
+
+        pyo3::prepare_freethreaded_python();
         let parser = V1parser::new(&tmp_file, false).expect("Could not parse tmp file");
         parser
             .resolve_m_overflow_idxs()
@@ -551,6 +553,7 @@ fn python_v1_linear() {
 
         let tmp_file = get_only_file(tmp_dir.path()).expect("Temp File not found");
 
+        pyo3::prepare_freethreaded_python();
         let parser = V1parser::new(&tmp_file, false).expect("VHF v1 parser could not be created");
         use vhf_parse::VHFparse;
         parser
@@ -657,6 +660,7 @@ fn python_v1_edgecase() {
         // copy to /dev/shm/sine.bin;
         // std::fs::copy(&tmp_file, "/dev/shm/sine.bin").expect("failed_to copy");
 
+        pyo3::prepare_freethreaded_python();
         let parser = V1parser::new(&tmp_file, false).expect("Could not parse tmp file");
         parser
             .resolve_m_overflow_idxs()

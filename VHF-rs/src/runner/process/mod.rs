@@ -517,6 +517,7 @@ mod o3_test_setup {
     /// This test should not occur if o3 feature is not activated in the test.
     #[test]
     fn correct_pwd() {
+        pyo3::prepare_freethreaded_python();
         log::info!("PYTHONPATH = {:?}", env::var("PYTHONPATH"));
         assert!(vhf_parse::v1_python::test_import())
     }
