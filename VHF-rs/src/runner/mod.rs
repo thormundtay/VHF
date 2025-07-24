@@ -39,3 +39,6 @@ pub use process::*;
 /// After the data is processed (or not) in flight, data has to be written out to somewhere. This
 /// module therefore provides the means to writing into different output methods.
 pub mod writer;
+
+#[cfg(test)]
+mod test;
