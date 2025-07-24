@@ -408,18 +408,11 @@ class ManifoldRollover:
         if self._potential_overflow(m_block):  # Perform only if necessary
             self.logger.debug("_potential_overflow found!")
             # We first perform the np.diff for the self._trace_blk_id > 1 case:
-            x = None
-            if self._prev_trc_last_m is not None:
-                x = m_block[0] - self._prev_trc_last_m
             # Populate the np.diff for the given block
-            if x is not None:
-                diff_offset = 1
-                diff = np.zeros_like(m_block, dtype=BinaryVHFTrace.m_arr_type)
-                diff[0] = x
-            else:
-                diff_offset = 0
-                diff = np.zeros((m_block.size-1,), dtype=BinaryVHFTrace.m_arr_type)
-            diff[diff_offset:] = np.diff(m_block)
+            diff = np.zeros_like(m_block, dtype=BinaryVHFTrace.m_arr_type)
+            if self._prev_trc_last_m is not None:
+                diff[0] = m_block[0] - self._prev_trc_last_m
+            diff[1:] = np.diff(m_block)
             # Next, get indices and rollover direction
             idx, deltas = self._rollover_lemma(diff)
 
