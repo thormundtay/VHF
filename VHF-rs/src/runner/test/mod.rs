@@ -5,6 +5,9 @@
 // Let all tests within each mod reduce by 1 super by scoping as if they were in [crate::runner].
 use super::*;
 
+/// Various signals to hijack into MmapReader.
+pub mod signals;
+
 /// Test [super::super::process::VHF] pushing "ingesting from FPGA" before pushing out as an Iter.
 /// This is mostly done so by spoofing the MMapReader thread.
 mod vhf;
