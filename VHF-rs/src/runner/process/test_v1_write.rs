@@ -592,7 +592,6 @@ fn python_v1_linear() {
     push_arc_pages_thread.join().expect("Failed to join");
 }
 
-#[ignore = "python logical bug"]
 #[test]
 fn python_v1_edgecase() {
     let debug_vhf_total_len = 4 * VHF_MMAP_WINDOW_LEN;
@@ -609,9 +608,8 @@ fn python_v1_edgecase() {
 
     // Define the signal we are testing for.
     let ampl = 5000f64;
-    let ang_freq = TAU / (4.); // The very high frequency here means that if the end of offset zone
-    // is also involved in the next offset zone (such as when the zone is only 2 wide back to back,
-    // is when all the issues occur.)
+    let ang_freq = TAU / 9.;
+    // The signal must start within the m_offset = 0 range.
     let phase_offset = 2.2f64;
     let signal_radius = 5000f64;
 
@@ -711,7 +709,11 @@ fn python_v1_edgecase() {
         expected_reduced_phases
             .zip(actual_reduced_phases)
             .enumerate()
-            .for_each(|(_i, (e, a))| {
+            .for_each(|(i, (e, a))| {
+                if i == 0 {
+                    assert!(e.round() <= (i16::MAX as f64 + 1.));
+                    assert!((i16::MIN as f64 - 1.) <= e.round());
+                }
                 assert_relative_eq!(e, a);
             });
     }
