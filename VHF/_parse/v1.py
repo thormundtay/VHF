@@ -388,7 +388,7 @@ class ManifoldRollover:
         )  # TODO: type casting here needs to be tested better.
         idx = np.ravel(np.argwhere(deltas))  # assumes 1D
         rollover: ManifoldRollover.sparse_m_delta_type = deltas[idx]
-        idx = idx + self._trace_blk_id * self._blk_size + 1
+        idx = idx + self._trace_blk_id * self._blk_size
         return idx, rollover
 
     def update(self, trace_block: NDArray[BinaryVHFTrace.raw_word_type]):
