@@ -12,11 +12,12 @@ use jiff::Zoned;
 use std::collections::HashMap;
 use std::f64::consts::TAU;
 use std::ffi::CString;
+use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tempfile::TempDir;
 use test_log::test;
-use vhf_common::data_types::{Polar, RawVHFWord};
+use vhf_common::data_types::{IQMTriplet, Polar, RawVHFWord};
 
 #[cfg(feature = "o3")]
 use approx::assert_relative_eq;
@@ -717,5 +718,99 @@ fn python_v1_edgecase() {
     }
 
     tmp_dir.close().expect("Could not close temp_dir.");
+    push_arc_pages_thread.join().expect("Failed to join");
+}
+
+/// This block of code merely aims to create a block of data for manual debugging in Python.
+#[ignore = "creates v1 files for manual debugging"]
+#[test]
+fn generate_n_wide_bump() {
+    const TOTAL_ELEMS: usize = MMAP_PAGE_LEN * VHF_MMAP_WINDOW_LEN;
+    const INITIAL_FLAT_LINE_WIDTH: usize = 8;
+    const BUMP_WIDTH: usize = 2;
+    const REMAINDER_WIDTH: usize = TOTAL_ELEMS - 3 * BUMP_WIDTH - INITIAL_FLAT_LINE_WIDTH;
+
+    let low = TAU * (i16::MAX as f64) - 1.;
+    let hig = TAU * (i16::MAX as f64) + 7.;
+    let radius = 7000.;
+
+    {
+        let low_phase: IQMTriplet = Polar { phase: low, radius }.into();
+        log::debug!("low_triplet = {:?}", &low_phase);
+        let low_phase: Polar = low_phase.into();
+        let high_phase: IQMTriplet = Polar { phase: hig, radius }.into();
+        log::debug!("high_triplet = {:?}", &high_phase);
+        let high_phase: Polar = high_phase.into();
+        log::debug!("low_phase = {}", low_phase.phase);
+        log::debug!("high_phase = {}", high_phase.phase);
+    }
+
+    let debug_vhf_conf = Configs::default();
+    let (debug_vhf, dbg_vhf_sender, eng) =
+        debug_vhf_new(&debug_vhf_conf, NonZeroUsize::new(TOTAL_ELEMS).unwrap());
+
+    let params = StreamFold::none_default();
+    matches!(params.op, StreamFoldOp::None);
+
+    let signal_data: Vec<Polar> = [Polar { phase: low, radius }; INITIAL_FLAT_LINE_WIDTH]
+        .into_iter()
+        .chain([Polar { phase: hig, radius }; BUMP_WIDTH])
+        .chain([Polar { phase: low, radius }; BUMP_WIDTH])
+        .chain([Polar { phase: hig, radius }; BUMP_WIDTH])
+        .chain([Polar { phase: low, radius }; REMAINDER_WIDTH])
+        .collect();
+
+    /// Struct just for respecting engine requirements of the VHF struct.
+    struct MMapEngine {
+        engine_running: Arc<AtomicBool>,
+        data: std::vec::IntoIter<Polar>,
+    }
+    impl Iterator for MMapEngine {
+        type Item = RawVHFWord;
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.engine_running.load(Ordering::Acquire) {
+                let result = self.data.next().map(RawVHFWord::from);
+                if result.is_none() {
+                    self.engine_running.fetch_and(false, Ordering::AcqRel);
+                }
+                result
+            } else {
+                None
+            }
+        }
+    }
+
+    let signal = MMapEngine {
+        engine_running: eng.clone(),
+        data: signal_data.into_iter(),
+    };
+
+    // Add signal into pages. We now add data into the buffer.
+    let push_arc_pages_thread = push_arc_pages(dbg_vhf_sender, signal, Duration::new(0, 100), eng)
+        .expect("push_arc_pages failed");
+
+    let time_start = Zoned::now();
+    let mut config = Configs::new(None).expect("Config struct could not be made");
+    let tmp_dir = Path::new("/dev/shm");
+    config.save_to_file = true;
+    config.save_dir = tmp_dir.into();
+    config.num_samples = TOTAL_ELEMS;
+    config.skip_num = 9999;
+    config.verbosity = 3;
+    log::info!("save_dir = {:?}", &config.save_dir);
+
+    let builder = config.file_writer().unwrap();
+    matches!(builder.writer_type, Writers::V1(_));
+    let mut writer = builder.with_start_time(time_start.clone()).build();
+
+    debug_vhf
+        .iter()
+        .step_by(params.step_by)
+        .map(|x| (*params.func)(x))
+        .try_for_each(|write_block| writer.write_data(write_block))
+        .expect("Writing to v1_writer failed");
+
+    log::info!("File written!");
+
     push_arc_pages_thread.join().expect("Failed to join");
 }
