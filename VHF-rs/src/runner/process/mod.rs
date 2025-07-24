@@ -33,36 +33,36 @@ use vhf_common::config_types::SamplingSpeed;
 /// This is the size in bytes of the Mmap that is backed by the VHF device.
 const MMAP_BYTES_LEN: usize = 1 << 22;
 /// The size of the only continuous ring buffer that is [heapless::Deque].
-const DEQUE_CAP: usize = 256;
+pub(super) const DEQUE_CAP: usize = 256;
 
 /// Everything necessary to ensure the lifetime of pulling memory out from the VHF for its runtime
 pub struct VHF<'a> {
-    configuration: BoardConfig<'a>,
-    handle: libc::c_int,
-    raw_handle: std::fs::File,
+    pub(super) configuration: BoardConfig<'a>,
+    pub(super) handle: libc::c_int,
+    pub(super) raw_handle: std::fs::File,
     /// map_reader contains the thread that is responsible for pulling elements out of the MMap
     /// into a [Self::buffer].
     /// More details is as given in [self::mmap_reader].
-    map_reader: Option<JoinHandle<Result<()>>>,
+    pub(super) map_reader: Option<JoinHandle<Result<()>>>,
     /// Used to signal to [self::mmap_reader::MMapReader] has started, and to determine that child has stopped.
-    engine_running: Arc<AtomicBool>,
+    pub(super) engine_running: Arc<AtomicBool>,
     /// Stopped invoked
-    vhf_stop: bool,
+    pub(super) vhf_stop: bool,
     /// Used to receive signal from [self::mmap_reader::MMapReader] that new pages have been placed into
     /// [Self::buffer].
-    buffer_signal: Arc<Condvar>,
+    pub(super) buffer_signal: Arc<Condvar>,
     /// This is the channel used to receive from the child thread.
-    buffer_receive: Receiver<MmapPage>,
+    pub(super) buffer_receive: Receiver<MmapPage>,
     /// buffer is a local mirror of Mmap that is intended for the likes of SlidingWindow
     /// [itertools::Itertools::tuple_windows] and par_map, which has more Rust Semantics than reading straight
     /// out of a Mmap.
-    buffer: Rc<RefCell<Deque<MmapPage, DEQUE_CAP>>>,
+    pub(super) buffer: Rc<RefCell<Deque<MmapPage, DEQUE_CAP>>>,
     /// This is the amount of time between any two pages. Used for determining other timings.
-    time_between_pages: Span,
+    pub(super) time_between_pages: Span,
     /// Expected time when to next wake up mmap_reader thread.
-    wake_mmap: Arc<RwLock<Instant>>,
+    pub(super) wake_mmap: Arc<RwLock<Instant>>,
     /// This is the total number of pages to be read by [Self::map_reader].
-    total_pages_to_read: NonZeroUsize,
+    pub(super) total_pages_to_read: NonZeroUsize,
 }
 
 impl<'a> VHF<'a> {

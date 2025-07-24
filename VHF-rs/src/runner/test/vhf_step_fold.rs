@@ -4,14 +4,19 @@
 //! ```
 //! behaves to expectation.
 
-use super::super::fold::{StreamFold, StreamFoldOp};
-use super::consts::MMAP_PAGE_LEN;
-use super::test_vhf::{debug_vhf_new, push_arc_pages};
-use super::*;
+use super::Config;
+use super::consts::{MMAP_PAGE_LEN, VHF_MMAP_WINDOW_LEN};
+use super::fold::{StreamFold, StreamFoldOp};
+use super::pages::MmapPage;
+use super::{debug_vhf_new, push_arc_pages};
 use vhf_common::data_types::{IQMTriplet, MOverflowRaw, Polar, RawVHFWord};
 
 use std::f64::consts::{PI, TAU};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::num::NonZeroUsize;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, AtomicUsize, Ordering},
+};
 use std::time::Duration;
 use test_log::test;
 

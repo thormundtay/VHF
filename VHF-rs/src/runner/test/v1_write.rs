@@ -1,18 +1,22 @@
 //! This file is to test if [super::super::Writer] works.
 
-use super::super::config::Configs;
-use super::super::fold::{StreamFold, StreamFoldOp};
-use super::super::writer::builder::Writers;
-use super::consts::MMAP_PAGE_LEN;
-use super::test_vhf::{debug_vhf_new, push_arc_pages};
-use super::test_vhf_step_fold::SineArr;
-use super::*;
+use super::Config;
+use super::consts::{MMAP_PAGE_LEN, VHF_MMAP_WINDOW_LEN};
+use super::fold::{StreamFold, StreamFoldOp};
+use super::vhf_step_fold::SineArr;
+use super::writer::builder::Writers;
+use super::{debug_vhf_new, push_arc_pages};
+use crate::{Error, Result};
 
 use jiff::Zoned;
 use std::collections::HashMap;
 use std::f64::consts::TAU;
 use std::ffi::CString;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::num::NonZeroUsize;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, AtomicU64, Ordering},
+};
 use std::time::Duration;
 use tempfile::TempDir;
 use test_log::test;
@@ -58,7 +62,7 @@ fn get_only_file(tmpdir: &Path) -> Result<PathBuf> {
 fn writes_correct_file() {
     let debug_vhf_total_len = 4 * VHF_MMAP_WINDOW_LEN;
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
-    let debug_vhf_conf = Configs::default();
+    let debug_vhf_conf = Config::default();
     let (debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
         &debug_vhf_conf,
         NonZeroUsize::new(debug_vhf_total_len).unwrap(),
@@ -93,7 +97,7 @@ fn writes_correct_file() {
         .expect("push_arc_pages failed");
 
     let time_start = Zoned::now();
-    let mut config = Configs::new(None).expect("Config struct could not be made");
+    let mut config = Config::new(None).expect("Config struct could not be made");
     let tmp_dir = TempDir::new().expect("Could not create temp_dir");
     config.save_to_file = true;
     config.save_dir = (*tmp_dir.path()).into();
@@ -155,7 +159,7 @@ fn writes_correct_file() {
 
         assert_eq!(
             header.effective_decimation_factor(),
-            NonZeroU64::new(1u64 + Configs::default().skip_num as u64)
+            NonZeroU64::new(1u64 + Config::default().skip_num as u64)
                 .expect("Could not read default")
         );
 
@@ -290,7 +294,7 @@ fn creates_multiple_files() {
             .expect("push_arc_pages failed");
 
     let time_start = Zoned::now();
-    let mut config = Configs::new(None).expect("Config struct could not be made");
+    let mut config = Config::new(None).expect("Config struct could not be made");
     let tmp_dir = TempDir::new().expect("Could not create temp_dir");
     config.save_to_file = true;
     config.save_dir = (*tmp_dir.path()).into();
@@ -374,7 +378,7 @@ fn creates_correct_multithreaded_files() {
         push_arc_pages(dbg_vhf_sender, signal, thread_sleep, eng).expect("push_arc_pages failed");
 
     let time_start = Zoned::now();
-    let mut config = Configs::new(None).expect("Config struct could not be made");
+    let mut config = Config::new(None).expect("Config struct could not be made");
     let tmp_dir = TempDir::new().expect("Could not create temp_dir");
     config.save_dir = (*tmp_dir.path()).into();
     config.num_samples = VHF_MMAP_WINDOW_LEN * MMAP_PAGE_LEN * file_save_size;
@@ -500,7 +504,7 @@ impl Clone for LinearPhaseArr {
 fn python_v1_linear() {
     let debug_vhf_total_len = 12 * VHF_MMAP_WINDOW_LEN;
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
-    let debug_vhf_conf = Configs::default();
+    let debug_vhf_conf = Config::default();
     let (debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
         &debug_vhf_conf,
         NonZeroUsize::new(debug_vhf_total_len).unwrap(),
@@ -526,7 +530,7 @@ fn python_v1_linear() {
         .expect("push_arc_pages failed");
 
     let time_start = Zoned::now();
-    let mut config = Configs::new(None).expect("Config struct could not be made");
+    let mut config = Config::new(None).expect("Config struct could not be made");
     let tmp_dir = TempDir::new().expect("Could not create temp_dir");
     config.save_to_file = true;
     config.save_dir = (*tmp_dir.path()).into();
@@ -596,7 +600,7 @@ fn python_v1_linear() {
 fn python_v1_edgecase() {
     let debug_vhf_total_len = 4 * VHF_MMAP_WINDOW_LEN;
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
-    let debug_vhf_conf = Configs::default();
+    let debug_vhf_conf = Config::default();
     let (debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
         &debug_vhf_conf,
         NonZeroUsize::new(debug_vhf_total_len).unwrap(),
@@ -632,7 +636,7 @@ fn python_v1_edgecase() {
         .expect("push_arc_pages failed");
 
     let time_start = Zoned::now();
-    let mut config = Configs::new(None).expect("Config struct could not be made");
+    let mut config = Config::new(None).expect("Config struct could not be made");
     let tmp_dir = TempDir::new().expect("Could not create temp_dir");
     config.save_to_file = true;
     config.save_dir = (*tmp_dir.path()).into();
@@ -694,7 +698,7 @@ fn python_v1_edgecase() {
 
         assert_eq!(
             header.effective_decimation_factor(),
-            NonZeroU64::new(1u64 + Configs::default().skip_num as u64)
+            NonZeroU64::new(1u64 + Config::default().skip_num as u64)
                 .expect("Could not read default")
         );
 

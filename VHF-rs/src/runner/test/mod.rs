@@ -2,9 +2,13 @@
 //! corresponding parsers. The strategy taken up is by building up the through the testing of
 //! various components.
 
+// Let all tests within each mod reduce by 1 super by scoping as if they were in [crate::runner].
+use super::*;
+
 /// Test [super::super::process::VHF] pushing "ingesting from FPGA" before pushing out as an Iter.
 /// This is mostly done so by spoofing the MMapReader thread.
 mod vhf;
+use vhf::{debug_vhf_new, push_arc_pages};
 
 /// Assuming pages pushed out as an iterator are correct, we now test that the processing of this
 /// pages prior to file writing are done to expectation. This is primarily for the comparatively
