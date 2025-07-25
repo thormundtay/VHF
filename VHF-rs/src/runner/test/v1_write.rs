@@ -1,4 +1,4 @@
-//! This file is to test if [super::super::Writer] works.
+//! This file is to test if [super::writer::V1Writer] works.
 
 use super::Config;
 use super::consts::{MMAP_PAGE_LEN, VHF_MMAP_WINDOW_LEN};

@@ -335,9 +335,10 @@ impl<'a> V2BinWriter<'a> {
             .ok_or(Error::ExcessData)
     }
 
-    /// MOverflowRaw encodes the absolute position relative to start of [super::VHFIter]. However,
-    /// we sometimes instead want the absolute position relative to start of the file.
-    /// This iterator version avoids a repeated check file start index relative to VHFIter start.
+    /// MOverflowRaw encodes the absolute position relative to start of
+    /// [super::super::process::VHFIter]. However, we sometimes instead want the absolute position
+    /// relative to start of the file. This iterator version avoids a repeated check file start
+    /// index relative to VHFIter start.
     #[inline]
     fn align_to_file_start_iter(
         &self,

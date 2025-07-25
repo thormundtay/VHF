@@ -112,7 +112,8 @@ impl MMapReader {
 
     /// With the previous (rounded) bytes to current (rounded) byes, create a lazy iterator for
     /// pushing onto buffer.  
-    /// Rounding done must be in accordance with [MMAP_PAGE_LEN]. Note that each [crate::types::RawVHFWord] is 8 bytes.
+    /// Rounding done must be in accordance with [MMAP_PAGE_LEN]. Note that each
+    /// [vhf_common::data_types::RawVHFWord] is 8 bytes.
     fn get_mmap_iter(&self, prev: usize, next: usize) -> impl Iterator<Item = &'_ u64> {
         use bytemuck::try_cast_slice;
         // Bytes rounded to page length should have
@@ -133,7 +134,7 @@ impl MMapReader {
 
     /// This converts Mmap u8s into VHFPages which are placed into [self.buffer].
     /// # Errors
-    /// [super::VHF::ioctl_next] yields Err or has negative value.
+    /// [super::VHF]::ioctl_next yields Err or has negative value.
     fn stream(&mut self) -> Result<()> {
         let mut next_bytes;
         loop {
