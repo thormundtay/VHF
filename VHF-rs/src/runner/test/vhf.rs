@@ -1,17 +1,26 @@
-use super::consts::MMAP_PAGE_LEN;
-use super::pages::*;
-use super::*;
+use super::Config;
+use super::consts::{MMAP_PAGE_LEN, VHF_MMAP_WINDOW_LEN};
+use super::pages::MmapPage;
+use super::signals::{LinearArr, ZeroArr};
+use super::{DEQUE_CAP, VHF};
+use crate::{Error, Result};
 use vhf_common::data_types::RawVHFWord;
 
 use heapless::Deque;
+use jiff::Span;
 use std::{
+    cell::RefCell,
     matches,
+    num::NonZeroUsize,
     ops::Deref,
+    rc::Rc,
     sync::{
-        atomic::{AtomicU64, AtomicUsize, Ordering},
+        Arc, Condvar, RwLock,
+        atomic::{AtomicBool, Ordering},
         mpsc::{SyncSender, sync_channel},
     },
-    time::Duration,
+    thread::{self, JoinHandle},
+    time::{Duration, Instant},
 };
 use tempfile::{NamedTempFile, TempDir};
 use test_log::test;
@@ -93,39 +102,6 @@ pub(super) fn push_arc_pages(
         .map_err(Error::Io)
 }
 
-// Generate the zero-constant iterator on demand.
-struct ZeroArr {
-    total_len: usize,
-    current_idx: AtomicUsize,
-    engine_running: Arc<AtomicBool>,
-}
-
-impl Iterator for ZeroArr {
-    type Item = RawVHFWord;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.current_idx.load(Ordering::Acquire) >= self.total_len {
-            self.engine_running.fetch_and(false, Ordering::AcqRel);
-            None
-        } else {
-            self.current_idx.fetch_add(1, Ordering::Relaxed);
-            Some(RawVHFWord::from(0))
-        }
-    }
-}
-
-impl ZeroArr {
-    fn new(total_len: usize, engine_running: Arc<AtomicBool>) -> Self {
-        if total_len % MMAP_PAGE_LEN != 0 {
-            log::warn!("ZeroArr did not receive an integer multiple of MMAP_PAGE_LEN");
-        }
-        Self {
-            total_len,
-            current_idx: AtomicUsize::new(0),
-            engine_running,
-        }
-    }
-}
-
 /// We check if the iterator method does drop the Arc when .iter() has completed consuming.
 #[test]
 fn vhf_drops_arc() {
@@ -169,38 +145,6 @@ fn vhf_drops_arc() {
     assert_eq!(to_drop.strong_count(), 0);
 
     push_arc_pages_thread.join().expect("Failed to join");
-}
-
-struct LinearArr {
-    total_len: u64,
-    current_idx: AtomicU64,
-    engine_running: Arc<AtomicBool>,
-}
-
-impl Iterator for LinearArr {
-    type Item = RawVHFWord;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.current_idx.load(Ordering::Acquire) >= self.total_len {
-            self.engine_running.fetch_and(false, Ordering::AcqRel);
-            None
-        } else {
-            let prev = self.current_idx.fetch_add(1, Ordering::AcqRel);
-            Some(RawVHFWord::from(prev))
-        }
-    }
-}
-
-impl LinearArr {
-    fn new(total_len: usize, engine_running: Arc<AtomicBool>) -> Self {
-        if total_len % MMAP_PAGE_LEN != 0 {
-            log::warn!("LinearArr did not receive an integer multiple of MMAP_PAGE_LEN");
-        }
-        Self {
-            total_len: total_len.try_into().unwrap(),
-            current_idx: AtomicU64::new(0),
-            engine_running,
-        }
-    }
 }
 
 /// We check that the VHF struct is yielding the correct windows with next.
