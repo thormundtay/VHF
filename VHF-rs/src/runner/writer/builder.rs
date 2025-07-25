@@ -50,6 +50,10 @@ impl<'a> WriterBuilder<'a> {
                 verbosity: 4..=15,
                 ..
             } => {
+                if conf.num_samples < 1 {
+                    log::error!("Properties for v2 file detected, but 0 file length!");
+                    return Err(Error::User);
+                };
                 let board_config = conf.build_board_config()?;
                 Ok(Writers::V2Bin(V2BinArg {
                     board_config: conf.build_board_config().unwrap(),
@@ -57,7 +61,7 @@ impl<'a> WriterBuilder<'a> {
                     num_files: &conf.num_files,
                     verbosity: &conf.verbosity,
                     file_timespan: Box::new(board_config.file_timespan()),
-                    filename_details: conf.details(),
+                    filename_details: conf.filename(),
                     save_dir: &conf.save_dir,
                 }))
             }

@@ -136,7 +136,7 @@ impl<'a> V2BinWriter<'a> {
         Self {
             start_time: Box::new(start_time),
             board_config: Box::new(config.board_config),
-            num_files: *config.num_files,
+            num_files: (*config.num_files).max(1), // Allow for user to not specify
             num_files_so_far: AtomicUsize::new(0),
             time_between_files: Box::new(*config.file_timespan),
             num_elements_per_file: *config.num_samples,
