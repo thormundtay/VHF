@@ -1,5 +1,6 @@
 pub mod config_types;
 pub mod data_types;
+pub mod magic;
 
 pub type Result<T> = core::result::Result<T, Error>;
 

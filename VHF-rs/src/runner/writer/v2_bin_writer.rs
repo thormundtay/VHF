@@ -29,8 +29,7 @@ use std::{
     thread,
 };
 use vhf_common::data_types::{MOverflowRaw, RawVHFWord};
-
-pub(super) const V2_MAGIC_HEADER: &str = "VHFV2BIN";
+use vhf_common::magic::V2_MAGIC_HEADER;
 
 pub struct V2BinWriter<'a> {
     /// Timestamp of the board's start time.
