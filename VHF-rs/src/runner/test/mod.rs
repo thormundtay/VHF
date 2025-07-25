@@ -63,3 +63,6 @@ mod o3_test_setup {
         assert!(vhf_parse::v1_python::test_import())
     }
 }
+
+/// Specifically to v2 file writer, test if the file writing is sound (up to some concerns).
+mod v2_write;

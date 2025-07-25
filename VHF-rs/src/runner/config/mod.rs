@@ -109,7 +109,7 @@ impl Configs {
     }
 
     // Assumes ExtendedInterpolation from Python's ConfigParser
-    fn with_config(&mut self, config: ini::Ini) -> Result<()> {
+    pub(crate) fn with_config(&mut self, config: ini::Ini) -> Result<()> {
         // Section: Board
         if let evalexpr::Value::Int(num_samples) = config
             .get("Board", "num_samples")
