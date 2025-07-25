@@ -7,7 +7,6 @@
 use super::Config;
 use super::consts::{MMAP_PAGE_LEN, VHF_MMAP_WINDOW_LEN};
 use super::fold::{StreamFold, StreamFoldOp};
-use super::pages::MmapPage;
 use super::signals::SineArr;
 use super::{debug_vhf_new, push_arc_pages};
 use vhf_common::data_types::{IQMTriplet, MOverflowRaw, RawVHFWord};
@@ -46,8 +45,9 @@ fn stepped_nonoverlapping_identity_a() {
     let signal_expected = signal.clone(); // This will lose the engine
 
     // Add signal into pages. We now add data into the buffer.
-    let push_arc_pages_thread = push_arc_pages(dbg_vhf_sender, signal, Duration::default(), eng)
-        .expect("push_arc_pages failed");
+    let push_arc_pages_thread =
+        push_arc_pages(dbg_vhf_sender, params.pad, signal, Duration::default(), eng)
+            .expect("push_arc_pages failed");
 
     let result: Vec<RawVHFWord> = debug_vhf
         .iter()
@@ -105,8 +105,9 @@ fn stepped_nonoverlapping_identity_b() {
     let signal_expected = signal.clone(); // This will lose the engine
 
     // Add signal into pages. We now add data into the buffer.
-    let push_arc_pages_thread = push_arc_pages(dbg_vhf_sender, signal, Duration::default(), eng)
-        .expect("push_arc_pages failed");
+    let push_arc_pages_thread =
+        push_arc_pages(dbg_vhf_sender, params.pad, signal, Duration::default(), eng)
+            .expect("push_arc_pages failed");
 
     let result: Vec<RawVHFWord> = debug_vhf
         .iter()
@@ -158,12 +159,9 @@ fn stepped_overlapping_identity_a() {
     let signal_expected = signal.clone(); // This will lose the engine
 
     // Add signal into pages. We now add data into the buffer.
-    (0..params.pad)
-        .map(|_| MmapPage::Empty)
-        .try_for_each(|page| dbg_vhf_sender.send(page))
-        .expect("failed to push_back empty");
-    let push_arc_pages_thread = push_arc_pages(dbg_vhf_sender, signal, Duration::default(), eng)
-        .expect("push_arc_pages failed");
+    let push_arc_pages_thread =
+        push_arc_pages(dbg_vhf_sender, params.pad, signal, Duration::default(), eng)
+            .expect("push_arc_pages failed");
 
     // We also need to test for sign overflow.
     let results: Vec<_> = debug_vhf
@@ -233,12 +231,9 @@ fn stepped_overlapping_identity_b() {
     let signal_expected = signal.clone(); // This will lose the engine
 
     // Add signal into pages. We now add data into the buffer.
-    (0..params.pad)
-        .map(|_| MmapPage::Empty)
-        .try_for_each(|page| dbg_vhf_sender.send(page))
-        .expect("failed to push_back empty");
-    let push_arc_pages_thread = push_arc_pages(dbg_vhf_sender, signal, Duration::default(), eng)
-        .expect("push_arc_pages failed");
+    let push_arc_pages_thread =
+        push_arc_pages(dbg_vhf_sender, params.pad, signal, Duration::default(), eng)
+            .expect("push_arc_pages failed");
 
     // We also need to test for sign overflow.
     let results: Vec<_> = debug_vhf

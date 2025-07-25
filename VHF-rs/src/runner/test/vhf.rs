@@ -74,8 +74,17 @@ pub(super) fn debug_vhf_new<'a>(
 }
 
 /// Pushes [pages::Page]s from slice into [VHF].buffer.
+/// Note that this bypasses the MmapReader.
+///
+/// Arguments:
+/// - buffer_sender: Sender end of channel for pushing into [VHF].
+/// - empty_pages: Number of empty pages as given by [super::fold::StreamFold].
+/// - data: Any Iterator of [RawVHFWord].
+/// - sleep_between_pages: Time spent sleeping between each page push.
+/// - engine: Synchronization used to determine if VHF is running.
 pub(super) fn push_arc_pages(
     buffer_sender: SyncSender<MmapPage>,
+    empty_pages: usize,
     data: impl Iterator<Item = RawVHFWord> + Send + 'static,
     sleep_between_pages: Duration,
     engine: Arc<AtomicBool>,
@@ -84,6 +93,11 @@ pub(super) fn push_arc_pages(
         .name("Unit Test: Buffer Page Creator".to_string())
         .spawn(move || {
             use itertools::Itertools;
+            (0..empty_pages).for_each(|_| {
+                buffer_sender
+                    .send(MmapPage::Empty)
+                    .expect("Failed to to push empty page onto buffer.");
+            });
             data.into_iter()
                 .chunks(MMAP_PAGE_LEN)
                 .into_iter()
@@ -123,6 +137,7 @@ fn vhf_drops_arc() {
         .expect("Failed to push_back testing page.");
     let push_arc_pages_thread = push_arc_pages(
         dbg_vhf_sender,
+        0,
         ZeroArr::new((total_window_len - 1) * MMAP_PAGE_LEN, eng.clone()),
         Duration::default(),
         eng,
@@ -162,8 +177,18 @@ fn next_window_linear() {
     let signal = LinearArr::new(total_window_len * MMAP_PAGE_LEN, eng.clone());
 
     // Add signal into pages. We now add data into the buffer.
-    push_arc_pages(dbg_vhf_sender, signal, Duration::default(), eng)
-        .expect("push_arc_pages failed");
+    push_arc_pages(
+        dbg_vhf_sender,
+        debug_vhf_conf
+            .build_board_config()
+            .expect("Could not build board config")
+            .stream_fold_parameters()
+            .pad,
+        signal,
+        Duration::default(),
+        eng,
+    )
+    .expect("push_arc_pages failed");
 
     let mut debug_vhf_iter = debug_vhf.iter();
     for _ in 0..debug_vhf_total_len {
