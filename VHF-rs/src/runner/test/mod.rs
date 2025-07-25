@@ -2,6 +2,9 @@
 //! corresponding parsers. The strategy taken up is by building up the through the testing of
 //! various components.
 
+use crate::{Error, Result};
+use std::path::PathBuf;
+
 // Let all tests within each mod reduce by 1 super by scoping as if they were in [crate::runner].
 use super::*;
 
@@ -22,6 +25,28 @@ mod vhf_step_fold;
 /// As the parser is written in Python, please invoke the feature flag to test if the data as
 /// written is consistent with the parser.
 mod v1_write;
+
+/// For a temp dir, check that there has only been a single file in it. Thereafter, yield the path
+/// to it.
+fn get_only_file(tmpdir: &Path) -> Result<PathBuf> {
+    if !tmpdir.is_dir() {
+        return Err(Error::InternalInconsistency);
+    }
+    let files: Vec<_> = tmpdir
+        .read_dir()
+        .expect("Dir could not be read")
+        .filter_map(|d| d.ok())
+        .collect();
+    if files.len() != 1 {
+        return Err(Error::InternalInconsistency);
+    }
+
+    files
+        .into_iter()
+        .next()
+        .map(|d| d.path())
+        .ok_or(Error::InternalInconsistency)
+}
 
 /// In the event that Python integration is invoked for the testing, ensure that the environment is
 /// to expectation.

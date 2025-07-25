@@ -17,7 +17,7 @@ use tempfile::TempDir;
 use test_log::test;
 
 #[cfg(feature = "o3")]
-use crate::{Error, Result};
+use super::get_only_file;
 #[cfg(feature = "o3")]
 use approx::assert_relative_eq;
 #[cfg(feature = "o3")]
@@ -25,32 +25,7 @@ use jiff::ZonedRound;
 #[cfg(feature = "o3")]
 use std::num::NonZeroU64;
 #[cfg(feature = "o3")]
-use std::path::{Path, PathBuf};
-#[cfg(feature = "o3")]
 use vhf_parse::{VHFparse, v1::VHFparser as V1parser};
-
-/// For a temp dir, check that there has only been a single file in it. Thereafter, yield the path
-/// to it.
-#[cfg(feature = "o3")]
-fn get_only_file(tmpdir: &Path) -> Result<PathBuf> {
-    if !tmpdir.is_dir() {
-        return Err(Error::InternalInconsistency);
-    }
-    let files: Vec<_> = tmpdir
-        .read_dir()
-        .expect("Dir could not be read")
-        .filter_map(|d| d.ok())
-        .collect();
-    if files.len() != 1 {
-        return Err(Error::InternalInconsistency);
-    }
-
-    files
-        .into_iter()
-        .next()
-        .map(|d| d.path())
-        .ok_or(Error::InternalInconsistency)
-}
 
 /// Write a file that has data with m-overflow.
 /// This test will fail if [super::test_vhf_step_fold::stepped_nonoverlapping_identity_b] fails.
