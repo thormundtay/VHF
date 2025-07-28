@@ -25,7 +25,7 @@ impl ToString for SamplingSpeed {
 impl FromStr for SamplingSpeed {
     type Err = Error;
     fn from_str(value: &str) -> Result<Self> {
-        match value.chars().next() {
+        match value.chars().next().as_ref().map(char::to_ascii_lowercase) {
             None => Err(Error::ParseEmpty),
             Some('l') => Ok(SamplingSpeed::Low),
             Some('h') => Ok(SamplingSpeed::High),
