@@ -12,9 +12,9 @@ impl From<u64> for RawVHFWord {
     }
 }
 
-impl Into<u64> for RawVHFWord {
-    fn into(self) -> u64 {
-        self.0
+impl From<RawVHFWord> for u64 {
+    fn from(val: RawVHFWord) -> Self {
+        val.0
     }
 }
 
@@ -127,7 +127,7 @@ const fn triplet_to_raw(value: &IQMTriplet) -> RawVHFWord {
     let i = ((-(1 << 24) + value.0) & 0xFFFFFF) as u64;
     let q = ((-(1 << 24) + value.1) & 0xFFFFFF) as u64;
     let m = (value.2 as u16) as u64;
-    RawVHFWord((m << 48) | (i << 24) | (q << 0))
+    RawVHFWord((m << 48) | (i << 24) | q)
 }
 
 impl From<&Polar> for RawVHFWord {
