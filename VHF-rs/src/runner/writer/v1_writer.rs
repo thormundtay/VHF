@@ -1,8 +1,7 @@
 //! Writer method meant to be as identical as possible to the original C file writer.
 
-use super::super::config::typedef::Encode;
 use super::{FILE_LAZY_LEN, VHFWriter};
-use crate::{Error, Result, types::RawVHFWord};
+use crate::{Error, Result};
 #[cfg(not(test))]
 use jiff::SignedDuration;
 use jiff::{Span, Zoned};
@@ -17,6 +16,8 @@ use std::{
     },
     thread,
 };
+use vhf_common::config_types::Encode;
+use vhf_common::data_types::RawVHFWord;
 
 pub(super) const V1_MAGIC_HEADER: u64 = 0x123456ABCDEF0000;
 
@@ -30,6 +31,7 @@ pub struct V1Writer {
     time_between_files: Span,
     /// This is the number of [crate::runner::Config::num_samples] to be eventually be written to file.
     num_elements_per_file: usize,
+    /// This is the number of elements written to the current file.
     num_elements_written: AtomicUsize,
     verbosity: u8,
     header_details: String,
@@ -48,6 +50,7 @@ impl VHFWriter for V1Writer {
         let data: &mut Vec<_> = &mut words.data;
         'data_has_element: loop {
             if self.num_files_so_far.load(Ordering::Acquire) > self.num_files {
+                log::warn!("VHFIter has collected too many pages.");
                 return Err(Error::ExcessData);
             }
 
@@ -67,8 +70,7 @@ impl VHFWriter for V1Writer {
 
             // Check if to continue or break loop
             if self.num_elements_written.load(Ordering::Acquire) >= self.num_elements_per_file {
-                self.num_elements_written.fetch_min(0, Ordering::AcqRel);
-                self.close_file()?
+                self.close_file()?;
             }
 
             if data.is_empty() {
@@ -164,10 +166,7 @@ impl V1Writer {
             }
         }
         if std::fs::exists(path.clone()).unwrap() {
-            log::error!(
-                "Created file name found to already exist in location, path = {:?}",
-                path
-            );
+            log::error!("Created file name found to already exist in location, path = {path:?}");
             log::error!(
                 "self.start_time = {}, self.time_between_files = {}, num_files_so_far = {}",
                 self.start_time,
@@ -219,7 +218,7 @@ impl V1Writer {
                             * self.num_files_so_far.load(Ordering::Acquire).checked_sub(1).unwrap() as i64,
                     )
                     .map_err(Error::Jiff)?
-                    .strftime("%FT%T%z")
+                    .strftime("%FT%T%.f%z")
                     .to_string(),
                 "\n".to_string(),
             ]);
@@ -272,7 +271,7 @@ impl V1Writer {
                     .lock()
                     .unwrap()
                     .drain(0..)
-                    .try_for_each(|word| file.write_u64::<LittleEndian>(word))
+                    .try_for_each(|word| file.write_u64::<LittleEndian>(word.into()))
                     .map_err(Error::Io)?;
                 self.num_elements_written
                     .fetch_add(buf_len, Ordering::Release);
@@ -285,7 +284,7 @@ impl V1Writer {
                     .saturating_sub(self.num_elements_written.load(Ordering::Acquire))
                     .min(data.len()),
             )
-            .try_for_each(|word| file.write_u64::<LittleEndian>(word))
+            .try_for_each(|word| file.write_u64::<LittleEndian>(word.into()))
             .map_err(Error::Io)?;
 
             self.num_elements_written
@@ -311,7 +310,7 @@ impl V1Writer {
                     .saturating_sub(self.num_elements_written.load(Ordering::Acquire))
                     .min(data.len()),
             )
-            .try_for_each(move |word| file.write_u64::<LittleEndian>(word))
+            .try_for_each(move |word| file.write_u64::<LittleEndian>(word.into()))
             .map_err(Error::Io)?;
 
             self.num_elements_written
@@ -329,6 +328,7 @@ impl V1Writer {
             use std::io::Write;
             file.flush().map_err(Error::Io)?;
         }
+        self.num_elements_written.fetch_min(0, Ordering::AcqRel);
         *self.current_file_handle.lock().unwrap() = None;
         Ok(())
     }
@@ -337,7 +337,7 @@ impl V1Writer {
 impl Drop for V1Writer {
     fn drop(&mut self) {
         if thread::panicking() {
-            log::warn!("V1Writer in panic. self = {:?}", self);
+            log::warn!("V1Writer in panic. self = {self:?}");
         }
 
         let tmp = self.close_file();

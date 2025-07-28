@@ -1,7 +1,6 @@
 # Written with svn r14 in mind, where files are now explicitly set to save in
 # binary output
 
-from datetime import datetime
 from matplotlib import pyplot as plt
 from matplotlib.axes._axes import Axes
 import numpy as np
@@ -9,7 +8,7 @@ from typing import Tuple, Callable
 from pathlib import Path
 import scipy as sp
 from VHF.user_io import get_files, user_input_bool
-from VHF.parse import VHFparser
+from VHF.parse import VHF_v1_parser as VHFparser
 
 
 def get_radius(o: VHFparser) -> np.ndarray:
@@ -42,6 +41,7 @@ def plot_iqm(o: VHFparser):
     axs[2].set_ylabel(r"$M$/ADC units", usetex=True)
     axs[2].set_xlabel(r"$t$/s", usetex=True)
     return fig
+
 
 def plot_rad_spec(radius: bool, velocity: bool, spectrum: bool) -> Callable:
     """Yield desired function for plotting phase, radius and spectrum.
@@ -85,7 +85,7 @@ def plot_rad_spec(radius: bool, velocity: bool, spectrum: bool) -> Callable:
         r_ax_histy.tick_params(axis="y", labelleft=False, length=0)
         scatter_hist(rs, r_ax_histy)
 
-    def plotsp(sp_ax, o: VHFparser, *_):
+    def plotsp(sp_ax, o: VHFparser, *args):
         sp_ax.scatter(
             *get_spec(o),
             color="mediumblue",
@@ -123,7 +123,8 @@ def plot_rad_spec(radius: bool, velocity: bool, spectrum: bool) -> Callable:
             axs = [axs]
         i = 0
         plotphi(axs[i], o, phase)
-        for option, plot_, opt_x in zip(options, options_plots, options_sharex):
+        for option, plot_, opt_x in zip(options, options_plots,
+                                        options_sharex):
             if option:
                 i += 1
                 ax = axs[i]
@@ -166,7 +167,7 @@ def main():
         logger = logging.getLogger()
 
     if args.file is not None:
-        files = args.file
+        files = Path(args.file)
         logger.info("File selected: %s", files)
     else:
         print("Please select files intended for plotting.")

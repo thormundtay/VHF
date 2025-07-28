@@ -8,7 +8,7 @@ import subprocess
 from subprocess import PIPE
 import sys
 from tempfile import TemporaryDirectory
-from VHF.parse import VHFparser
+from VHF.parse import VHF_v1_parser
 from VHF.runner import VHFRunner
 
 
@@ -81,7 +81,7 @@ def run_and_plot():
             sys.exit(-emsg)
 
         tmp_store_name = tmp_store_file(tmp_store)
-        parsed = VHFparser(tmp_store_name)
+        parsed = VHF_v1_parser(tmp_store_name)
         logging.debug("min(m) = %f, max(m) = %f", np.min(parsed.m_arr), np.max(parsed.m_arr))
 
     phase = parsed.reduced_phase
@@ -104,7 +104,7 @@ def main():
     import sys
     from VHF.log_utils import no_matplot
 
-    argp = ArgumentParser(prog="plot_vhf", description="Plots VHFparser files.")
+    argp = ArgumentParser(prog="plot_vhf", description="Plots VHF_v1_parser files.")
     argp.add_argument("-d", "--debug", action="store_true", help="Prints logger to stdout")
     args = argp.parse_args()
 
