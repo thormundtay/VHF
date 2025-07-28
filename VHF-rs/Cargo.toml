@@ -20,8 +20,8 @@ clear-fifo = ["nix/user", "prettytable-rs"]
 o3 = ["numpy", "pyo3", "pyo3-pylogger", "VHF-parse/o3"]
 
 [dependencies]
-bytemuck = { version = "1.23.0" }
-byteorder = "1.5.0"
+bytemuck = { version = "1.23.0", features = ["aarch64_simd"] }
+byteorder = { version = "1.5.0" }
 clap = { version = "4.5.39", features = ["derive"] }
 configparser = { version = "3.1.0", default-features = false }
 evalexpr = { version = "12.0.2", features = ["regex"] }

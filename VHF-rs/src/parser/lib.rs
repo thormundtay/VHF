@@ -20,6 +20,9 @@ pub enum ParseError {
     #[cfg(feature = "o3")]
     BorrowError(numpy::BorrowError),
     JiffError(jiff::Error),
+    IoError(std::io::Error),
+    Utf8Error,
+    SerdeJson(serde_json::Error),
     InternalError,
 }
 
@@ -27,6 +30,24 @@ pub enum ParseError {
 impl From<PyErr> for ParseError {
     fn from(value: PyErr) -> Self {
         ParseError::PyError(value)
+    }
+}
+
+impl From<std::io::Error> for ParseError {
+    fn from(value: std::io::Error) -> Self {
+        ParseError::IoError(value)
+    }
+}
+
+impl From<std::str::Utf8Error> for ParseError {
+    fn from(_: std::str::Utf8Error) -> Self {
+        ParseError::Utf8Error
+    }
+}
+
+impl From<serde_json::Error> for ParseError {
+    fn from(value: serde_json::Error) -> Self {
+        ParseError::SerdeJson(value)
     }
 }
 

@@ -52,11 +52,13 @@ name = "VHF-parse"
 version = "0.1.0"
 dependencies = [
  "VHF-common",
+ "byteorder",
  "jiff",
  "log",
  "ndarray",
  "numpy",
  "pyo3",
+ "serde_json",
  "tempfile",
  "test-log",
 ]
