@@ -64,8 +64,13 @@ impl PartialEq for RelTime {
 
 /// For view window of Plot, one is free to specify either an absolute time, or time relative to
 /// the file start.
+#[derive(PartialEq, Clone, Debug)]
 pub enum StartTime {
+    /// This is the [jiff::Zoned] time for the start of the plot window.
+    /// This will be coerced to be within the trace.
     Abs(AbsTime),
+    /// This is the [jiff::Span] time relative to the file start for the plot window.
+    /// This will be coerced to be within the trace.
     Rel(RelTime),
 }
 
@@ -75,6 +80,27 @@ impl StartTime {
         match self {
             StartTime::Abs(v) => v.into_pyobject(py),
             StartTime::Rel(v) => v.into_pyobject(py),
+        }
+    }
+}
+
+#[derive(PartialEq, Clone, Debug)]
+pub enum DurationOrEndTime {
+    /// Denotes the duration of the plot window, with the start time being being the last specified
+    /// start time.
+    /// This will be coerced to be within the trace.
+    Rel(RelTime),
+    /// Denotes the end of the plot window, with [jiff::Zoned] time.
+    /// This will be coerced to be within the trace.
+    Abs(AbsTime),
+}
+
+impl DurationOrEndTime {
+    #[cfg(feature = "o3")]
+    pub(crate) fn into_pyobject<'py>(self, py: Python<'py>) -> ParseResult<Bound<'py, PyAny>> {
+        match self {
+            DurationOrEndTime::Abs(v) => v.into_pyobject(py),
+            DurationOrEndTime::Rel(v) => v.into_pyobject(py),
         }
     }
 }

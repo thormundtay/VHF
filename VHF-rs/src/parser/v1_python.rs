@@ -1,7 +1,7 @@
 //! This file uses the Python parsing through PyO3 for v1 file types. As such, it is dependent on
 //! it being in the correct environment.
 
-use super::{ParseError, ParseResult, RelTime, StartTime, VHFWord, VHFparse};
+use super::{DurationOrEndTime, ParseError, ParseResult, StartTime, VHFWord, VHFparse};
 use crate::ReducedPhase;
 use crate::py_binds::AbsTime;
 use jiff::Zoned;
@@ -60,7 +60,7 @@ pub struct VHFparser {
     /// Rust specified user previous start, for managing [self::data_rs].
     start: Box<Option<AbsTime>>,
     /// Rust specified user previous duration, for managing [self::data_rs].
-    duration: Box<Option<RelTime>>,
+    duration_or_end: Box<Option<DurationOrEndTime>>,
     /// Rust owned reflection of Python's data for GIL reasons.
     data_rs: RefCell<Option<Array1<VHFWord>>>,
     /// Rust owned reflection of Python's data for GIL reasons.
@@ -89,7 +89,7 @@ impl VHFparser {
             Ok(e)
         })?);
         let start = Box::new(None);
-        let duration = Box::new(None);
+        let duration_or_end = Box::new(None);
         let data_rs = RefCell::new(None);
         let phase_rs = RefCell::new(None);
         let (headerraw, header) = Self::fetch_header(&parser)?;
@@ -100,7 +100,7 @@ impl VHFparser {
             headerraw,
             file_start,
             start,
-            duration,
+            duration_or_end,
             data_rs,
             phase_rs,
         };
@@ -161,39 +161,55 @@ impl VHFparse for VHFparser {
 
     fn update_plot_timing(
         &mut self,
-        start: StartTime,
-        duration: RelTime,
+        start: Option<StartTime>,
+        duration_or_end: Option<DurationOrEndTime>,
         lazy: bool,
     ) -> ParseResult<()> {
-        let start_abs: AbsTime = {
-            match start {
-                StartTime::Abs(ref v) => v.clone(),
-                StartTime::Rel(ref r) => (*self.file_start)
-                    .checked_add(r.0)
-                    .map_err(ParseError::JiffError)?
-                    .into(),
+        // We don't attempt to maintain a true mirror of the Python state in this Rust wrapper at
+        // the moment as to what the plot_start and plot_end is.
+        let start_abs: Option<AbsTime> = {
+            // Not using Option::map due to closure escape
+            let arg_start = if let Some(s) = start.clone() {
+                match s {
+                    StartTime::Abs(ref v) => Some(v.clone()),
+                    StartTime::Rel(ref r) => Some(
+                        (*self.file_start)
+                            .checked_add(r.0)
+                            .map_err(ParseError::JiffError)?
+                            .into(),
+                    ),
+                }
+            } else {
+                None
+            };
+
+            if arg_start.is_none() {
+                *self.start.clone()
+            } else {
+                arg_start
             }
         };
 
         // If input was not changed, early exit.
-        if self.start.clone().is_some_and(|s| s == start_abs)
-            && self.duration.clone().is_some_and(|d| d == duration)
-        {
+        if (*self.start == start_abs) && (*self.duration_or_end == duration_or_end) {
             return Ok(());
         }
 
         // Otherwise, invalidate and call into Python.
-        self.start = Box::new(Some(start_abs));
-        self.duration = Box::new(Some(duration.clone()));
+        self.start = Box::new(start_abs);
+        self.duration_or_end = Box::new(duration_or_end.clone());
         *self.data_rs.borrow_mut() = None;
         *self.phase_rs.borrow_mut() = None;
 
         Python::with_gil(|py| -> ParseResult<()> {
             let kwargs = {
-                let kv: [(&str, Bound<PyAny>); 2] = [
-                    ("start", start.into_pyobject(py)?),
-                    ("duration", duration.into_pyobject(py)?),
-                ];
+                let mut kv: Vec<(&str, Bound<PyAny>)> = Vec::with_capacity(2);
+                if let Some(s) = start {
+                    kv.push(("start", s.into_pyobject(py)?));
+                };
+                if let Some(d) = duration_or_end {
+                    kv.push(("duration", d.into_pyobject(py)?));
+                };
                 kv.into_py_dict(py)?
             };
 
@@ -239,12 +255,10 @@ impl VHFparse for VHFparser {
             *self.data_rs.borrow_mut() = Some(array);
         }
 
-        let arr = self
-            .data_rs
+        self.data_rs
             .borrow()
             .clone()
-            .ok_or(ParseError::InternalError);
-        arr
+            .ok_or(ParseError::InternalError)
     }
 
     /// For now, fetches from Python; Will chang to using Rust Mapv.
@@ -279,7 +293,7 @@ impl Debug for VHFparser {
             .field("parser", &self.parser)
             .field("file_start", &self.file_start)
             .field("start", &self.start)
-            .field("duration", &self.duration)
+            .field("duration_or_end", &self.duration_or_end)
             .field(
                 "data_rs.len()",
                 &self.data_rs.borrow().clone().map(|l| l.len()).unwrap_or(0),
@@ -315,9 +329,9 @@ impl<'a> VHFheader<'a> {
             let speed = match v {
                 0 => None,
                 _ => {
-                    if let Ok(_) = dict.get_item("l") {
+                    if dict.get_item("l").is_ok() {
                         Some(SamplingSpeed::Low)
-                    } else if let Ok(_) = dict.get_item("h") {
+                    } else if dict.get_item("h").is_ok() {
                         Some(SamplingSpeed::High)
                     } else {
                         None

@@ -2,7 +2,7 @@ mod consts;
 
 /// Methods for translating between Rust types to how some of our Python functions are written.
 pub mod py_binds;
-use py_binds::{RelTime, StartTime};
+use py_binds::{DurationOrEndTime, StartTime};
 
 /// Result associated to parsing of VHF file format.
 pub type ParseResult<T> = core::result::Result<T, ParseError>;
@@ -81,8 +81,8 @@ pub trait VHFparse {
     /// - Lazy: Defer data fetch from when this function is called.
     fn update_plot_timing(
         &mut self,
-        start: StartTime,
-        duration: RelTime,
+        start: Option<StartTime>,
+        duration_or_end: Option<DurationOrEndTime>,
         lazy: bool,
     ) -> ParseResult<()>;
 

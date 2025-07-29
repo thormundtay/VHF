@@ -6,7 +6,7 @@ fn main() -> ParseResult<()> {
     use jiff::Span;
     use pyo3::prepare_freethreaded_python;
     use std::path::PathBuf;
-    use vhf_parse::py_binds::{RelTime, StartTime};
+    use vhf_parse::py_binds::{DurationOrEndTime, RelTime, StartTime};
     use vhf_parse::v1_python::VHFparser;
 
     prepare_freethreaded_python();
@@ -20,7 +20,11 @@ fn main() -> ParseResult<()> {
     let start = Span::new().seconds(60);
     let duration = Span::new().seconds(90);
 
-    v1p.update_plot_timing(StartTime::Rel(RelTime(start)), RelTime(duration), false)?;
+    v1p.update_plot_timing(
+        Some(StartTime::Rel(RelTime(start))),
+        Some(DurationOrEndTime::Rel(RelTime(duration))),
+        false,
+    )?;
 
     Ok(())
 }
