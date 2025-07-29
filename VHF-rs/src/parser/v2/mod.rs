@@ -2,7 +2,7 @@
 
 use crate::{ParseError, ParseResult};
 use byteorder::{NativeEndian, ReadBytesExt};
-use jiff::Zoned;
+use jiff::{Span, Zoned};
 use serde_json::Value;
 use std::{
     fs::{self, File},
@@ -174,6 +174,21 @@ impl TraceDetails {
             filter_const,
             stream_fold,
         })
+    }
+
+    /// Determine the interval of time between 2 consecutive samples of the trace.
+    pub fn sample_interval(&self) -> ParseResult<Span> {
+        let base_ns = self.speed.in_ns();
+
+        Ok(self.effective_decimation_factor() as i64 * base_ns)
+    }
+
+    /// Accounts skip-factor and software filters to determine the decimation factor relative to
+    /// the FPGA sampling rate.
+    pub fn effective_decimation_factor(&self) -> usize {
+        // Until TraceDetails includes each filter's decimation factor, we assume it to be 1 for
+        // now.
+        self.skip_num as usize + 1
     }
 }
 
