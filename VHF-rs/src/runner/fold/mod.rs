@@ -11,14 +11,6 @@ use serde::Serialize;
 use std::{cmp::Ordering, hint::unreachable_unchecked, num::NonZeroUsize, ops::Deref, sync::Arc};
 use vhf_common::data_types::{IQMTriplet, MOverflowRaw, RawVHFWord};
 
-/// Bounding [MOverflowWrite] limits.
-const M_OVERFLOW_IDX_MAX: usize = usize::MAX >> 1;
-
-/// Compacted representation of [MOverflowRaw] into 8 bytes for file-writing reasons.  
-/// See: [super::writer::V2BinWriter].
-#[repr(transparent)]
-pub(super) struct MOverflowWrite(pub i64);
-
 /// This fully describes and contains all relevant mechanisms for taking the iterator output of
 /// [super::VHFIter] for "in-flight processing."
 #[derive(Clone)]
@@ -259,75 +251,6 @@ impl Serialize for StreamFold {
     }
 }
 
-impl TryFrom<&MOverflowRaw> for MOverflowWrite {
-    type Error = Error;
-
-    /// Converts [MOverflowRaw] into a standardized representation of 64-bits. The most significant
-    /// bit (MSB) denotes the sign change, where 0 denotes +1 and 1 denotes -1. After zeroing the MSB, interpreting as index.
-    ///
-    /// # Errors
-    /// When the index of [MOverflowRaw.0] is too large.
-    fn try_from(value: &MOverflowRaw) -> Result<MOverflowWrite> {
-        if value.0 > M_OVERFLOW_IDX_MAX {
-            return Err(Error::ExcessData);
-        }
-        match value.1 {
-            1 => {
-                let idx: u64 = value.0.try_into().unwrap(); // Safety: M_OVERFLOW_IDX_MAX
-                let idx = idx as i64;
-                Ok(MOverflowWrite(idx))
-            }
-            -1 => {
-                let idx: u64 = value.0.try_into().unwrap(); // Safety: M_OVERFLOW_IDX_MAX
-                let idx = idx as i64 + (1 << 63);
-                debug_assert!(idx >> 63 == 1);
-                Ok(MOverflowWrite(idx))
-            }
-            #[cfg(test)]
-            _ => panic!("Unrecognised overflow-raw sign"),
-            #[cfg(not(test))]
-            _ => unsafe { unreachable_unchecked() },
-        }
-    }
-}
-
-impl TryFrom<MOverflowRaw> for MOverflowWrite {
-    type Error = Error;
-
-    /// Converts [MOverflowRaw] into a standardized representation of 64-bits. The most significant
-    /// bit (MSB) denotes the sign change, where 0 denotes +1 and 1 denotes -1. After zeroing the MSB, interpreting as index.
-    ///
-    /// # Errors
-    /// When the index of [MOverflowRaw.0] is too large.
-    #[inline(always)]
-    fn try_from(value: MOverflowRaw) -> Result<MOverflowWrite> {
-        (&value).try_into()
-    }
-}
-
-impl TryFrom<&MOverflowWrite> for MOverflowRaw {
-    type Error = Error;
-
-    fn try_from(value: &MOverflowWrite) -> Result<MOverflowRaw> {
-        let value = value.0;
-        let sign = value >> 63;
-        let sign = if sign == 0 {
-            Ok(1)
-        } else if sign == 1 {
-            Ok(-1)
-        } else {
-            Err(Error::InternalInconsistency)
-        }?;
-
-        Ok(MOverflowRaw(
-            (value & ((u64::MAX >> 1) as i64))
-                .try_into()
-                .map_err(|_| Error::ExcessData)?,
-            sign as i8,
-        ))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -339,14 +262,5 @@ mod tests {
         assert!(first == first);
         assert!(second == second);
         assert!(first != second);
-    }
-
-    #[test]
-    fn packing_m_overflow() {
-        let x = MOverflowRaw(2, 1);
-        let y: MOverflowWrite = (&x).try_into().unwrap();
-        let z: MOverflowRaw = (&y).try_into().unwrap();
-
-        assert_eq!(x, z);
     }
 }

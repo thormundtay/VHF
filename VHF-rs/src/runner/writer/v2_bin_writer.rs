@@ -8,7 +8,6 @@
 //! section of data. For more information, see [MOverflowRaw].
 
 use super::super::BoardConfig;
-use super::super::fold::MOverflowWrite;
 use super::{FILE_LAZY_LEN, VHFWriter};
 use crate::{Error, Result};
 #[cfg(not(test))]
@@ -30,6 +29,7 @@ use std::{
 };
 use vhf_common::data_types::{MOverflowRaw, RawVHFWord};
 use vhf_common::magic::V2_MAGIC_HEADER;
+use vhf_common::write_types::MOverflowWrite;
 
 pub struct V2BinWriter<'a> {
     /// Timestamp of the board's start time.
@@ -440,10 +440,11 @@ impl<'a> V2BinWriter<'a> {
                         .saturating_sub(self.m_overflow_written.load(Ordering::Acquire)),
                 ); // Drain only as many as writeable.
                 self.align_to_file_start_iter(m_idxs.drain(0..num_to_drain))
-                    .try_for_each(|m_idx| {
+                    .try_for_each(|m_idx| -> vhf_common::Result<()> {
                         m_cumulative += (m_idx.1) as i64;
                         m_idx.try_into().and_then(|m_write: MOverflowWrite| {
-                            file.write_i64::<NativeEndian>(m_write.0).map_err(Error::Io)
+                            file.write_i64::<NativeEndian>(*m_write)
+                                .map_err(vhf_common::Error::Io)
                         })
                     })?;
                 self.m_overflow_written

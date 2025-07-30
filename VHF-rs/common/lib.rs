@@ -1,6 +1,7 @@
 pub mod config_types;
 pub mod data_types;
 pub mod magic;
+pub mod write_types;
 
 pub type Result<T> = core::result::Result<T, Error>;
 
@@ -11,6 +12,7 @@ pub enum Error {
     Io(std::io::Error),
     Jiff(jiff::Error),
     InternalInconsistency,
+    ExcessData,
 }
 
 impl std::error::Error for Error {}
