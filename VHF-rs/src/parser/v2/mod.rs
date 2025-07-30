@@ -1,5 +1,7 @@
 //! For the parsing of v2 file types.
 
+mod trace_timer;
+
 use crate::{ParseError, ParseResult};
 use byteorder::{NativeEndian, ReadBytesExt};
 use jiff::{Span, Zoned};
@@ -11,6 +13,7 @@ use std::{
     str::FromStr,
 };
 // use vhf_common::data_types::RawVHFWord;
+use trace_timer::TraceTimer;
 use vhf_common::config_types::SamplingSpeed;
 use vhf_common::magic::V2_MAGIC_HEADER;
 
@@ -207,6 +210,8 @@ pub struct VHFparser<'a> {
     data_len: usize,
     /// This is the offset block for the first m value.
     m_offset: i64,
+    /// Managing the plot window.
+    timer: Box<TraceTimer>,
 }
 
 impl<'a> VHFparser<'a> {
@@ -309,6 +314,14 @@ impl<'a> VHFparser<'a> {
         }
         let data_len = data_len_bytes / 8;
 
+        let timer = {
+            let trace_start = header.start_time.clone();
+            let sample_interval = TraceDetails::sample_interval(&header)?;
+            let trace_len = data_len;
+
+            Box::new(TraceTimer::new(trace_start, sample_interval, trace_len)?)
+        };
+
         {
             // Warn if the declared length is not the same as what is recorded.
             if data_len != header.num_samples {
@@ -327,6 +340,7 @@ impl<'a> VHFparser<'a> {
             header,
             data_len,
             m_offset,
+            timer,
         })
     }
 }
