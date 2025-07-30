@@ -2,7 +2,8 @@
 use super::{ParseError, ParseResult};
 #[cfg(feature = "o3")]
 use pyo3::{Bound, IntoPyObject, PyAny, prelude::Python, types::PyAnyMethods};
-use std::cmp::Ordering;
+
+use std::{cmp::Ordering, ops::Deref};
 
 /// Absolute Time (Civil)
 /// Work still to be done to check if timezone is required during parsing.
@@ -23,6 +24,13 @@ impl AbsTime {
 impl From<jiff::Zoned> for AbsTime {
     fn from(value: jiff::Zoned) -> Self {
         AbsTime(value)
+    }
+}
+
+impl Deref for AbsTime {
+    type Target = jiff::Zoned;
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -59,6 +67,13 @@ impl PartialEq for RelTime {
                 false
             }
         }
+    }
+}
+
+impl Deref for RelTime {
+    type Target = jiff::Span;
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
