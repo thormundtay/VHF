@@ -2,7 +2,7 @@
 
 mod trace_timer;
 
-use crate::{ParseError, ParseResult};
+use crate::{M, ParseError, ParseResult};
 use byteorder::{NativeEndian, ReadBytesExt};
 use jiff::{Span, Zoned};
 use serde_json::Value;
@@ -209,7 +209,7 @@ pub struct VHFparser<'a> {
     /// This is the number of words in the data section.
     data_len: usize,
     /// This is the offset block for the first m value.
-    m_offset: i64,
+    m_offset: M,
     /// Managing the plot window.
     timer: Box<TraceTimer>,
 }
@@ -267,7 +267,7 @@ impl<'a> VHFparser<'a> {
 
         let header: Box<TraceDetails> = { Box::new(TraceDetails::new(&header_value)?) };
 
-        let m_offset = header_value
+        let m_offset: M = header_value
             .get("m_offset")
             .ok_or_else(|| {
                 log::error!("m_offset not found! This should not happen!");
@@ -277,6 +277,12 @@ impl<'a> VHFparser<'a> {
                 v.as_i64().ok_or_else(|| {
                     log::error!("m_offset not i64! found: {v}");
                     ParseError::ValueError
+                })
+            })
+            .and_then(|m| {
+                m.try_into().map_err(|_| {
+                    log::error!("m_offset read as i64 larger than internal M bounds.");
+                    ParseError::InternalError
                 })
             })?;
         let m_overflow_len = header_value
