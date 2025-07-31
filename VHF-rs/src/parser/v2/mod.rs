@@ -2,9 +2,11 @@
 
 mod trace_timer;
 
-use crate::{M, ParseError, ParseResult};
+use super::{DurationOrEndTime, StartTime};
+use crate::{M, ParseError, ParseResult, VHFparse};
 use byteorder::{NativeEndian, ReadBytesExt};
 use jiff::{Span, Zoned};
+use ndarray::{ArrayView, Ix1};
 use serde_json::Value;
 use std::{
     fs::{self, File},
@@ -199,7 +201,10 @@ impl TraceDetails {
 // 'a: Lifetime of file (as path) being read from.
 // 'd: Lifetime of mmap created during change of view window.
 #[derive(Debug)]
-pub struct VHFparser<'a> {
+pub struct VHFparser<'a, 'd>
+where
+    'a: 'd,
+{
     file: &'a Path,
     /// This is the number of bytes associated header str.
     header_len: usize,
@@ -212,9 +217,19 @@ pub struct VHFparser<'a> {
     m_offset: M,
     /// Managing the plot window.
     timer: Box<TraceTimer>,
+    /// This is the internal store of the view window.
+    data: Option<ArrayView<'d, u64, Ix1>>, // No Rc<RefCell> due to passing out lifetime
 }
 
-impl<'a> VHFparser<'a> {
+impl<'a, 'd> VHFparser<'a, 'd> {
+    /// V2 Binary file format parser.
+    ///
+    /// Data is only fetched when data or phase is requested.
+    ///
+    /// Arguments:
+    /// - file: [Path] to file.
+    /// - headers_only: If false, ManifoldManger is invoked not at init time, but at first data
+    ///   fetch.
     pub fn new(file: &'a Path) -> ParseResult<Self> {
         log::debug!("Creating v2::VHFparser with {}", file.display());
 
@@ -347,7 +362,40 @@ impl<'a> VHFparser<'a> {
             data_len,
             m_offset,
             timer,
+            data: None,
         })
+    }
+}
+
+impl<'a, 'd> VHFparse<'d> for VHFparser<'a, 'd>
+where
+    'a: 'd,
+{
+    type DataReturn = ArrayView<'d, u64, Ix1>;
+    type TransformReturn<T: 'd> = ArrayView<'d, T, Ix1>;
+
+    fn update_plot_timing(
+        &mut self,
+        start: Option<StartTime>,
+        duration_or_end: Option<DurationOrEndTime>,
+        lazy: bool,
+    ) -> ParseResult<()> {
+        todo!()
+    }
+
+    fn data(&self) -> ParseResult<Self::DataReturn> {
+        if self.data.is_some() {
+            return Ok(*self.data.as_ref().unwrap());
+        }
+        todo!()
+    }
+
+    fn resolve_m_overflow_idxs(&mut self) -> ParseResult<()> {
+        todo!()
+    }
+
+    fn reduced_phase(&self) -> ParseResult<Self::TransformReturn<crate::ReducedPhase>> {
+        todo!()
     }
 }
 
