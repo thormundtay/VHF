@@ -91,6 +91,15 @@ impl TryFrom<&MOverflowWrite> for MOverflowRaw {
     }
 }
 
+impl TryFrom<MOverflowWrite> for MOverflowRaw {
+    type Error = Error;
+
+    #[inline(always)]
+    fn try_from(value: MOverflowWrite) -> Result<MOverflowRaw> {
+        (&value).try_into()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

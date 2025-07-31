@@ -1,5 +1,6 @@
 //! For the parsing of v2 file types.
 
+mod rollover;
 mod trace_timer;
 
 use super::{DurationOrEndTime, StartTime};
@@ -7,6 +8,7 @@ use crate::{M, ParseError, ParseResult, VHFparse};
 use byteorder::{NativeEndian, ReadBytesExt};
 use jiff::{Span, Zoned};
 use ndarray::{ArrayView, Ix1};
+use rollover::RollOver;
 use serde_json::Value;
 use std::{
     fs::{self, File},
@@ -14,7 +16,6 @@ use std::{
     path::Path,
     str::FromStr,
 };
-// use vhf_common::data_types::RawVHFWord;
 use trace_timer::TraceTimer;
 use vhf_common::config_types::SamplingSpeed;
 use vhf_common::magic::V2_MAGIC_HEADER;

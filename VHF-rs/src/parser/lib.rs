@@ -13,6 +13,7 @@ use pyo3::PyErr;
 /// Errors associated during parsing of VHF file format.
 #[derive(Debug)]
 pub enum ParseError {
+    Excess,
     ValueError,
     #[cfg(feature = "o3")]
     PyError(PyErr),
@@ -21,6 +22,7 @@ pub enum ParseError {
     BorrowError(numpy::BorrowError),
     JiffError(jiff::Error),
     IoError(std::io::Error),
+    ByteMuckError(bytemuck::PodCastError),
     Utf8Error,
     SerdeJson(serde_json::Error),
     InternalError,
@@ -48,6 +50,12 @@ impl From<std::str::Utf8Error> for ParseError {
 impl From<serde_json::Error> for ParseError {
     fn from(value: serde_json::Error) -> Self {
         ParseError::SerdeJson(value)
+    }
+}
+
+impl From<bytemuck::PodCastError> for ParseError {
+    fn from(value: bytemuck::PodCastError) -> Self {
+        ParseError::ByteMuckError(value)
     }
 }
 
