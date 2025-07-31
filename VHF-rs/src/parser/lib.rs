@@ -60,17 +60,17 @@ type M = i32;
 type ReducedPhase = f64;
 
 /// Expected methods of any VHF parser. Mirrors Python's expectations.
-pub trait VHFparse {
+pub trait VHFparse<'d> {
     /// v1 Writer unfortunately has to return as an Owned Array, but it is quite likely that v2
     /// will return as a View Array.
     type DataReturn;
 
     // /// This changes in accordance with if Map is collected, or if taken from Python etc.
-    type TransformReturn<T>;
+    type TransformReturn<T: 'd>;
 
     /// Update the class to be aware of all m-overflow indices. This is in the event that the
     /// parser tries to be lazy at init time.
-    fn resolve_m_overflow_idxs(&self) -> ParseResult<()>;
+    fn resolve_m_overflow_idxs(&mut self) -> ParseResult<()>;
 
     /// Changes the expected view window associated with the current parsed file.
     ///

@@ -101,7 +101,7 @@ fn writes_correct_file() {
         // std::fs::copy(&tmp_file, "/dev/shm/sine.bin").expect("failed_to copy");
 
         pyo3::prepare_freethreaded_python();
-        let parser = V1parser::new(&tmp_file, false).expect("Could not parse tmp file");
+        let mut parser = V1parser::new(&tmp_file, false).expect("Could not parse tmp file");
         parser
             .resolve_m_overflow_idxs()
             .expect("Could not fix m_overflow.");
@@ -481,7 +481,8 @@ fn python_v1_linear() {
         let tmp_file = get_only_file(tmp_dir.path()).expect("Temp File not found");
 
         pyo3::prepare_freethreaded_python();
-        let parser = V1parser::new(&tmp_file, false).expect("VHF v1 parser could not be created");
+        let mut parser =
+            V1parser::new(&tmp_file, false).expect("VHF v1 parser could not be created");
         use vhf_parse::VHFparse;
         parser
             .resolve_m_overflow_idxs()
@@ -592,7 +593,7 @@ fn python_v1_edgecase() {
         // std::fs::copy(&tmp_file, "/dev/shm/sine.bin").expect("failed_to copy");
 
         pyo3::prepare_freethreaded_python();
-        let parser = V1parser::new(&tmp_file, false).expect("Could not parse tmp file");
+        let mut parser = V1parser::new(&tmp_file, false).expect("Could not parse tmp file");
         parser
             .resolve_m_overflow_idxs()
             .expect("Could not fix m_overflow.");
