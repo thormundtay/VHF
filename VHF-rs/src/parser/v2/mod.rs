@@ -5,8 +5,10 @@ mod trace_timer;
 
 use super::{DurationOrEndTime, StartTime};
 use crate::{M, ParseError, ParseResult, VHFparse};
+use bytemuck::checked::try_cast_slice;
 use byteorder::{NativeEndian, ReadBytesExt};
 use jiff::{Span, Zoned};
+use memmap2::{Mmap, MmapOptions};
 use ndarray::{ArrayView, Ix1};
 use rollover::RollOver;
 use serde_json::Value;
@@ -214,6 +216,8 @@ where
     header: Box<TraceDetails>,
     /// This is the number of words in the data section.
     data_len: usize,
+    /// Owned memory map to data section.
+    data_raw_map: Mmap,
     /// This is the offset block for the first m value.
     m_offset: M,
     /// Managing the plot window.
@@ -348,12 +352,24 @@ impl<'a, 'd> VHFparser<'a, 'd> {
 
         let m_mgr = None;
 
+        let data_raw_map = {
+            let offset_to_m_idxs = (PRE_REMAININGHEADER + header_len).div_ceil(8) * 8;
+            let offset_to_data = offset_to_m_idxs + 8 * m_overflow_len;
+
+            unsafe {
+                MmapOptions::new()
+                    .offset(offset_to_data as _)
+                    .map(&File::open(file)?)
+            }?
+        };
+
         let mut s = Self {
             file,
             header_len,
             m_overflow_len,
             header,
             data_len,
+            data_raw_map,
             m_offset,
             timer,
             m_mgr: Box::new(m_mgr),
@@ -376,6 +392,25 @@ impl<'a, 'd> VHFparser<'a, 'd> {
         };
 
         Ok(s)
+    }
+
+    /// Reads from data section as `[start..end]`.
+    ///
+    /// Wrap output manually as VHFWord if necessary.
+    ///
+    /// Arguments:
+    /// - start: Number of words relative to the 0th word in data section.
+    /// - end: Number of words relative to the 0th word to exclude from return.
+    fn read_data(&self, start: usize, end: usize) -> ParseResult<&[u64]> {
+        if end > self.data_len {
+            return Err(ParseError::Excess);
+        }
+        if end <= start {
+            return Ok(&[]);
+        }
+
+        let block_raw = &self.data_raw_map[(start * 8)..(end * 8)];
+        try_cast_slice(block_raw).map_err(ParseError::ByteMuckCastError)
     }
 }
 

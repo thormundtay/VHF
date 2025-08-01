@@ -13,8 +13,8 @@ pub(super) struct TraceTimer {
     sample_interval: SignedDuration,
     /// Number of elements within the length file.
     trace_len: i64,
-    plot_start: usize,
-    plot_end: usize,
+    pub plot_start: usize,
+    pub plot_end: usize,
 }
 
 impl TraceTimer {

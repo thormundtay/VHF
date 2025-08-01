@@ -25,6 +25,7 @@ pub enum ParseError {
     ByteMuckError(bytemuck::PodCastError),
     Utf8Error,
     SerdeJson(serde_json::Error),
+    ByteMuckCastError(bytemuck::checked::CheckedCastError),
     InternalError,
 }
 
@@ -56,6 +57,12 @@ impl From<serde_json::Error> for ParseError {
 impl From<bytemuck::PodCastError> for ParseError {
     fn from(value: bytemuck::PodCastError) -> Self {
         ParseError::ByteMuckError(value)
+    }
+}
+
+impl From<bytemuck::checked::CheckedCastError> for ParseError {
+    fn from(value: bytemuck::checked::CheckedCastError) -> Self {
+        ParseError::ByteMuckCastError(value)
     }
 }
 
