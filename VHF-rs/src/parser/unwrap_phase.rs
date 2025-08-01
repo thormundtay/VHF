@@ -55,9 +55,9 @@ where
         }
 
         // Avoid the need for peeking with use of .peekable().
-        let iter = vec![first_word.clone().unwrap()].into_iter().chain(self);
+        let iter = vec![first_word.unwrap()].into_iter().chain(self);
         let mut curr_offset = initial_m;
-        let mut prev_wrapped_triplet = first_word.clone().unwrap().as_triplet();
+        let mut prev_wrapped_triplet = first_word.unwrap().as_triplet();
         let result = iter.scan(
             first_word.unwrap().wrapped_phase(),
             move |_, x: VHFWord| -> Option<Self::Output> {
