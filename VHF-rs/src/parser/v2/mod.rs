@@ -452,6 +452,7 @@ where
                 offset,
                 self.m_overflow_len,
                 self.m_offset,
+                self,
             )?);
         }
         Ok(())

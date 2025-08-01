@@ -2,7 +2,7 @@ use crate::consts::M_OVERFLOW;
 use crate::{M, ParseError, ParseResult};
 use bytemuck::try_cast_slice;
 use itertools::Itertools;
-use memmap2::MmapOptions;
+use rayon::prelude::*;
 use std::{
     cmp::Ordering,
     fs::File,
@@ -38,6 +38,7 @@ impl RollOver {
         offset: usize,
         words: usize,
         initial_m_offset: M,
+        data_raw_map: &super::VHFparser,
     ) -> ParseResult<Self> {
         if offset % 8 != 0 {
             log::error!("Header not flushed to word boundary!");
@@ -78,14 +79,7 @@ impl RollOver {
         };
 
         if delta_signs.len() == words {
-            let data_offset = offset
-                .checked_add(words.checked_mul(8).ok_or(ParseError::Excess)?)
-                .ok_or(ParseError::Excess)?;
-            Self::populate_remaining_m_overflow(
-                file,
-                data_offset,
-                (&mut delta_idxs, &mut delta_signs),
-            )?;
+            Self::populate_remaining_m_overflow(data_raw_map, (&mut delta_idxs, &mut delta_signs))?;
         };
 
         Ok(Self {
@@ -98,41 +92,75 @@ impl RollOver {
     /// Updates the MOverflow yielded from the file.
     /// If the last element within the specified m_overflow region was not zeroed, it implies that
     /// there are more m_overflows than allocatable by file.
+    ///
     /// Arguments:
-    /// - file: Path
-    /// - data_offset: Number of bytes leading up to the first word of data.
-    /// - (idx, sign):
+    /// - v2_parser: Parent involved in creating RollOver, for read_data method
+    /// - (idx, sign): Pass by mutable reference for [Self::new].
     fn populate_remaining_m_overflow(
-        file: &Path,
-        data_offset: usize,
+        v2_parser: &super::VHFparser,
         idx_sign: (&mut Vec<usize>, &mut Vec<i8>),
     ) -> ParseResult<()> {
         let (delta_idx, delta_sign) = idx_sign;
 
         let last_idx = delta_idx.last().copied().unwrap_or(0);
-        let offset = last_idx
-            .checked_add(data_offset as _)
-            .ok_or(ParseError::Excess)?;
 
-        let mmap = unsafe {
-            MmapOptions::new()
-                .offset(offset as _)
-                .map(&File::open(file)?)
-        }?;
-        let raw: &[u64] = try_cast_slice(&mmap)?; // Current mallocs the entire file into u64
+        let num_bytes = v2_parser.data_len * 8;
 
-        raw.iter()
-            .enumerate()
-            .skip(last_idx)
-            .map(|(idx, &v)| -> (usize, RawVHFWord) { (idx, v.into()) })
-            .tuple_windows()
-            .filter_map(Self::idx_and_sign_for_filter_map)
-            .for_each(|v| {
-                delta_idx.push(v.0);
-                delta_sign.push(v.1);
-            });
+        const BLOCK_BYTES: usize = 1 << 17;
+        let raw_blocks: Vec<(usize, usize)> = (0..)
+            .scan(last_idx * 8 + 8, |prev_end, _| {
+                let start = *prev_end - 8;
+                if start >= num_bytes - 8 {
+                    return None;
+                }
+                let end = (start + BLOCK_BYTES).min(num_bytes);
+                if end - start < 2 * 8 {
+                    return None;
+                }
+
+                *prev_end = end;
+                Some((start, end))
+            })
+            .collect();
+
+        let par_result: Vec<_> = raw_blocks
+            .into_par_iter()
+            .map(|(start, end)| Self::per_block(v2_parser, start, end))
+            .collect();
+        let mut result: Vec<MOverflowRaw> = par_result.into_iter().flatten().collect();
+        result.sort_unstable_by_key(|v| v.0);
+
+        result.into_iter().for_each(|MOverflowRaw(i, s)| {
+            delta_idx.push(i);
+            delta_sign.push(s)
+        });
 
         Ok(())
+    }
+
+    /// For each Rayon thread to read one block of mmap.
+    ///
+    /// Arguments:
+    /// - v2_parser for read_data method
+    /// - [Start_byte, ..., End_byte-1], End_byte, ...
+    ///   is the region in the mmap to read from.
+    fn per_block(
+        v2_parser: &super::VHFparser,
+        start_byte: usize,
+        end_byte: usize,
+    ) -> impl Iterator<Item = MOverflowRaw> {
+        debug_assert_eq!(start_byte % 8, 0);
+        debug_assert_eq!(end_byte % 8, 0);
+
+        let data_block = v2_parser
+            .read_data(start_byte / 8, end_byte / 8)
+            .expect("Failed to read from data_mmap");
+        data_block
+            .iter()
+            .enumerate()
+            .map(move |(i, &v)| -> (usize, RawVHFWord) { (i + (start_byte / 8), v.into()) })
+            .tuple_windows()
+            .filter_map(Self::idx_and_sign_for_filter_map)
     }
 
     /// Filter on file by index to get delta_idx and delta_sign.
