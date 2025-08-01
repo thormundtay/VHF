@@ -218,6 +218,8 @@ where
     m_offset: M,
     /// Managing the plot window.
     timer: Box<TraceTimer>,
+    /// Records m-offset of trace.
+    m_mgr: Box<Option<RollOver>>,
     /// This is the internal store of the view window.
     data: Option<ArrayView<'d, u64, Ix1>>, // No Rc<RefCell> due to passing out lifetime
 }
@@ -231,7 +233,7 @@ impl<'a, 'd> VHFparser<'a, 'd> {
     /// - file: [Path] to file.
     /// - headers_only: If false, ManifoldManger is invoked not at init time, but at first data
     ///   fetch.
-    pub fn new(file: &'a Path) -> ParseResult<Self> {
+    pub fn new(file: &'a Path, headers_only: bool) -> ParseResult<Self> {
         log::debug!("Creating v2::VHFparser with {}", file.display());
 
         let mut file_bytes = BufReader::new(File::open(file)?).bytes();
@@ -344,18 +346,9 @@ impl<'a, 'd> VHFparser<'a, 'd> {
             Box::new(TraceTimer::new(trace_start, sample_interval, trace_len)?)
         };
 
-        {
-            // Warn if the declared length is not the same as what is recorded.
-            if data_len != header.num_samples {
-                log::warn!(
-                    "{} declared num_samples = {}, found {data_len}",
-                    file.display(),
-                    header.num_samples
-                );
-            }
-        }
+        let m_mgr = None;
 
-        Ok(Self {
+        let mut s = Self {
             file,
             header_len,
             m_overflow_len,
@@ -363,8 +356,26 @@ impl<'a, 'd> VHFparser<'a, 'd> {
             data_len,
             m_offset,
             timer,
+            m_mgr: Box::new(m_mgr),
             data: None,
-        })
+        };
+
+        {
+            // Warn if the declared length is not the same as what is recorded.
+            if data_len != s.header.num_samples {
+                log::warn!(
+                    "{} declared num_samples = {}, found {data_len}",
+                    file.display(),
+                    s.header.num_samples
+                );
+            }
+        }
+
+        if !headers_only {
+            s.resolve_m_overflow_idxs()?;
+        };
+
+        Ok(s)
     }
 }
 
@@ -385,14 +396,30 @@ where
     }
 
     fn data(&self) -> ParseResult<Self::DataReturn> {
-        if self.data.is_some() {
-            return Ok(*self.data.as_ref().unwrap());
+        if self.m_mgr.is_none() {
+            log::error!(
+                "Unable to fetch data as init was lazy! Consider running resolve_m_overflow_idxs first!"
+            );
+            return Err(ParseError::ValueError);
         }
-        todo!()
+
+        match self.data.is_some() {
+            true => Ok(*self.data.as_ref().unwrap()),
+            false => Err(ParseError::InternalError),
+        }
     }
 
     fn resolve_m_overflow_idxs(&mut self) -> ParseResult<()> {
-        todo!()
+        if self.m_mgr.is_none() {
+            let offset = (PRE_REMAININGHEADER + self.header_len).div_ceil(8) * 8;
+            self.m_mgr.replace(RollOver::new(
+                self.file,
+                offset,
+                self.m_overflow_len,
+                self.m_offset,
+            )?);
+        }
+        Ok(())
     }
 
     fn reduced_phase(&self) -> ParseResult<Self::TransformReturn<crate::ReducedPhase>> {
