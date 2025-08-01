@@ -7,10 +7,6 @@ edition = "2024"
 name = "vhf_parse"
 path = "lib.rs"
 
-[[bin]]
-name = "bind-py"
-path = "bin/bind-py.rs"
-
 [features]
 default = []
 o3 = ["numpy", "pyo3"]
