@@ -75,13 +75,13 @@ type M = i32;
 type ReducedPhase = f64;
 
 /// Expected methods of any VHF parser. Mirrors Python's expectations.
-pub trait VHFparse<'d> {
+pub trait VHFparse {
     /// v1 Writer unfortunately has to return as an Owned Array, but it is quite likely that v2
     /// will return as a View Array.
     type DataReturn;
 
     // /// This changes in accordance with if Map is collected, or if taken from Python etc.
-    type TransformReturn<T: 'd>;
+    type TransformReturn<T>;
 
     /// Update the class to be aware of all m-overflow indices. This is in the event that the
     /// parser tries to be lazy at init time.

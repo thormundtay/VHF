@@ -143,9 +143,9 @@ impl VHFparser {
     }
 }
 
-impl<'data> VHFparse<'data> for VHFparser {
+impl VHFparse for VHFparser {
     type DataReturn = Array1<VHFWord>;
-    type TransformReturn<T: 'data> = Array1<T>;
+    type TransformReturn<T> = Array1<T>;
 
     fn resolve_m_overflow_idxs(&mut self) -> ParseResult<()> {
         Python::with_gil(|py| -> PyResult<()> {

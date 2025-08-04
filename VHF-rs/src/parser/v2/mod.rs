@@ -9,7 +9,7 @@ use bytemuck::checked::try_cast_slice;
 use byteorder::{NativeEndian, ReadBytesExt};
 use jiff::{Span, Zoned};
 use memmap2::{Mmap, MmapOptions};
-use ndarray::{ArrayView, Ix1};
+use ndarray::{Array1, ArrayView1};
 use rollover::RollOver;
 use serde_json::Value;
 use std::{
@@ -204,10 +204,7 @@ impl TraceDetails {
 // 'a: Lifetime of file (as path) being read from.
 // 'd: Lifetime of mmap created during change of view window.
 #[derive(Debug)]
-pub struct VHFparser<'a, 'd>
-where
-    'a: 'd,
-{
+pub struct VHFparser<'a> {
     file: &'a Path,
     /// This is the number of bytes associated header str.
     header_len: usize,
@@ -225,10 +222,10 @@ where
     /// Records m-offset of trace.
     m_mgr: Box<Option<RollOver>>,
     /// This is the internal store of the view window.
-    data: Option<ArrayView<'d, u64, Ix1>>, // No Rc<RefCell> due to passing out lifetime
+    data: Option<Array1<u64>>, // No Rc<RefCell> due to passing out lifetime
 }
 
-impl<'a, 'd> VHFparser<'a, 'd> {
+impl<'a> VHFparser<'a> {
     /// V2 Binary file format parser.
     ///
     /// Data is only fetched when data or phase is requested.
@@ -414,12 +411,9 @@ impl<'a, 'd> VHFparser<'a, 'd> {
     }
 }
 
-impl<'a, 'd> VHFparse<'d> for VHFparser<'a, 'd>
-where
-    'a: 'd,
-{
-    type DataReturn = ArrayView<'d, u64, Ix1>;
-    type TransformReturn<T: 'd> = ArrayView<'d, T, Ix1>;
+impl<'a> VHFparse for VHFparser<'a> {
+    type DataReturn = Array1<u64>;
+    type TransformReturn<T> = Array1<T>;
 
     fn update_plot_timing(
         &mut self,
@@ -438,10 +432,14 @@ where
             return Err(ParseError::ValueError);
         }
 
-        match self.data.is_some() {
-            true => Ok(*self.data.as_ref().unwrap()),
-            false => Err(ParseError::InternalError),
-        }
+        if self.data.is_none() {
+            log::warn!(
+                "Lazy data fetching at update_plot_timing meant internal data was not populated."
+            );
+            return Err(ParseError::ValueError);
+        };
+
+        self.data.as_ref().cloned().ok_or(ParseError::ValueError)
     }
 
     fn resolve_m_overflow_idxs(&mut self) -> ParseResult<()> {

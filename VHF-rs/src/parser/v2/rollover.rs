@@ -123,11 +123,10 @@ impl RollOver {
             })
             .collect();
 
-        let par_result: Vec<_> = raw_blocks
+        let mut result: Vec<_> = raw_blocks
             .into_par_iter()
-            .map(|(start, end)| Self::per_block(v2_parser, start, end))
+            .flat_map_iter(|(start, end)| Self::per_block(v2_parser, start, end))
             .collect();
-        let mut result: Vec<MOverflowRaw> = par_result.into_iter().flatten().collect();
         result.sort_unstable_by_key(|v| v.0);
 
         result.into_iter().for_each(|MOverflowRaw(i, s)| {
