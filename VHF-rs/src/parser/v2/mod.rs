@@ -421,7 +421,25 @@ impl<'a> VHFparse for VHFparser<'a> {
         duration_or_end: Option<DurationOrEndTime>,
         lazy: bool,
     ) -> ParseResult<()> {
-        todo!()
+        // Do not early return if self.data is None, as then data method will error out.
+        if !self.timer.update_plot_timing(start, duration_or_end)? && self.data.is_some() {
+            return Ok(());
+        }
+
+        // Clear out self.data etc
+        self.data = None;
+
+        if lazy {
+            log::warn!("Lazy not supported in update_plot_timing for v2!");
+        }
+
+        let (start, end) = {
+            let t = self.timer.as_ref();
+            (t.plot_start, t.plot_end)
+        };
+        self.data = Some(ArrayView1::from(self.read_data(start, end)?).to_owned());
+
+        Ok(())
     }
 
     fn data(&self) -> ParseResult<Self::DataReturn> {
