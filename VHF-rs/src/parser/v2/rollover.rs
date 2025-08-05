@@ -53,7 +53,7 @@ impl RollOver {
             // populate_remaining_m_overflow.
             let mut file_handle = BufReader::new(File::open(file)?);
             file_handle.seek_relative(offset as _)?;
-            let mut raw_u8: Vec<u8> = Vec::with_capacity(words * 8);
+            let mut raw_u8: Vec<u8> = vec![0; words * 8];
             let raw: &[i64] = {
                 if words > 0 {
                     file_handle.read_exact(&mut raw_u8)?;
