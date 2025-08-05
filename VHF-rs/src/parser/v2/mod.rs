@@ -4,7 +4,8 @@ mod rollover;
 mod trace_timer;
 
 use super::{DurationOrEndTime, StartTime};
-use crate::{M, ParseError, ParseResult, VHFparse};
+use crate::{M, ReducedPhase};
+use crate::{ParseError, ParseResult, VHFparse};
 use bytemuck::checked::try_cast_slice;
 use byteorder::{NativeEndian, ReadBytesExt};
 use jiff::{Span, Zoned};
@@ -13,6 +14,7 @@ use ndarray::{Array1, ArrayView1};
 use rollover::RollOver;
 use serde_json::Value;
 use std::{
+    f64::consts::TAU,
     fs::{self, File},
     io::{BufReader, Read},
     path::Path,
@@ -482,6 +484,7 @@ impl<'a> VHFparse for VHFparser<'a> {
             return Err(ParseError::ValueError);
         };
 
+        // .cloned() needed as Self::DataReturn having &_ lifetime is still under work.
         self.data.as_ref().cloned().ok_or(ParseError::ValueError)
     }
 
@@ -499,8 +502,26 @@ impl<'a> VHFparse for VHFparser<'a> {
         Ok(())
     }
 
-    fn reduced_phase(&self) -> ParseResult<Self::TransformReturn<crate::ReducedPhase>> {
-        todo!()
+    fn reduced_phase(&self) -> ParseResult<Self::TransformReturn<ReducedPhase>> {
+        let data = self.data()?;
+        let mut result = data.mapv(|d| {
+            let IQMTriplet(i, _, _) = RawVHFWord::from(d).into();
+            i as f64
+        });
+        let q_arr = data.mapv(|d| {
+            let IQMTriplet(_, q, _) = RawVHFWord::from(d).into();
+            q as f64
+        });
+        let m_arr = self.m_arr()?;
+
+        debug_assert_eq!(m_arr.len(), result.len());
+        ndarray::par_azip!(
+            (i in &mut result, &q in &q_arr, &m in &m_arr) {
+                *i = (i.atan2(q)/TAU) + (m as f64)
+            }
+        );
+
+        Ok(result)
     }
 }
 
