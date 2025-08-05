@@ -19,8 +19,11 @@ use std::{
     str::FromStr,
 };
 use trace_timer::TraceTimer;
-use vhf_common::config_types::SamplingSpeed;
-use vhf_common::magic::V2_MAGIC_HEADER;
+use vhf_common::{
+    config_types::SamplingSpeed,
+    data_types::{IQMTriplet, RawVHFWord},
+    magic::V2_MAGIC_HEADER,
+};
 
 /// Number of bytes up to and including bytes used to determine the rest of the header length.
 // Magic Header + BOM + Magic Time + #Bytes of Header to read as u64
@@ -411,6 +414,25 @@ impl<'a> VHFparser<'a> {
 
         let block_raw = &self.data_raw_map[(start * 8)..(end * 8)];
         try_cast_slice(block_raw).map_err(ParseError::ByteMuckCastError)
+    }
+
+    /// Similar to Python, self._m_arr will always already have m_overflow unwrapped.
+    fn m_arr(&'a self) -> ParseResult<Array1<M>> {
+        if self.m_mgr.is_none() {
+            log::error!("Please run resolve_m_overflow_idxs first!");
+            return Err(ParseError::ValueError);
+        }
+
+        let mut m_arr: Array1<M> = self.data()?.mapv(|d| {
+            let IQMTriplet(_, _, m) = RawVHFWord::from(d).into();
+            m as _
+        });
+        (*self.m_mgr)
+            .as_ref()
+            .unwrap()
+            .fix_m_overflow(&mut m_arr, &self.timer)?;
+
+        Ok(m_arr)
     }
 }
 
