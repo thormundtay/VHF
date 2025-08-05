@@ -1,7 +1,10 @@
+use super::M_OFFSET;
 use crate::consts::M_OVERFLOW;
 use crate::{M, ParseError, ParseResult};
 use bytemuck::try_cast_slice;
 use itertools::Itertools;
+use ndarray::Array1;
+use ndarray::s as slice_macro;
 use rayon::prelude::*;
 use std::{
     cmp::Ordering,
@@ -81,6 +84,11 @@ impl RollOver {
         if delta_signs.len() == words {
             Self::populate_remaining_m_overflow(data_raw_map, (&mut delta_idxs, &mut delta_signs))?;
         };
+
+        // Terminate with end of file.
+        debug_assert!(delta_idxs.last().cloned().unwrap_or_default() < data_raw_map.data_len);
+        delta_idxs.push(data_raw_map.data_len);
+        delta_signs.push(0);
 
         Ok(Self {
             initial_m_offset,
@@ -182,5 +190,43 @@ impl RollOver {
         } else {
             None
         }
+    }
+
+    pub(super) fn fix_m_overflow(
+        &self,
+        m_arr: &mut Array1<M>,
+        timer: &super::TraceTimer,
+    ) -> ParseResult<()> {
+        let start_idx = timer.plot_start;
+        let end_idx = timer.plot_end;
+
+        let rollover_start_idx = self.delta_idxs.partition_point(|&x| x < start_idx);
+        let rollover_end_idx = self.delta_idxs.partition_point(|&x| x < end_idx);
+
+        let initial_offset = self.delta_signs[..rollover_start_idx]
+            .iter()
+            .try_fold(self.initial_m_offset, |acc, &x| acc.checked_add(x as _))
+            .ok_or(ParseError::Excess)?;
+
+        (rollover_start_idx..rollover_end_idx)
+            .map(|rollover_idx| {
+                let s = self.delta_idxs[rollover_idx];
+                let e = self.delta_idxs[rollover_idx + 1];
+
+                (rollover_idx, s, e)
+            })
+            .fold(initial_offset, |acc, (rollover_idx, start, end)| {
+                let m_left = start.saturating_sub(start_idx);
+                let m_right = end_idx.min(end - start_idx);
+
+                let delta = self.delta_signs[rollover_idx];
+                let offset = acc + (delta as M);
+                let mut slice = m_arr.slice_mut(slice_macro![m_left..m_right]);
+                slice += M_OFFSET.checked_mul(offset).expect("Excess m-value");
+
+                offset
+            });
+
+        Ok(())
     }
 }

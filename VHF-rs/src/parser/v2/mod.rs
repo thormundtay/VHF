@@ -26,6 +26,9 @@ use vhf_common::magic::V2_MAGIC_HEADER;
 // Magic Header + BOM + Magic Time + #Bytes of Header to read as u64
 const PRE_REMAININGHEADER: usize = V2_MAGIC_HEADER.len() + 2 + 8 + 8;
 
+/// This is the amount each m value should be shifted by for every rollover.
+const M_OFFSET: M = u16::MAX as M + 1;
+
 /// Properties of trace as specified in header.
 #[derive(Debug)]
 pub struct TraceDetails {
