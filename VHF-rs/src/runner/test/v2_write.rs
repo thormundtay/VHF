@@ -9,15 +9,20 @@ use super::get_only_file;
 use super::signals::LinearPhaseArr;
 use super::{debug_vhf_new, push_arc_pages};
 
+use approx::AbsDiffEq;
 use configparser::ini::Ini;
 use jiff::Zoned;
 use std::num::NonZeroUsize;
 use std::time::Duration;
 use tempfile::TempDir;
 use test_log::test;
+use vhf_common::data_types::IQMTriplet;
+use vhf_parse::v2;
+use vhf_parse::{VHFWord, VHFparse};
 
+/// Tests just amount of written data.
 #[test]
-fn writes_correct_v2_file() {
+fn writes_correct_v2_file_basic() {
     let debug_vhf_total_len = 12 * VHF_MMAP_WINDOW_LEN;
     let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
     let total_elements = total_window_len * MMAP_PAGE_LEN;
@@ -101,11 +106,50 @@ fn writes_correct_v2_file() {
         .map(|x| (*params.func)(x))
         .try_for_each(|write_block| writer.write_data(write_block))
         .expect("Writing to v2_writer failed");
+    std::mem::drop(writer); // writer needs to be dropped to flush m_overflow_idx...
 
     // Test that the unwrapped phase is identical
+    let tmp_file = get_only_file(tmp_dir.path()).expect("Temp File not found");
+    let mut parser = v2::VHFparser::new(&tmp_file, true).expect("Could not make v2 parser");
+    parser
+        .resolve_m_overflow_idxs()
+        .expect("Could not resolve m_overflow");
+    parser
+        .update_plot_timing(None, None, false)
+        .expect("Could not update_plot_timing");
+    log::debug!("parser = {parser:?}",);
+
+    let raw_data = parser.data().expect("Could not get raw data");
+    // Manually log all overflow indices
+    raw_data.iter().enumerate().fold(
+        {
+            let word = VHFWord::from(*raw_data.first().unwrap());
+            let IQMTriplet(_, _, m) = word.into();
+            m
+        },
+        |prev_m, (idx, &curr_data)| {
+            let word = VHFWord::from(curr_data);
+            let IQMTriplet(i, q, m) = word.into();
+            if m.abs_diff(prev_m) > u16::MAX / 4 {
+                let IQMTriplet(pi, pq, pm)=
+                    VHFWord::from(*raw_data.iter().nth(idx - 1).unwrap()).into();
+                log::debug!(
+                    "Overflow on data[idx-1] = IQM({pi:>6}, {pq:>6}, {pm:>6}) -- idx = {idx}: IQM({i:>6}, {q:>6}, {m:>6})",
+                );
+            };
+
+            m
+        },
+    );
+
+    let reduced_phase = parser.reduced_phase().expect("Could not get reduced_phase");
+    assert_eq!(*reduced_phase.first().unwrap(), initial_reduced_phase);
+    reduced_phase
+        .windows(2)
+        .into_iter()
+        .all(|w| (w[1]).abs_diff_eq(&w[0], 1e-5));
 
     // Save to external
-    let _tmp_file = get_only_file(tmp_dir.path()).expect("Temp File not found");
     // std::fs::copy(&tmp_file, "/dev/shm/v2_linear.bin").expect("failed_to copy");
 
     tmp_dir.close().expect("Could not close temp_dir.");
