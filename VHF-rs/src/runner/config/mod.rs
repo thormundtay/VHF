@@ -59,6 +59,9 @@ pub struct Configs {
     pub save_dir: PathBuf,
     pub board: PathBuf,
     pub save_to_file: bool,
+
+    /// V2 m_overflow_idx block length to data length ratio.
+    pub v2_overflow_to_data_ratio: Option<f64>,
 }
 
 impl Default for Configs {
@@ -82,6 +85,8 @@ impl Default for Configs {
             save_dir: PathBuf::from("./Data"),
             board: PathBuf::from("/dev/usbhybrid0"),
             save_to_file: false,
+
+            v2_overflow_to_data_ratio: None,
         }
     }
 }

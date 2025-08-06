@@ -60,6 +60,7 @@ impl<'a> WriterBuilder<'a> {
                     num_samples: &conf.num_samples,
                     num_files: &conf.num_files,
                     verbosity: &conf.verbosity,
+                    overflow_to_data_ratio: &conf.v2_overflow_to_data_ratio,
                     file_timespan: Box::new(board_config.file_timespan()),
                     filename_details: conf.filename(),
                     save_dir: &conf.save_dir,

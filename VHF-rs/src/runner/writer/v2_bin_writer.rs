@@ -127,7 +127,9 @@ impl<'a> V2BinWriter<'a> {
         // Constant is currently hard-baked with reference to Archive/20250208, instead of
         // being from config specification.
         let m_overflow_total = if *config.verbosity & 0b1000 != 0 {
-            (*config.num_samples as f64 * 0.00005).round() as usize
+            const DEFAULT_RATIO: f64 = 0.00005;
+            let m_of_to_d_ratio = config.overflow_to_data_ratio.unwrap_or(DEFAULT_RATIO); // m_overflow to data ratio.
+            (*config.num_samples as f64 * m_of_to_d_ratio).round() as usize
         } else {
             0
         };
@@ -597,6 +599,7 @@ pub struct V2BinArg<'a> {
     pub num_samples: &'a usize,
     pub num_files: &'a usize,
     pub verbosity: &'a u8,
+    pub overflow_to_data_ratio: &'a Option<f64>,
     pub file_timespan: Box<Span>,
     pub filename_details: String,
     pub save_dir: &'a Path,
