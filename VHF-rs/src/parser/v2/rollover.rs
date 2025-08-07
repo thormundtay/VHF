@@ -16,6 +16,7 @@ use std::{
 use vhf_common::data_types::{IQMTriplet, MOverflowRaw, RawVHFWord};
 use vhf_common::write_types::MOverflowWrite;
 
+/// Keeps track of m_overflow for the trace of V2 binary files.
 #[derive(Debug)]
 pub(super) struct RollOver {
     /// This is the offset of the 0th data point.
@@ -228,5 +229,36 @@ impl RollOver {
             });
 
         Ok(())
+    }
+}
+
+/// Thin wrapper over [RollOver] for unit tests.
+#[cfg(feature = "internals")]
+#[allow(private_interfaces)]
+// #[repr(transparent)] // This wraps the ref and not the struct
+pub struct RollOverMgr<'a>(pub &'a RollOver);
+
+/// These are intended for unit tests.
+#[allow(private_interfaces, dead_code)]
+#[cfg(feature = "internals")]
+impl RollOverMgr<'_> {
+    /// This returns a slice of all idx picked up from the file.
+    /// The internal representation of capping with the end of length is not cared for.
+    pub fn get_delta_idx(&self) -> impl Iterator<Item = usize> {
+        self.0
+            .delta_idxs
+            .iter()
+            .take(self.0.delta_idxs.len() - 1)
+            .cloned()
+    }
+
+    /// This returns a slice of all signs picked up from the file.
+    /// The internal representation of capping with the end of length is not cared for.
+    pub fn get_delta_signs(&self) -> impl Iterator<Item = i8> {
+        self.0
+            .delta_signs
+            .iter()
+            .take(self.0.delta_idxs.len() - 1)
+            .cloned()
     }
 }

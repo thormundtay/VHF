@@ -12,6 +12,8 @@ use jiff::{Span, Zoned};
 use memmap2::{Mmap, MmapOptions};
 use ndarray::{Array1, ArrayView1};
 use rollover::RollOver;
+#[cfg(feature = "internals")]
+use rollover::RollOverMgr;
 use serde_json::Value;
 use std::{
     f64::consts::TAU,
@@ -522,6 +524,14 @@ impl<'a> VHFparse for VHFparser<'a> {
         );
 
         Ok(result)
+    }
+}
+
+#[cfg(feature = "internals")]
+/// Methods here are intended for unit tests.
+impl VHFparser<'_> {
+    pub fn get_m_mgr(&self) -> Option<RollOverMgr> {
+        self.m_mgr.as_ref().as_ref().map(RollOverMgr)
     }
 }
 
