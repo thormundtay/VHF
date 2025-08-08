@@ -10,6 +10,7 @@ path = "lib.rs"
 [features]
 default = []
 o3 = ["numpy", "pyo3"]
+internals = []
 
 [dependencies]
 byteorder = { version = "1.5.0" }

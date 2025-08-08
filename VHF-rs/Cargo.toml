@@ -43,9 +43,10 @@ regex = { version = "1.11.1" }
 serde = { version = "1.0.219" }
 serde_json = { version = "1.0.140" }
 VHF-common = { path = "common" }
-VHF-parse = { path = "src/parser" }
+VHF-parse = { path = "src/parser", default-features = false }
 
 [dev-dependencies]
 approx = { version = "0.5.1" }
 tempfile = { version = "3.19.1", features = ["default"] }
 test-log = { version = "0.2.17", features = ["trace", "color"] }
+VHF-parse = { path = "src/parser", features = ["internals"] }
