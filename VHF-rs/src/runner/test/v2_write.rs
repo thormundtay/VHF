@@ -12,6 +12,7 @@ use super::{debug_vhf_new, push_arc_pages};
 use approx::AbsDiffEq;
 use configparser::ini::Ini;
 use jiff::Zoned;
+use std::hint::unreachable_unchecked;
 use std::num::NonZeroUsize;
 use std::time::Duration;
 use tempfile::TempDir;
@@ -76,8 +77,7 @@ fn writes_correct_v2_file_basic() {
     // We want to force an unwrapping to occur at least once.
     assert!(total_elements > u16::MAX as usize + 3);
     let signal_radius = 7000.;
-    // let initial_reduced_phase = i16::MAX as f64 - 240.9;
-    let initial_reduced_phase = 0.;
+    let initial_reduced_phase = i16::MAX as f64 - 240.9;
     let reduced_phase_gradient = 0.21;
     let linear = LinearPhaseArr::new(
         total_elements,
@@ -120,30 +120,68 @@ fn writes_correct_v2_file_basic() {
     log::debug!("parser = {parser:?}",);
 
     let raw_data = parser.data().expect("Could not get raw data");
-    // Manually log all overflow indices
-    raw_data.iter().enumerate().fold(
-        {
-            let word = VHFWord::from(*raw_data.first().unwrap());
-            let IQMTriplet(_, _, m) = word.into();
-            m
-        },
-        |prev_m, (idx, &curr_data)| {
-            let word = VHFWord::from(curr_data);
-            let IQMTriplet(i, q, m) = word.into();
-            if m.abs_diff(prev_m) > u16::MAX / 4 {
-                let IQMTriplet(pi, pq, pm)=
-                    VHFWord::from(*raw_data.iter().nth(idx - 1).unwrap()).into();
-                log::debug!(
-                    "Overflow on data[idx-1] = IQM({pi:>6}, {pq:>6}, {pm:>6}) -- idx = {idx}: IQM({i:>6}, {q:>6}, {m:>6})",
-                );
-            };
+    // assert_eq!(raw_data.len(), total_elements); // No "pad_end" on signal, so iter.step_by might
+    // // not flush out everything.
 
-            m
-        },
+    // Manually log all overflow indices
+    let (expected_overflow_idx, expected_overflow_sign) = {
+        let mut idxs = Vec::new();
+        let mut signs = Vec::new();
+        let _ = raw_data.iter().enumerate().fold(
+            {
+                let word = VHFWord::from(*raw_data.first().unwrap());
+                let IQMTriplet(_, _, m) = word.into();
+                m
+            },
+            |prev_m, (idx, &curr_data)| {
+                let word = VHFWord::from(curr_data);
+                let IQMTriplet(_i, _q, m) = word.into();
+                if m.abs_diff(prev_m) > u16::MAX / 4 {
+                    // let IQMTriplet(pi, pq, pm)=
+                    //     VHFWord::from(*raw_data.iter().nth(idx - 1).unwrap()).into();
+                    // log::debug!(
+                    //     "Overflow on data[idx-1] = IQM({pi:>6}, {pq:>6}, {pm:>6}) -- idx = {idx}: IQM({i:>6}, {q:>6}, {m:>6})",
+                    // );
+                    idxs.push(idx);
+                    signs.push(match m.cmp(&prev_m) {
+                        std::cmp::Ordering::Less => 1,
+                        std::cmp::Ordering::Greater => -1,
+                        std::cmp::Ordering::Equal => unsafe { unreachable_unchecked() },
+                    })
+                };
+
+                m
+            },
+        );
+        (idxs, signs)
+    };
+    // Point is to test situation where there is at least 1 element written into m_overflow!
+    assert!(!expected_overflow_idx.is_empty());
+
+    // Check m_mgr
+    // Currently we zip because the element length does not match with file length.
+    let m_mgr = parser.get_m_mgr().expect("manifold manager not found");
+    assert!(
+        m_mgr
+            .get_delta_idx()
+            .zip(expected_overflow_idx)
+            .all(|(a, e)| a == e)
+    );
+    assert!(
+        m_mgr
+            .get_delta_signs()
+            .zip(expected_overflow_sign)
+            .all(|(a, e)| a as i16 == e)
     );
 
+    // Check reduced phases
     let reduced_phase = parser.reduced_phase().expect("Could not get reduced_phase");
-    assert_eq!(*reduced_phase.first().unwrap(), initial_reduced_phase);
+    assert!(
+        reduced_phase
+            .first()
+            .unwrap()
+            .abs_diff_eq(&initial_reduced_phase, 1e-5)
+    );
     reduced_phase
         .windows(2)
         .into_iter()
