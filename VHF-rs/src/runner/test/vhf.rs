@@ -25,7 +25,16 @@ use std::{
 use tempfile::{NamedTempFile, TempDir};
 use test_log::test;
 
-// Create a VHF struct with false child thread "map_reader".
+/// Create a VHF struct with false child thread "map_reader".
+///
+/// Arguments:
+/// - configuration: Basic properties of the mock VHF engine being expected.
+/// - total_to_read: number of pages that the false map_reader should be reading.
+///
+/// Returns:
+/// - VHF: Iterate to get MmapPages for processing.
+/// - SyncSender: Used to push pages from some signal generator into VHF.
+/// - Engine: Used for coordinate VHF with the signal generator.
 pub(super) fn debug_vhf_new<'a>(
     configuration: &'a Config,
     total_to_read: NonZeroUsize,
