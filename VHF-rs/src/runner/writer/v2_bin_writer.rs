@@ -348,6 +348,7 @@ impl<'a> V2BinWriter<'a> {
         let neg_offset = self
             .num_files_so_far
             .load(Ordering::Acquire)
+            .saturating_sub(1)
             .checked_mul(self.num_elements_per_file)
             .expect("Error trying to get idx of file start relative to VHFIter.");
         m_raws.map(move |m_raw| m_raw.offset_neg(neg_offset))
@@ -550,6 +551,7 @@ impl<'a> V2BinWriter<'a> {
     }
 
     fn close_file(&mut self) -> Result<()> {
+        log::info!("Closing file...");
         self.deplete_from_m_overflow_to_write()?;
         if let Some(file) = self.current_file_handle.lock().unwrap().as_mut() {
             use std::io::Write;
