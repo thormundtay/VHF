@@ -35,12 +35,13 @@ impl TryFrom<&MOverflowRaw> for MOverflowWrite {
             1 => {
                 let idx: u64 = value.0.try_into().unwrap(); // Safety: M_OVERFLOW_IDX_MAX
                 let idx = idx as i64;
+                debug_assert_eq!((idx as u64) >> 63, 0);
                 Ok(MOverflowWrite(idx))
             }
             -1 => {
                 let idx: u64 = value.0.try_into().unwrap(); // Safety: M_OVERFLOW_IDX_MAX
                 let idx = idx as i64 + (1 << 63);
-                debug_assert!(idx >> 63 == 1);
+                debug_assert_eq!((idx as u64) >> 63, 1);
                 Ok(MOverflowWrite(idx))
             }
             #[cfg(test)]
@@ -73,7 +74,7 @@ impl TryFrom<&MOverflowWrite> for MOverflowRaw {
 
     fn try_from(value: &MOverflowWrite) -> Result<MOverflowRaw> {
         let value = value.0;
-        let sign = value >> 63;
+        let sign = (value as u64) >> 63;
         let sign = if sign == 0 {
             Ok(1)
         } else if sign == 1 {
