@@ -25,6 +25,15 @@ use std::{
 use tempfile::{NamedTempFile, TempDir};
 use test_log::test;
 
+/// Rounds up to the appropriate number of pages so that mocked engine pushes all pages through
+/// step_by iterator.
+pub(super) fn required_window_pages(intended_pages: usize, step_by: usize) -> usize {
+    assert!(step_by < VHF_MMAP_WINDOW_LEN);
+    let a = VHF_MMAP_WINDOW_LEN - step_by; // 20 (VHF_MMAP_WINDOW_LEN) - 19 (STEP_BY) = 1 (OVERLAP EXPECTED)
+
+    (VHF_MMAP_WINDOW_LEN.max(intended_pages) - a).div_ceil(step_by) * step_by
+}
+
 /// Create a VHF struct with false child thread "map_reader".
 ///
 /// Arguments:
