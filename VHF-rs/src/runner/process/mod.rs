@@ -424,6 +424,10 @@ impl std::iter::Iterator for VHFIter<'_> {
                 let result = self.buffer.borrow_mut().push_back(page);
                 if result.is_err() {
                     log::error!("Pushing onto internal buffer without sufficient space.");
+                    #[cfg(test)]
+                    {
+                        panic!("Please use a longer delay in the signal generator for the tests.");
+                    }
                     // Discard failed to push page.
                 }
             }
