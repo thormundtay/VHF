@@ -187,7 +187,7 @@ impl SineArr {
         params: (f64, f64, f64, f64, f64),
     ) -> Self {
         if total_len % MMAP_PAGE_LEN != 0 {
-            log::warn!("ZeroArr did not receive an integer multiple of MMAP_PAGE_LEN");
+            log::warn!("SineArr did not receive an integer multiple of MMAP_PAGE_LEN");
         }
         Self {
             total_len,
