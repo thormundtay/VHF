@@ -7,7 +7,7 @@ use super::Config;
 use super::consts::{MMAP_PAGE_LEN, VHF_MMAP_WINDOW_LEN};
 use super::get_only_file;
 use super::signals::LinearPhaseArr;
-use super::{debug_vhf_new, push_arc_pages};
+use super::{debug_vhf_new, push_arc_pages, required_window_pages};
 
 use approx::AbsDiffEq;
 use configparser::ini::Ini;
@@ -25,7 +25,8 @@ use vhf_parse::{VHFWord, VHFparse};
 #[test]
 fn writes_correct_v2_file_basic() {
     let debug_vhf_total_len = 12 * VHF_MMAP_WINDOW_LEN;
-    let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
+    let params_step_by = 19;
+    let total_window_len = required_window_pages(debug_vhf_total_len, params_step_by);
     let total_elements = total_window_len * MMAP_PAGE_LEN;
 
     let tmp_dir = TempDir::new().expect("Could not create temp_dir");
@@ -201,7 +202,8 @@ fn writes_correct_v2_file_basic() {
 #[test]
 fn writes_correct_v2_file_zero() {
     let debug_vhf_total_len = 12 * VHF_MMAP_WINDOW_LEN;
-    let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
+    let params_step_by = 19;
+    let total_window_len = required_window_pages(debug_vhf_total_len, params_step_by);
     let total_elements = total_window_len * MMAP_PAGE_LEN;
 
     let tmp_dir = TempDir::new().expect("Could not create temp_dir");
