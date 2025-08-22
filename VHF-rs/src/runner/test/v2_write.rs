@@ -121,8 +121,7 @@ fn writes_correct_v2_file_basic() {
     log::debug!("parser = {parser:?}",);
 
     let raw_data = parser.data().expect("Could not get raw data");
-    // assert_eq!(raw_data.len(), total_elements); // No "pad_end" on signal, so iter.step_by might
-    // // not flush out everything.
+    assert_eq!(raw_data.len(), total_elements);
 
     // Manually log all overflow indices
     let (expected_overflow_idx, expected_overflow_sign) = {
@@ -160,11 +159,12 @@ fn writes_correct_v2_file_basic() {
     assert!(!expected_overflow_idx.is_empty());
 
     // Check m_mgr
-    // Currently we zip because the element length does not match with file length.
     let m_mgr = parser.get_m_mgr().expect("manifold manager not found");
+    let actual_idx: Vec<_> = m_mgr.get_delta_idx().collect();
+    assert_eq!(actual_idx.len(), expected_overflow_idx.len());
     assert!(
-        m_mgr
-            .get_delta_idx()
+        actual_idx
+            .into_iter()
             .zip(expected_overflow_idx)
             .all(|(a, e)| a == e)
     );
@@ -300,8 +300,7 @@ fn writes_correct_v2_file_zero() {
     log::debug!("parser = {parser:?}",);
 
     let raw_data = parser.data().expect("Could not get raw data");
-    // assert_eq!(raw_data.len(), total_elements); // No "pad_end" on signal, so iter.step_by might
-    // // not flush out everything.
+    assert_eq!(raw_data.len(), total_elements);
 
     // Manually log all overflow indices
     let (expected_overflow_idx, expected_overflow_sign) = {
@@ -334,11 +333,12 @@ fn writes_correct_v2_file_zero() {
     assert!(!expected_overflow_idx.is_empty());
 
     // Check m_mgr
-    // Currently we zip because the element length does not match with file length.
     let m_mgr = parser.get_m_mgr().expect("manifold manager not found");
+    let actual_idx: Vec<_> = m_mgr.get_delta_idx().collect();
+    assert_eq!(actual_idx.len(), expected_overflow_idx.len());
     assert!(
-        m_mgr
-            .get_delta_idx()
+        actual_idx
+            .into_iter()
             .zip(expected_overflow_idx)
             .all(|(a, e)| a == e)
     );
