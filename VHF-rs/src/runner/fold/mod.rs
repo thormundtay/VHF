@@ -87,6 +87,7 @@ impl std::fmt::Debug for StreamFold {
             .field("step_by", &self.step_by)
             .field("pad", &self.pad)
             .field("op", &op_str)
+            .field("repr", &self.repr)
             .finish()
     }
 }
