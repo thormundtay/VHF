@@ -138,7 +138,7 @@ impl VHFparser {
     }
 
     /// Gets the header "dictionary" associated with the file.
-    pub fn header(&self) -> VHFheader {
+    pub fn header(&self) -> VHFheader<'_> {
         VHFheader::new(&self.headerraw, &self.header)
     }
 }

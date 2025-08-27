@@ -773,7 +773,7 @@ impl Configs {
 
     /// If all parameters passed in are valid, a [BoardConfig] will be produced that fully
     /// represents all necessary processes required to interact with VHF Board.
-    pub fn build_board_config(&self) -> Result<BoardConfig> {
+    pub fn build_board_config(&self) -> Result<BoardConfig<'_>> {
         // Check self.board resolves and exists. Done here because it is Configs that does not
         // fully assert the correctness.
         #[cfg(not(test))]
@@ -786,7 +786,7 @@ impl Configs {
     }
 
     /// This is yield the WriterBuilder, which requires [WriterBuilder::with_start_time] to begin.
-    pub fn file_writer(&self) -> Result<WriterBuilder> {
+    pub fn file_writer(&self) -> Result<WriterBuilder<'_>> {
         // Default to v1arg first before breaking into individual choices through the use of
         // [WriterBuilder::new].
         WriterBuilder::new(self)

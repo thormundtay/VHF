@@ -530,7 +530,7 @@ impl<'a> VHFparse for VHFparser<'a> {
 #[cfg(feature = "internals")]
 /// Methods here are intended for unit tests.
 impl VHFparser<'_> {
-    pub fn get_m_mgr(&self) -> Option<RollOverMgr> {
+    pub fn get_m_mgr(&self) -> Option<RollOverMgr<'_>> {
         self.m_mgr.as_ref().as_ref().map(RollOverMgr)
     }
 }
