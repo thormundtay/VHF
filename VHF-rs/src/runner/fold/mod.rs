@@ -17,15 +17,15 @@ use super::process::{
 };
 use super::writer::WriteBlock;
 use crate::parser::consts::M_OVERFLOW;
-use serde::Serialize;
 use std::{cmp::Ordering, hint::unreachable_unchecked, ops::Deref, sync::Arc};
 use vhf_common::data_types::{IQMTriplet, MOverflowRaw, RawVHFWord};
 
 /// This contains the necessary information that is then delegated to both file writing and
 /// "in-flight processing".
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct StreamFold {
-    // TODO
+    pub func: StreamFoldFunction,
+    pub repr: StreamFoldRepr,
 }
 
 impl StreamFold {
@@ -41,13 +41,15 @@ impl StreamFold {
             WriteBlock::new(data)
         };
 
-        StreamFold {
+        let func = StreamFoldFunction {
             func: Arc::new(identity),
             step_by: VHF_MMAP_WINDOW_LEN,
             pad: 0,
             op: StreamFoldOp::None,
-            repr: Vec::new(),
-        }
+        };
+        let repr = StreamFoldRepr::default();
+
+        Self { func, repr }
     }
 
     //// This is the Identity transform with roll-over checking.
@@ -132,17 +134,20 @@ impl StreamFold {
             result
         }
 
-        StreamFold {
+        let func = StreamFoldFunction {
             func: Arc::new(overlapping_identity),
             step_by: VHF_MMAP_WINDOW_LEN - PAGES_START,
             pad: PAGES_START,
             op: StreamFoldOp::Map(None),
-            repr: Vec::new(),
-        }
+        };
+
+        let repr = StreamFoldRepr::default();
+
+        Self { func, repr }
     }
 }
 
-impl Serialize for StreamFold {
+impl serde::Serialize for StreamFold {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
