@@ -9,6 +9,7 @@ mod func;
 pub use func::StreamFoldFunction;
 pub use func::{MapArg, StreamFoldOp};
 pub mod repr;
+pub use repr::StreamFoldRepr;
 
 use super::process::{
     consts::{MMAP_PAGE_LEN, VHF_MMAP_WINDOW_LEN},
@@ -16,7 +17,6 @@ use super::process::{
 };
 use super::writer::WriteBlock;
 use crate::parser::consts::M_OVERFLOW;
-use repr::Representation;
 use serde::Serialize;
 use std::{cmp::Ordering, hint::unreachable_unchecked, ops::Deref, sync::Arc};
 use vhf_common::data_types::{IQMTriplet, MOverflowRaw, RawVHFWord};

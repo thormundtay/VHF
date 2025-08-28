@@ -3,6 +3,12 @@
 
 use serde::Serialize;
 
+/// This is the full description of its sibling: [super::StreamFoldFunction].
+#[derive(Clone, Default, Debug, PartialEq, Serialize)]
+pub struct StreamFoldRepr {
+    pub repr: Box<[Representation<f64>]>,
+}
+
 /// There exists a multitude of ways in which [super] can do process the data. This aims to pool
 /// together a collection of valid means of processing, and place the information together into a
 /// single place.
