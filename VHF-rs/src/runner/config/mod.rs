@@ -1,7 +1,7 @@
 /// Convenience functions associated with the parsing of INI and CLI arguments.
 mod utils;
 
-use super::fold::StreamFold;
+use super::fold::{StreamFold, StreamFoldFunction};
 use super::writer::WriterBuilder;
 use crate::{Error, Result};
 use clap::{Arg, ArgAction, ArgGroup, Command, ValueHint, value_parser};
@@ -844,8 +844,8 @@ impl<'a> BoardConfig<'a> {
     }
 
     /// Gets the parameters of StreamFold part of the configuration.
-    pub fn stream_fold_parameters(&self) -> &StreamFold {
-        self.stream_fold
+    pub fn stream_fold_parameters(&self) -> &StreamFoldFunction {
+        &self.stream_fold.func
     }
 
     /// This the frequency in Hertz at which data is being emitted from the board after skip_num (`s`)
@@ -868,7 +868,7 @@ impl<'a> BoardConfig<'a> {
     }
 
     pub fn time_between_vhf_start_and_first_element(&self) -> Result<jiff::Span> {
-        let num_drop = self.stream_fold.words_dropped_before_first_write()?;
+        let num_drop = self.stream_fold.func.words_dropped_before_first_write()?;
         // let ns: f64 = (num_drop * 1_000_000_000) as f64 / self.sampling_frequency();
         let ns: f64 = {
             let numerator = num_drop * 1_000_000_000 * (1 + *self.skip_num as i64);

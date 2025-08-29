@@ -392,7 +392,7 @@ fn hybrid_drain(board: PathBuf) -> Result<()> {
         ..Config::default()
     };
 
-    let mut vhf = VHF::new(&config, &stream_fold)?;
+    let mut vhf = VHF::new(&config, &stream_fold.func)?;
     vhf.start()?;
 
     sleep(Duration::from_millis(500));
