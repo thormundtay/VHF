@@ -1,95 +1,31 @@
+//! This module is for all functionality pertaining to the folding - (map/reduce) of the VHF
+//! stream.
+//!
+//! The two primary concerns of this module are:
+//! 1. Human readability of folding, as expressed in file headers.
+//! 2. Mathematical functions invoked for the fold.
+
+mod func;
+pub use func::StreamFoldFunction;
+pub use func::{MapArg, StreamFoldOp};
 pub mod repr;
+pub use repr::StreamFoldRepr;
 
 use super::process::{
     consts::{MMAP_PAGE_LEN, VHF_MMAP_WINDOW_LEN},
     pages::MmapPage,
 };
 use super::writer::WriteBlock;
-use crate::{Error, Result, parser::consts::M_OVERFLOW};
-use repr::Representation;
-use serde::Serialize;
-use std::{cmp::Ordering, hint::unreachable_unchecked, num::NonZeroUsize, ops::Deref, sync::Arc};
+use crate::parser::consts::M_OVERFLOW;
+use std::{cmp::Ordering, hint::unreachable_unchecked, ops::Deref, sync::Arc};
 use vhf_common::data_types::{IQMTriplet, MOverflowRaw, RawVHFWord};
 
-/// This fully describes and contains all relevant mechanisms for taking the iterator output of
-/// [super::VHFIter] for "in-flight processing."
-#[derive(Clone)]
+/// This contains the necessary information that is then delegated to both file writing and
+/// "in-flight processing".
+#[derive(Clone, Debug, PartialEq)]
 pub struct StreamFold {
-    /// This the function that has to be applied to every chunked window from [super::VHF].next.
-    pub func: Arc<dyn Fn(<super::VHFIter as Iterator>::Item) -> WriteBlock + Send + Sync>,
-    /// This is the number of windows to step by each time prior to par_iter.
-    pub step_by: usize,
-    /// This is the number of windows to pad to the start.
-    pub pad: usize,
-    /// This is the operation performed.
-    pub op: StreamFoldOp,
-    /// This is a representation that aims to convey what was done in the fold. See [repr].
-    ///
-    /// For example,
-    /// 1) Only m-rollover was tracked, and so effectively nothing was done:
-    /// ```json
-    /// { fold: [] }
-    /// ```
-    /// 2) two-pass decimation with different decimation factors and filter kernels.
-    pub repr: Vec<Representation<f64>>,
-}
-
-impl PartialEq for StreamFold {
-    fn eq(&self, other: &Self) -> bool {
-        std::ptr::addr_eq(Arc::as_ptr(&self.func), Arc::as_ptr(&other.func))
-            && self.step_by == other.step_by
-            && self.pad == other.pad
-            && self.op == other.op
-            && self.repr == other.repr
-    }
-}
-
-impl Eq for StreamFold {}
-
-/// Determines the mode of operation on [super::VHF].next.
-#[derive(Clone, PartialEq, Eq)]
-pub enum StreamFoldOp {
-    /// Identity Transform on Stream without index checking
-    None,
-    // Reduce,
-    /// Quite literally the map in functional programming.
-    ///
-    /// If the enclosed Option is None, means that the map is *effectively* the same as
-    /// [StreamFoldOp::None]. This is needed for [crate::runner::writer::V1Writer] and
-    /// [crate::runner::writer::V1StdOut], which require that the phase and skip values are not
-    /// altered in the fold process.
-    Map(Option<MapArg>),
-}
-
-/// With the context of [super::Config::skip_num], [StreamFold] will lead to a decrease in number of
-/// elements between the FPGA and what is written to the file.
-/// This struct contains all arguments specific to [StreamFoldOp::Map] that would otherwise
-/// definitely not make sense to be in [StreamFoldOp::None].
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct MapArg {
-    /// This number summarizes the possibly multiple steps performed by [StreamFold::func].
-    pub effective_decimation: NonZeroUsize,
-    /// This is the number of elements that are "dropped" before the first element is written to
-    /// file.
-    pub num_before_first_drop: NonZeroUsize,
-}
-
-impl std::fmt::Debug for StreamFold {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let op_str = match &self.op {
-            StreamFoldOp::None => "none".to_string(),
-            StreamFoldOp::Map(None) => "map: None".to_string(),
-            StreamFoldOp::Map(Some(e)) => format!("map: Some({e:?})"),
-        };
-
-        f.debug_struct("StreamFold")
-            .field("func", &"...")
-            .field("step_by", &self.step_by)
-            .field("pad", &self.pad)
-            .field("op", &op_str)
-            .field("repr", &self.repr)
-            .finish()
-    }
+    pub func: StreamFoldFunction,
+    pub repr: StreamFoldRepr,
 }
 
 impl StreamFold {
@@ -105,13 +41,15 @@ impl StreamFold {
             WriteBlock::new(data)
         };
 
-        StreamFold {
+        let func = StreamFoldFunction {
             func: Arc::new(identity),
             step_by: VHF_MMAP_WINDOW_LEN,
             pad: 0,
             op: StreamFoldOp::None,
-            repr: Vec::new(),
-        }
+        };
+        let repr = StreamFoldRepr::default();
+
+        Self { func, repr }
     }
 
     //// This is the Identity transform with roll-over checking.
@@ -196,50 +134,20 @@ impl StreamFold {
             result
         }
 
-        StreamFold {
+        let func = StreamFoldFunction {
             func: Arc::new(overlapping_identity),
             step_by: VHF_MMAP_WINDOW_LEN - PAGES_START,
             pad: PAGES_START,
             op: StreamFoldOp::Map(None),
-            repr: Vec::new(),
-        }
-    }
+        };
 
-    /// Determine if the process of [self] creates any sort of decimation.
-    /// Related: [super::VHF] has to determine the number of elements to read.
-    pub(super) fn effective_decimation_factor(&self) -> NonZeroUsize {
-        match self.op {
-            StreamFoldOp::None => unsafe { NonZeroUsize::new(1).unwrap_unchecked() },
-            StreamFoldOp::Map(None) => unsafe { NonZeroUsize::new(1).unwrap_unchecked() },
-            StreamFoldOp::Map(Some(MapArg {
-                effective_decimation: e,
-                ..
-            })) => e,
-            // StreamFoldOp::Reduce(_) => 1 //?
-        }
-    }
+        let repr = StreamFoldRepr::default();
 
-    /// Determine the number of elements dropped, starting from the first word from FPGA, up to,
-    /// and not including the first element written to the file.
-    pub fn words_dropped_before_first_write(&self) -> Result<i64> {
-        match &self.op {
-            StreamFoldOp::None => Ok(0),
-            StreamFoldOp::Map(None) => Ok(0),
-            StreamFoldOp::Map(Some(MapArg {
-                num_before_first_drop: n,
-                ..
-            })) => {
-                let n: usize = (*n).into();
-                n.try_into().map_err(|_| {
-                    log::error!("Could not get num_words_dropped as i64!");
-                    Error::User
-                })
-            }
-        }
+        Self { func, repr }
     }
 }
 
-impl Serialize for StreamFold {
+impl serde::Serialize for StreamFold {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,

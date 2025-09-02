@@ -40,8 +40,8 @@ fn writes_correct_file() {
     );
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
-    let params = StreamFold::none_default();
-    matches!(params.op, StreamFoldOp::None);
+    let params_func = StreamFold::none_default().func;
+    matches!(params_func.op, StreamFoldOp::None);
 
     // Define the signal we are testing for.
     let ampl = 5000f64;
@@ -66,7 +66,7 @@ fn writes_correct_file() {
     // Add signal into pages. We now add data into the buffer.
     let push_arc_pages_thread = push_arc_pages(
         dbg_vhf_sender,
-        params.pad,
+        params_func.pad,
         signal,
         Duration::new(0, 100),
         eng,
@@ -88,8 +88,8 @@ fn writes_correct_file() {
 
     debug_vhf
         .iter()
-        .step_by(params.step_by)
-        .map(|x| (*params.func)(x))
+        .step_by(params_func.step_by)
+        .map(|x| (*params_func.func)(x))
         .try_for_each(|write_block| writer.write_data(write_block))
         .expect("Writing to v1_writer failed");
 
@@ -243,8 +243,8 @@ fn creates_multiple_files() {
     );
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
-    let params = StreamFold::none_default();
-    matches!(params.op, StreamFoldOp::None);
+    let params_func = StreamFold::none_default().func;
+    matches!(params_func.op, StreamFoldOp::None);
 
     // Define the signal we are testing for.
     let ampl = 5000f64;
@@ -268,7 +268,7 @@ fn creates_multiple_files() {
     // Add signal into pages. We now add data into the buffer.
     let push_arc_pages_thread = push_arc_pages(
         dbg_vhf_sender,
-        params.pad,
+        params_func.pad,
         signal,
         Duration::new(0, 10_000),
         eng,
@@ -299,8 +299,8 @@ fn creates_multiple_files() {
 
     debug_vhf
         .iter()
-        .step_by(params.step_by)
-        .map(|x| (*params.func)(x))
+        .step_by(params_func.step_by)
+        .map(|x| (*params_func.func)(x))
         .try_for_each(|write_block| writer.write_data(write_block))
         .expect("Writing to v1_writer failed");
 
@@ -329,8 +329,8 @@ fn creates_correct_multithreaded_files() {
     );
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
-    let params = StreamFold::none_default();
-    matches!(params.op, StreamFoldOp::None);
+    let params_func = StreamFold::none_default().func;
+    matches!(params_func.op, StreamFoldOp::None);
 
     // Define the signal we are testing for.
     let ampl = 5000f64;
@@ -357,7 +357,7 @@ fn creates_correct_multithreaded_files() {
 
     // Add signal into pages. We now add data into the buffer.
     let push_arc_pages_thread =
-        push_arc_pages(dbg_vhf_sender, params.pad, signal, thread_sleep, eng)
+        push_arc_pages(dbg_vhf_sender, params_func.pad, signal, thread_sleep, eng)
             .expect("push_arc_pages failed");
 
     let time_start = Zoned::now();
@@ -397,8 +397,8 @@ fn creates_correct_multithreaded_files() {
     use pariter::IteratorExt;
     let body = pariter::scope(|scope| {
         vhf_iter
-            .step_by(params.step_by)
-            .parallel_map_scoped(scope, |x| (*params.func)(x))
+            .step_by(params_func.step_by)
+            .parallel_map_scoped(scope, |x| (*params_func.func)(x))
             .try_for_each(|write_block| writer.write_data(write_block))
             .expect("Failed to write data");
     });
@@ -428,7 +428,7 @@ fn python_v1_linear() {
     );
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
-    let params = StreamFold::none_default();
+    let params_func = StreamFold::none_default().func;
 
     // We want to force an unwrapping to occur at least once.
     assert!(total_elements > u16::MAX as usize + 3);
@@ -445,7 +445,7 @@ fn python_v1_linear() {
     // Add signal into pages. We now add data into the buffer.
     let push_arc_pages_thread = push_arc_pages(
         dbg_vhf_sender,
-        params.pad,
+        params_func.pad,
         linear,
         Duration::new(0, 100),
         eng,
@@ -467,8 +467,8 @@ fn python_v1_linear() {
 
     debug_vhf
         .iter()
-        .step_by(params.step_by)
-        .map(|x| (*params.func)(x))
+        .step_by(params_func.step_by)
+        .map(|x| (*params_func.func)(x))
         .try_for_each(|write_block| writer.write_data(write_block))
         .expect("Writing to v1_writer failed");
 
@@ -531,8 +531,8 @@ fn python_v1_edgecase() {
     );
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
-    let params = StreamFold::none_default();
-    matches!(params.op, StreamFoldOp::None);
+    let params_func = StreamFold::none_default().func;
+    matches!(params_func.op, StreamFoldOp::None);
 
     // Define the signal we are testing for.
     let ampl = 5000f64;
@@ -558,7 +558,7 @@ fn python_v1_edgecase() {
     // Add signal into pages. We now add data into the buffer.
     let push_arc_pages_thread = push_arc_pages(
         dbg_vhf_sender,
-        params.pad,
+        params_func.pad,
         signal,
         Duration::new(0, 100),
         eng,
@@ -580,8 +580,8 @@ fn python_v1_edgecase() {
 
     debug_vhf
         .iter()
-        .step_by(params.step_by)
-        .map(|x| (*params.func)(x))
+        .step_by(params_func.step_by)
+        .map(|x| (*params_func.func)(x))
         .try_for_each(|write_block| writer.write_data(write_block))
         .expect("Writing to v1_writer failed");
 

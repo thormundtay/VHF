@@ -7,7 +7,7 @@ pub(super) mod pages;
 
 use super::Config;
 use super::config::BoardConfig;
-use super::fold::StreamFold;
+use super::fold::StreamFoldFunction;
 use crate::{Error, Result};
 use consts::{MMAP_PAGE_LEN, VHF_MMAP_WINDOW_LEN};
 use heapless::Deque;
@@ -71,9 +71,9 @@ impl<'a> VHF<'a> {
     /// # Arguments
     /// - config: [Config]
     ///   Configuration for running VHF.
-    /// - params: [StreamFold]
+    /// - params: [StreamFoldFunction]
     ///   This is to ensure that the same parameters are being used by the driving body and [VHF].
-    pub fn new(config: &'a Config, params: &StreamFold) -> Result<Self> {
+    pub fn new(config: &'a Config, params: &StreamFoldFunction) -> Result<Self> {
         let config: BoardConfig<'_> = config.build_board_config()?;
         let handle = Self::open_dev(
             config
@@ -111,7 +111,7 @@ impl<'a> VHF<'a> {
             let mut buffer = Deque::new();
             // Left padding is initialisation, and is thus handled in the parent.
             // Right-padding is termination, and therefore has to be handled by the child thread.
-            (0..config.stream_fold.pad)
+            (0..config.stream_fold.func.pad)
                 .try_for_each(|_| buffer.push_back(MmapPage::Empty))
                 .expect("Failed to push_back onto buffer.");
             Rc::new(RefCell::new(buffer))
@@ -131,7 +131,7 @@ impl<'a> VHF<'a> {
             debug_assert!(number_of_pages_between_stream_resume < DEQUE_CAP as i64 / 2);
             log::debug!("MMapReader time_between_stream_resume = {time_between_stream_resume:?}");
             let next_collect_time = wake_mmap.clone();
-            let streamfold = params.clone();
+            let streamfoldfunc = params.clone();
             thread::Builder::new()
                 .name("mmap_reader".to_string())
                 .spawn(move || {
@@ -145,7 +145,7 @@ impl<'a> VHF<'a> {
                         next_collect_time,
                         total_pages_to_read,
                         handle,
-                        &streamfold,
+                        &streamfoldfunc,
                     )
                 })
                 .map_err(Error::Io)

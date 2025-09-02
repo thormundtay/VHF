@@ -28,8 +28,8 @@ fn stepped_nonoverlapping_identity_a() {
     );
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
-    let params = StreamFold::none_default();
-    matches!(params.op, StreamFoldOp::None);
+    let params_func = StreamFold::none_default().func;
+    matches!(params_func.op, StreamFoldOp::None);
 
     // Define the signal we are testing for.
     let ampl = 5000f64;
@@ -45,14 +45,19 @@ fn stepped_nonoverlapping_identity_a() {
     let signal_expected = signal.clone(); // This will lose the engine
 
     // Add signal into pages. We now add data into the buffer.
-    let push_arc_pages_thread =
-        push_arc_pages(dbg_vhf_sender, params.pad, signal, Duration::default(), eng)
-            .expect("push_arc_pages failed");
+    let push_arc_pages_thread = push_arc_pages(
+        dbg_vhf_sender,
+        params_func.pad,
+        signal,
+        Duration::default(),
+        eng,
+    )
+    .expect("push_arc_pages failed");
 
     let result: Vec<RawVHFWord> = debug_vhf
         .iter()
-        .step_by(params.step_by)
-        .map(|x| (*params.func)(x))
+        .step_by(params_func.step_by)
+        .map(|x| (*params_func.func)(x))
         .flat_map(|x| x.data.into_iter())
         .collect();
 
@@ -82,8 +87,8 @@ fn stepped_nonoverlapping_identity_b() {
     );
 
     let total_elements = total_window_len * MMAP_PAGE_LEN;
-    let params = StreamFold::none_default();
-    matches!(params.op, StreamFoldOp::None);
+    let params_func = StreamFold::none_default().func;
+    matches!(params_func.op, StreamFoldOp::None);
 
     // Define the signal we are testing for.
     let ampl = 5000f64;
@@ -105,14 +110,19 @@ fn stepped_nonoverlapping_identity_b() {
     let signal_expected = signal.clone(); // This will lose the engine
 
     // Add signal into pages. We now add data into the buffer.
-    let push_arc_pages_thread =
-        push_arc_pages(dbg_vhf_sender, params.pad, signal, Duration::default(), eng)
-            .expect("push_arc_pages failed");
+    let push_arc_pages_thread = push_arc_pages(
+        dbg_vhf_sender,
+        params_func.pad,
+        signal,
+        Duration::default(),
+        eng,
+    )
+    .expect("push_arc_pages failed");
 
     let result: Vec<RawVHFWord> = debug_vhf
         .iter()
-        .step_by(params.step_by)
-        .map(|x| (*params.func)(x))
+        .step_by(params_func.step_by)
+        .map(|x| (*params_func.func)(x))
         .flat_map(|x| x.data.into_iter())
         .collect();
 
@@ -133,11 +143,11 @@ fn stepped_nonoverlapping_identity_b() {
 /// Check that without any m-overflow, StreamFold behaves to expectation.
 #[test]
 fn stepped_overlapping_identity_a() {
-    let params = StreamFold::identity_default();
-    matches!(params.op, StreamFoldOp::Map(None));
+    let params_func = StreamFold::identity_default().func;
+    matches!(params_func.op, StreamFoldOp::Map(None));
 
-    let debug_vhf_total_len = 4 * params.step_by;
-    let total_window_len = debug_vhf_total_len + params.step_by;
+    let debug_vhf_total_len = 4 * params_func.step_by;
+    let total_window_len = debug_vhf_total_len + params_func.step_by;
     let debug_vhf_conf = Config::default();
     let (debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
         &debug_vhf_conf,
@@ -159,15 +169,20 @@ fn stepped_overlapping_identity_a() {
     let signal_expected = signal.clone(); // This will lose the engine
 
     // Add signal into pages. We now add data into the buffer.
-    let push_arc_pages_thread =
-        push_arc_pages(dbg_vhf_sender, params.pad, signal, Duration::default(), eng)
-            .expect("push_arc_pages failed");
+    let push_arc_pages_thread = push_arc_pages(
+        dbg_vhf_sender,
+        params_func.pad,
+        signal,
+        Duration::default(),
+        eng,
+    )
+    .expect("push_arc_pages failed");
 
     // We also need to test for sign overflow.
     let results: Vec<_> = debug_vhf
         .iter()
-        .step_by(params.step_by)
-        .map(|x| (*params.func)(x))
+        .step_by(params_func.step_by)
+        .map(|x| (*params_func.func)(x))
         .collect();
     let result_phase: Vec<RawVHFWord> = results
         .iter()
@@ -199,10 +214,10 @@ fn stepped_overlapping_identity_a() {
 /// Check that with m-overflow, StreamFold behaves to expectation.
 #[test]
 fn stepped_overlapping_identity_b() {
-    let params = StreamFold::identity_default();
-    matches!(params.op, StreamFoldOp::Map(None));
+    let params_func = StreamFold::identity_default().func;
+    matches!(params_func.op, StreamFoldOp::Map(None));
 
-    let total_window_len = params.step_by * 5;
+    let total_window_len = params_func.step_by * 5;
     let debug_vhf_conf = Config::default();
     let (debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
         &debug_vhf_conf,
@@ -231,15 +246,20 @@ fn stepped_overlapping_identity_b() {
     let signal_expected = signal.clone(); // This will lose the engine
 
     // Add signal into pages. We now add data into the buffer.
-    let push_arc_pages_thread =
-        push_arc_pages(dbg_vhf_sender, params.pad, signal, Duration::default(), eng)
-            .expect("push_arc_pages failed");
+    let push_arc_pages_thread = push_arc_pages(
+        dbg_vhf_sender,
+        params_func.pad,
+        signal,
+        Duration::default(),
+        eng,
+    )
+    .expect("push_arc_pages failed");
 
     // We also need to test for sign overflow.
     let results: Vec<_> = debug_vhf
         .iter()
-        .step_by(params.step_by)
-        .map(|x| (*params.func)(x))
+        .step_by(params_func.step_by)
+        .map(|x| (*params_func.func)(x))
         .collect();
     let result_phase: Vec<RawVHFWord> = results
         .iter()

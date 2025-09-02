@@ -73,8 +73,8 @@ fn writes_correct_v2_file_basic() {
         NonZeroUsize::new(debug_vhf_total_len).unwrap(),
     );
 
-    let params = &debug_vhf_conf.stream_fold;
-    matches!(params.op, StreamFoldOp::Map(None));
+    let params_func = &debug_vhf_conf.stream_fold.func;
+    matches!(params_func.op, StreamFoldOp::Map(None));
 
     // We want to force an unwrapping to occur at least once.
     assert!(total_elements > u16::MAX as usize + 3);
@@ -90,7 +90,7 @@ fn writes_correct_v2_file_basic() {
     // Add signal into pages. We now add data into the buffer.
     let push_arc_pages_thread = push_arc_pages(
         dbg_vhf_sender,
-        params.pad,
+        params_func.pad,
         linear,
         Duration::new(0, 100),
         eng,
@@ -104,8 +104,8 @@ fn writes_correct_v2_file_basic() {
 
     debug_vhf
         .iter()
-        .step_by(params.step_by)
-        .map(|x| (*params.func)(x))
+        .step_by(params_func.step_by)
+        .map(|x| (*params_func.func)(x))
         .try_for_each(|write_block| writer.write_data(write_block))
         .expect("Writing to v2_writer failed");
     std::mem::drop(writer); // writer needs to be dropped to flush m_overflow_idx...
@@ -250,8 +250,8 @@ fn writes_correct_v2_file_insufficient() {
         NonZeroUsize::new(debug_vhf_total_len).unwrap(),
     );
 
-    let params = &debug_vhf_conf.stream_fold;
-    matches!(params.op, StreamFoldOp::Map(None));
+    let params_func = &debug_vhf_conf.stream_fold.func;
+    matches!(params_func.op, StreamFoldOp::Map(None));
 
     let signal_radius = 7000.;
     let initial_phase_offset = (i16::MAX as f64 - 70.9) * TAU;
@@ -269,12 +269,12 @@ fn writes_correct_v2_file_insufficient() {
             initial_phase_offset,
         ),
     );
-    assert_eq!(params_step_by, params.step_by);
+    assert_eq!(params_step_by, params_func.step_by);
 
     // Add signal into pages. We now add data into the buffer.
     let push_arc_pages_thread = push_arc_pages(
         dbg_vhf_sender,
-        params.pad,
+        params_func.pad,
         sinusoidal,
         Duration::new(0, 100),
         eng,
@@ -288,8 +288,8 @@ fn writes_correct_v2_file_insufficient() {
 
     debug_vhf
         .iter()
-        .step_by(params.step_by)
-        .map(|x| (*params.func)(x))
+        .step_by(params_func.step_by)
+        .map(|x| (*params_func.func)(x))
         .try_for_each(|write_block| writer.write_data(write_block))
         .expect("Writing to v2_writer failed");
     std::mem::drop(writer); // writer needs to be dropped to flush m_overflow_idx...
@@ -443,8 +443,8 @@ fn writes_correct_v2_file_zero() {
         NonZeroUsize::new(debug_vhf_total_len).unwrap(),
     );
 
-    let params = &debug_vhf_conf.stream_fold;
-    matches!(params.op, StreamFoldOp::Map(None));
+    let params_func = &debug_vhf_conf.stream_fold.func;
+    matches!(params_func.op, StreamFoldOp::Map(None));
 
     // We want to force an unwrapping to occur at least once.
     assert!(total_elements > u16::MAX as usize + 3);
@@ -460,7 +460,7 @@ fn writes_correct_v2_file_zero() {
     // Add signal into pages. We now add data into the buffer.
     let push_arc_pages_thread = push_arc_pages(
         dbg_vhf_sender,
-        params.pad,
+        params_func.pad,
         linear,
         Duration::new(0, 100),
         eng,
@@ -474,8 +474,8 @@ fn writes_correct_v2_file_zero() {
 
     debug_vhf
         .iter()
-        .step_by(params.step_by)
-        .map(|x| (*params.func)(x))
+        .step_by(params_func.step_by)
+        .map(|x| (*params_func.func)(x))
         .try_for_each(|write_block| writer.write_data(write_block))
         .expect("Writing to v2_writer failed");
     std::mem::drop(writer); // writer needs to be dropped to flush m_overflow_idx...
