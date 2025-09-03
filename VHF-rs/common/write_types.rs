@@ -8,7 +8,9 @@ use std::ops::Deref;
 const M_OVERFLOW_IDX_MAX: usize = usize::MAX >> 1;
 
 /// Compacted representation of [MOverflowRaw] into 8 bytes for file-writing reasons.  
-/// See: [VHF::runner::writer::V2BinWriter].
+/// See: [VHF::runner::writer::V2BinWriter][1].
+///
+/// [1]: ../../vhf/runner/writer/struct.V2BinWriter.html
 #[repr(transparent)]
 pub struct MOverflowWrite(pub i64);
 
