@@ -21,6 +21,9 @@ use vhf_common::data_types::RawVHFWord;
 
 pub(super) const V1_MAGIC_HEADER: u64 = 0x123456ABCDEF0000;
 
+/// Writes v1-style output files.
+///
+/// Currently only supports binary file output.
 pub struct V1Writer {
     /// Timestamp of the first file's first datapoint.
     start_time: Zoned,

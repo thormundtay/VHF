@@ -31,6 +31,7 @@ use vhf_common::data_types::{MOverflowRaw, RawVHFWord};
 use vhf_common::magic::V2_MAGIC_HEADER;
 use vhf_common::write_types::MOverflowWrite;
 
+/// Writes sequential v2-style binary files.
 pub struct V2BinWriter<'a> {
     /// Timestamp of the board's start time.
     start_time: Box<Zoned>,

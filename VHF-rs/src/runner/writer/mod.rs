@@ -94,7 +94,7 @@ impl WriteBlock {
     }
 }
 
-/// Struct which implement the following trait will consume some &\[u8;8\] to be written into the
+/// Struct which implement the following trait will consume some `&[u8;8]` to be written into the
 /// file of desired type. The struct will transparently handle writing into a new file, with
 /// appropriate header information.
 pub trait VHFWriter {

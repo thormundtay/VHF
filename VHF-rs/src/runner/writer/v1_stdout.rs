@@ -10,7 +10,7 @@ use std::{
 };
 use vhf_common::config_types::Encode;
 
-/// This has not been well-tested! Please consider using [super::V1Writer]!
+/// This has not been well-tested! Please consider using [V1Writer][super::V1Writer]!
 pub struct V1StdOut {
     /// Timestamp of the first file's first datapoint.
     start_time: Zoned,
