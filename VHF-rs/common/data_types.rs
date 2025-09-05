@@ -1,7 +1,7 @@
 //! Types associated to data created by VHF board.
 use std::f64::consts::TAU;
 
-/// This is one word of VHF data.
+/// This is one word of VHF data as seen from the DMA buffer.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct RawVHFWord(u64);
@@ -146,7 +146,7 @@ impl From<Polar> for RawVHFWord {
 }
 
 /// This is the polar representation of a data point. The phase here always denotes the wrapped phase.  
-/// Wrapped here denotes being bound within i16::MIN to i16::MAX for m.
+/// Wrapped here denotes being bound within `i16::MIN` to `i16::MAX` for `m`.
 #[derive(Copy, Clone, Debug)]
 pub struct Polar {
     pub radius: f64,

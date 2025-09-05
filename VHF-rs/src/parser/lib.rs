@@ -72,7 +72,7 @@ pub use vhf_common::data_types::RawVHFWord as VHFWord;
 /// M component of [VHFWord].
 type M = i32;
 /// Unwrapped reduced phase of [VHFWord].
-type ReducedPhase = f64;
+pub type ReducedPhase = f64;
 
 /// Expected methods of any VHF parser. Mirrors Python's expectations.
 pub trait VHFparse {

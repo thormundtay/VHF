@@ -358,6 +358,10 @@ impl Drop for VHF<'_> {
     }
 }
 
+/// Immutable iterator of VHF pages.
+///
+/// This struct is created with the [VHF::iter] method on [VHF].  
+/// Releases a window of VHF Pages with the [Self::next] method.
 pub struct VHFIter<'a> {
     /// non-iter parent
     vhf_parent: &'a VHF<'a>,
