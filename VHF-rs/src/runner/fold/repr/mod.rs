@@ -3,6 +3,9 @@
 
 use serde::Serialize;
 
+mod map;
+pub use map::*;
+
 /// This is the full description of its sibling: [StreamFoldFunction][super::StreamFoldFunction].
 #[derive(Clone, Default, Debug, PartialEq, Serialize)]
 pub struct StreamFoldRepr {
