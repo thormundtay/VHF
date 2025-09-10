@@ -1,5 +1,57 @@
 use serde::Serialize;
 
+/// The "kernel"/window functions used by the filters.
+#[derive(Clone, Debug, PartialEq)]
+pub struct StreamFoldMapKernRepr<T>
+where
+    T: num_traits::Num,
+{
+    /// Name of the Kernel used.
+    ///
+    /// This could be a window or similar. Examples would include:
+    /// - [Matlab-style IIR filters][1]: Butter, Butterord, Cheby1, ...
+    /// - [Scipy windows][2]: Boxcar, Triangle, Hamming, Blackman, ....
+    ///
+    /// [1]: <https://docs.scipy.org/doc/scipy/reference/signal.html#matlab-style-iir-filter-design>
+    /// [2]: <https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.get_window.html#scipy.signal.get_window>
+    pub name: Option<String>,
+    /// Arguments passed to Scipy used to generate [self.value][1].
+    ///
+    /// Intended to describe both args and keyworded args.
+    ///
+    /// [1]: #structfield.value
+    pub arg: Box<[(Argument, Option<Argument>)]>,
+    /// The value used by the function during the processing step.
+    ///
+    /// This would be the output of `name(arg)` that is then passed to
+    /// [`StreamFoldMapRepr.filter_type`][1] for filtering.
+    ///
+    /// [1]: ./struct.StreamFoldMapRepr.html#structfield.filter_type
+    pub value: Option<KernReprs<T>>,
+}
+
+impl<T> Serialize for StreamFoldMapKernRepr<T>
+where
+    T: num_traits::Num,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        todo!()
+    }
+}
+
+/// Public thin wrapper for values passed to Scipy Functions.
+///
+/// Used in [StreamFoldMapKernRepr].
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub enum Argument {
+    String(String),
+    Int(i64),
+    Float(f64),
+}
+
 /// This is the numerical values of various representations describing how the output signal is
 /// generated from the input signal, as used through a filter.
 #[derive(Clone, Debug, PartialEq, Serialize)]
