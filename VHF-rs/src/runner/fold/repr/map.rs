@@ -1,5 +1,40 @@
 use serde::Serialize;
 
+/// Possible filter types used by [StreamFoldMapRepr][super::StreamFoldMapRepr].
+///
+/// Currently written with reference to SciPy.
+///
+/// # Note
+/// Not every possible filtering method has yet been specified by this enum.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub enum Filter {
+    /// Filters data along one dimension using either a FIR or IIR Filter.
+    ///
+    /// # Notes
+    /// - Filtering with FIR is symmetric about some t_0, the filtering will be be a linear phase filter.
+    LFilter,
+    /// Filters data along one dimension using cascaded second-order-sections.
+    ///
+    /// Similar to [LFilter][Filter::LFilter], but using [Second-order-sections][KernReprs::SOS].
+    SOSFilt,
+    /// Applies a digital filter forward and backward to a signal.
+    ///
+    /// This function applies a linear digital filter twice, once forward and once backwards. The
+    /// combined filter has zero phase and a filter order twice that of the original.
+    ///
+    /// This generally expects arguments to be of the form `b, a`. It is recommended to normalize
+    /// `a[0]` to 1.
+    ///
+    /// # Notes
+    /// - The double pass ensures a zero-phase filter.
+    /// - This is a non-causal filter with the time-reversal double pass.
+    FiltFilt,
+    /// A forward-backward digital filter using cases second-order sections.
+    SOSFiltFilt,
+    /// User defined.
+    Other(String),
+}
+
 /// The "kernel"/window functions used by the filters.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StreamFoldMapKernRepr<T>
@@ -53,7 +88,7 @@ pub enum Argument {
 }
 
 /// This is the numerical values of various representations describing how the output signal is
-/// generated from the input signal, as used through a filter.
+/// generated from the input signal, as used through a [filter][Filter].
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum KernReprs<T>
 where
