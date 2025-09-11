@@ -1,4 +1,53 @@
+//! Structs related to representing [map operations][super::super::StreamFoldOp::Map].
+
 use serde::Serialize;
+
+/// Representation of [StreamFoldFunction::Map][super::super::StreamFoldFunction].
+///
+/// No validation is made here to ensure that this is an accurate reflaction of what the `Map`
+/// function does.
+// Ideal Example outputs:
+// 1. Hamming under FiltFilt
+// {
+//   "map": "FiltFilt(Hamming)",
+//   "Kernel Representation": {
+//     "name": "Hamming",
+//     "args": ["M=3",],
+//     "value": "DiscreteFIR([0.1, 0.8,  0.1])"
+//   },
+//   "skip_num": 5
+// }
+// 2. Unknown Transfer Function (TF) under FiltFilt
+// {
+//   "map": "FiltFilt(Unknown)",
+//   "Kernel Representation": {
+//     "name": "Unknown",
+//     "value": "TF([0.1, 0.8,  0.1], [1.])"
+//   },
+//   "skip_num": 5
+// }
+// 3. Butterworth in SOS representation under SOSFilt with numbers to SOS not written in example.
+// {
+//   "map": "SOSFilt(Butterworth)",
+//   "Kernel Representation": {
+//     "name": "butter",
+//     "args": ["N" = 4, "Wn" = 0.125, "output" = "sos"],
+//     "value": "SOS([[0.1, 0.8,  0.1], [...], [...]])"
+//   },
+//   "skip_num": 5
+// }
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct StreamFoldMapRepr<T>
+where
+    T: num_traits::Num,
+{
+    /// The filtering done in this map step.
+    pub filter_type: Filter,
+    /// The arguments used to obtain the filter.
+    pub filt_args: StreamFoldMapKernRepr<T>,
+    /// The number of elements skipped between each Map.
+    pub step_by: usize,
+}
 
 /// Possible filter types used by [StreamFoldMapRepr][super::StreamFoldMapRepr].
 ///
@@ -53,6 +102,7 @@ where
     /// Arguments passed to Scipy used to generate [self.value][1].
     ///
     /// Intended to describe both args and keyworded args.
+    /// `args` will be silently discarded if name was not given.
     ///
     /// [1]: #structfield.value
     pub arg: Box<[(Argument, Option<Argument>)]>,
