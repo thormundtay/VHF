@@ -16,9 +16,9 @@ internals = []
 byteorder = { version = "1.5.0" }
 bytemuck = { version = "1.23.0", features = ["aarch64_simd"] }
 itertools = { version = "0.14.0" }
-jiff = { version = "0.2.13", features = ["alloc", "std"] }
-log = { version = "0.4.22" }
-memmap2 = { version = "0.9.7" }
+jiff = { version = "0.2.15", features = ["alloc", "std"] }
+log = { version = "0.4.28" }
+memmap2 = { version = "0.9.8" }
 ndarray = { version = "0.16.1", features = ["rayon"] }
 numpy = { version = "0.25.0", optional = true }
 pyo3 = { version = "0.25.1", default-features = false, features = ["jiff-02"], optional = true }

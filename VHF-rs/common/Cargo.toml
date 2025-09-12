@@ -8,7 +8,7 @@ name = "vhf_common"
 path = "lib.rs"
 
 [dependencies]
-jiff = { version = "0.2.13", features = ["serde"] }
+jiff = { version = "0.2.15", features = ["serde"] }
 serde = { version = "1.0.219", features = ["derive"] }
 
 [dev-dependencies]
