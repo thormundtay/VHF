@@ -1,6 +1,7 @@
 //! Structs related to representing [map operations][super::super::StreamFoldOp::Map].
 
 use serde::Serialize;
+use serde::ser::SerializeMap;
 
 /// Representation of [StreamFoldFunction::Map][super::super::StreamFoldFunction].
 ///
@@ -39,7 +40,7 @@ use serde::Serialize;
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct StreamFoldMapRepr<T>
 where
-    T: num_traits::Num,
+    T: num_traits::Num + Serialize,
 {
     /// The filtering done in this map step.
     pub filter_type: Filter,
@@ -88,7 +89,7 @@ pub enum Filter {
 #[derive(Clone, Debug, PartialEq)]
 pub struct StreamFoldMapKernRepr<T>
 where
-    T: num_traits::Num,
+    T: num_traits::Num + Serialize,
 {
     /// Name of the Kernel used.
     ///
@@ -105,7 +106,7 @@ where
     /// `args` will be silently discarded if name was not given.
     ///
     /// [1]: #structfield.value
-    pub arg: Box<[(Argument, Option<Argument>)]>,
+    pub arg: serde_json::Value,
     /// The value used by the function during the processing step.
     ///
     /// This would be the output of `name(arg)` that is then passed to
@@ -117,24 +118,27 @@ where
 
 impl<T> Serialize for StreamFoldMapKernRepr<T>
 where
-    T: num_traits::Num,
+    T: num_traits::Num + Serialize,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        todo!()
-    }
-}
+        let mut map = serializer.serialize_map(Some({
+            1 + if self.name.is_some() { 1 } else { 0 } + if self.value.is_some() { 1 } else { 0 }
+        }))?;
 
-/// Public thin wrapper for values passed to Scipy Functions.
-///
-/// Used in [StreamFoldMapKernRepr].
-#[derive(Clone, Debug, PartialEq, Serialize)]
-pub enum Argument {
-    String(String),
-    Int(i64),
-    Float(f64),
+        map.serialize_entry("name", self.name.as_ref().unwrap_or(&"Unknown".to_string()))?;
+
+        if self.name.is_some() {
+            map.serialize_entry("args", &self.arg)?;
+        }
+        if self.value.is_some() {
+            map.serialize_entry("value", &self.value)?;
+        }
+
+        map.end()
+    }
 }
 
 /// This is the numerical values of various representations describing how the output signal is
@@ -142,7 +146,7 @@ pub enum Argument {
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum KernReprs<T>
 where
-    T: num_traits::Num,
+    T: num_traits::Num + Serialize,
 {
     /// For discrete finite impulse response filters, the discrete output signal `y[n]` as a
     /// function of the coefficients `b` and discrete input signal `x[n]` can be written as:
@@ -150,7 +154,13 @@ where
     /// \[ y[n] = \sum_{i=0}^N b_i x[n-i]. \]
     /// ```
     /// Initial conditions `zi` are given by `lfilter_zi` or `lfiltic`.
-    DiscreteFIRCoeff { b: Box<[T]>, zi: Option<Box<[T]>> },
+    DiscreteFIRCoeff {
+        /// Discrete coefficients.
+        b: Box<[T]>,
+        /// Initial conditions.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        zi: Option<Box<[T]>>,
+    },
     /// For discrete infinite impulse response filters, the discrete output signal `y[n]` as a
     /// function of the coefficients `b` and discrete input signal `x[n]` can be written as:
     /// ```custom,{class=language-latex}
@@ -190,6 +200,7 @@ where
         /// Array of second-order filter coefficients.
         sos: Box<[T; 6]>,
         /// Initial conditions for cascaded filter delays.
+        #[serde(skip_serializing_if = "Option::is_none")]
         zi: Option<Box<[T]>>,
     },
     /// Zero-pole-gain representation

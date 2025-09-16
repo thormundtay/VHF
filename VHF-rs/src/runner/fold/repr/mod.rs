@@ -37,7 +37,7 @@ pub struct StreamFoldRepr(pub Box<[StreamFoldOpRepr<f64>]>);
 #[derive(Clone, Default, Debug, PartialEq, Serialize)]
 pub enum StreamFoldOpRepr<T>
 where
-    T: num_traits::Num,
+    T: num_traits::Num + Serialize,
 {
     #[default]
     None,
