@@ -3,7 +3,26 @@
 use serde::Serialize;
 use serde::ser::SerializeMap;
 
-/// Representation of [StreamFoldFunction::Map][super::super::StreamFoldFunction].
+/// There are a variety of Map Operations that can be done. We split them into a few
+///
+/// # Note
+/// The variants provided are currently incomplete.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub enum StreamFoldMapRepr<T>
+where
+    T: num_traits::Num + Serialize,
+{
+    /// Pertaining to all filtering operations.
+    Filter(StreamFoldMapFilterRepr<T>),
+    /// Fourier Transform of a window of data. Often intended for product with a filtering window
+    /// in frequency space.
+    FourierTransform,
+    /// Inverse Fourier Transform of a window of data in frequency space that is already filtered.
+    /// Used to obtain data in temporal space.
+    InverseFourierTransform,
+}
+
+/// Representation of [StreamFoldFunction::Map][super::super::StreamFoldFunction] filtering.
 ///
 /// No validation is made here to ensure that this is an accurate reflaction of what the `Map`
 /// function does.
@@ -38,7 +57,7 @@ use serde::ser::SerializeMap;
 //   "skip_num": 5
 // }
 #[derive(Clone, Debug, PartialEq, Serialize)]
-pub struct StreamFoldMapRepr<T>
+pub struct StreamFoldMapFilterRepr<T>
 where
     T: num_traits::Num + Serialize,
 {
