@@ -401,6 +401,10 @@ impl<'a> VHFparser<'a> {
         Ok(s)
     }
 
+    pub fn get_header(&self) -> &TraceDetails {
+        &self.header
+    }
+
     /// Reads from data section as `[start..end]`.
     ///
     /// Wrap output manually as VHFWord if necessary.
