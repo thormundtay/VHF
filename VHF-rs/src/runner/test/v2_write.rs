@@ -12,6 +12,8 @@ use super::{debug_vhf_new, push_arc_pages, required_window_pages};
 use approx::{AbsDiffEq, RelativeEq};
 use configparser::ini::Ini;
 use jiff::Zoned;
+#[allow(unused_imports)]
+use std::env;
 use std::f64::consts::TAU;
 use std::hint::unreachable_unchecked;
 use std::num::NonZeroUsize;
@@ -110,9 +112,12 @@ fn writes_correct_v2_file_basic() {
         .expect("Writing to v2_writer failed");
     std::mem::drop(writer); // writer needs to be dropped to flush m_overflow_idx...
 
-    // Test that the unwrapped phase is identical
+    // Open file through parser.
     let tmp_file = get_only_file(tmp_dir.path()).expect("Temp File not found");
+    // std::fs::copy(&tmp_file, env::temp_dir().join("v2_linear.bin")).expect("failed_to copy");
     let mut parser = v2::VHFparser::new(&tmp_file, true).expect("Could not make v2 parser");
+
+    // Test that the unwrapped phase is identical
     parser
         .resolve_m_overflow_idxs()
         .expect("Could not resolve m_overflow");
@@ -188,9 +193,6 @@ fn writes_correct_v2_file_basic() {
         .windows(2)
         .into_iter()
         .all(|w| (w[1]).abs_diff_eq(&w[0], 1e-5));
-
-    // Save to external
-    // std::fs::copy(&tmp_file, "/dev/shm/v2_linear.bin").expect("failed_to copy");
 
     tmp_dir.close().expect("Could not close temp_dir.");
     push_arc_pages_thread.join().expect("Failed to join");
@@ -294,12 +296,12 @@ fn writes_correct_v2_file_insufficient() {
         .expect("Writing to v2_writer failed");
     std::mem::drop(writer); // writer needs to be dropped to flush m_overflow_idx...
 
+    // Open file through parser.
     let tmp_file = get_only_file(tmp_dir.path()).expect("Temp File not found");
-    // Save to external
-    // std::fs::copy(&tmp_file, "/dev/shm/v2_sine.bin").expect("failed_to copy");
+    // std::fs::copy(&tmp_file, env::temp_dir().join("v2_sine.bin")).expect("failed_to copy");
+    let mut parser = v2::VHFparser::new(&tmp_file, true).expect("Could not make v2 parser");
 
     // Test that the unwrapped phase is identical
-    let mut parser = v2::VHFparser::new(&tmp_file, true).expect("Could not make v2 parser");
     parser
         .resolve_m_overflow_idxs()
         .expect("Could not resolve m_overflow");
@@ -379,9 +381,6 @@ fn writes_correct_v2_file_insufficient() {
         .windows(2)
         .into_iter()
         .all(|w| (w[1]).abs_diff_eq(&w[0], 1e-5));
-
-    // Save to external
-    // std::fs::copy(&tmp_file, "/dev/shm/v2_sine.bin").expect("failed_to copy");
 
     tmp_dir.close().expect("Could not close temp_dir.");
     push_arc_pages_thread.join().expect("Failed to join");
@@ -480,9 +479,12 @@ fn writes_correct_v2_file_zero() {
         .expect("Writing to v2_writer failed");
     std::mem::drop(writer); // writer needs to be dropped to flush m_overflow_idx...
 
-    // Test that the unwrapped phase is identical
+    // Open file through parser.
     let tmp_file = get_only_file(tmp_dir.path()).expect("Temp File not found");
+    // std::fs::copy(&tmp_file, env::temp_dir().join("v2_zero.bin")).expect("failed_to copy");
     let mut parser = v2::VHFparser::new(&tmp_file, true).expect("Could not make v2 parser");
+
+    // Test that the unwrapped phase is identical
     parser
         .resolve_m_overflow_idxs()
         .expect("Could not resolve m_overflow");
