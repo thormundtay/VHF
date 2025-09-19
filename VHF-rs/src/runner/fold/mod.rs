@@ -153,9 +153,9 @@ impl serde::Serialize for StreamFold {
         S: serde::Serializer,
     {
         // Rather than specifying #[serde(skip_deserializing)] for all but self.repr.
-        use serde::ser::SerializeStruct;
-        let mut s = serializer.serialize_struct("StreamFold", 1)?;
-        s.serialize_field("fold", &self.repr)?;
+        use serde::ser::SerializeSeq;
+        let mut s = serializer.serialize_seq(Some(self.repr.len()))?;
+        self.repr.iter().try_for_each(|f| s.serialize_element(f))?;
         s.end()
     }
 }

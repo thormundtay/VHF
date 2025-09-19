@@ -5,6 +5,8 @@
 //! wrapper of [StreamFoldMapRepr]. Populate the fields of [StreamFoldMapRepr] as necessary, which
 //! will then be written into the appropriate places of the save file.
 
+use std::ops::Deref;
+
 use serde::Serialize;
 
 mod map;
@@ -28,6 +30,13 @@ pub use map::*;
 // subsequent StreamFoldFunction.func filtering, whilst accounting for RPIT opaque types.
 #[derive(Clone, Default, Debug, PartialEq, Serialize)]
 pub struct StreamFoldRepr(pub Box<[StreamFoldOpRepr<f64>]>);
+
+impl Deref for StreamFoldRepr {
+    type Target = Box<[StreamFoldOpRepr<f64>]>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 /// When defining a custom [super::StreamFold], the repr field emits a json, which will be used
 /// here to determine the resulting JSON output.
