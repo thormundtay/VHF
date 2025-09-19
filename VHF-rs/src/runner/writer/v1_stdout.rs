@@ -10,7 +10,9 @@ use std::{
 };
 use vhf_common::config_types::Encode;
 
-/// This has not been well-tested! Please consider using [V1Writer][super::V1Writer]!
+/// Writes v1-style files to stdout. This has not been well-tested! Please consider using [V1Writer][super::V1Writer]!
+///
+/// Currently only supports binary encoding!
 pub struct V1StdOut {
     /// Timestamp of the first file's first datapoint.
     start_time: Zoned,
