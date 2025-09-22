@@ -117,6 +117,13 @@ fn writes_correct_v2_file_basic() {
     // std::fs::copy(&tmp_file, env::temp_dir().join("v2_linear.bin")).expect("failed_to copy");
     let mut parser = v2::VHFparser::new(&tmp_file, true).expect("Could not make v2 parser");
 
+    // Test that the fold (as represented in the header) is empty.
+    parser
+        .get_header()
+        .stream_fold
+        .iter()
+        .for_each(|fold| assert!(fold.is_empty()));
+
     // Test that the unwrapped phase is identical
     parser
         .resolve_m_overflow_idxs()
@@ -301,6 +308,13 @@ fn writes_correct_v2_file_insufficient() {
     // std::fs::copy(&tmp_file, env::temp_dir().join("v2_sine.bin")).expect("failed_to copy");
     let mut parser = v2::VHFparser::new(&tmp_file, true).expect("Could not make v2 parser");
 
+    // Test that the fold (as represented in the header) is empty.
+    parser
+        .get_header()
+        .stream_fold
+        .iter()
+        .for_each(|fold| assert!(fold.is_empty()));
+
     // Test that the unwrapped phase is identical
     parser
         .resolve_m_overflow_idxs()
@@ -483,6 +497,13 @@ fn writes_correct_v2_file_zero() {
     let tmp_file = get_only_file(tmp_dir.path()).expect("Temp File not found");
     // std::fs::copy(&tmp_file, env::temp_dir().join("v2_zero.bin")).expect("failed_to copy");
     let mut parser = v2::VHFparser::new(&tmp_file, true).expect("Could not make v2 parser");
+
+    // Test that the fold (as represented in the header) is empty.
+    parser
+        .get_header()
+        .stream_fold
+        .iter()
+        .for_each(|fold| assert!(fold.is_empty()));
 
     // Test that the unwrapped phase is identical
     parser
