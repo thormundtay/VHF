@@ -2,60 +2,19 @@ from datetime import datetime
 from datetime import timedelta
 from io import BufferedRandom
 import logging
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Unpack
 import math
 import numpy as np
 from numpy.typing import NDArray
 import os
+from .board_const import LOW_BASE_FREQ, HIGH_BASE_FREQ
+from .trait import _PlotTimingArg
+from .trait import VHFparser_trait
+from .v1_binary_core import BinaryVHFTrace
 
 __all__ = [
     "VHFparser",
 ]
-
-
-class BinaryVHFTrace:
-    """Collection of methods for parsing binary data out of VHF trace.
-
-    Binary trace data is a contiguous binary array that is interpreted a word
-    at a time. Each word is 8 bytes, intended to be unpacked as (I, Q, M).
-    """
-    raw_word_type = np.uint64
-    i_arr_type = np.int32
-    q_arr_type = np.int32
-    m_arr_type = np.int32
-
-    bytes_per_word: int = 8
-    potential_m_overflow_tolerance: int = 0x7F00
-    # |m| > potential_m_overflow_tolerance => np.diff is then run
-    actual_m_overflow: int = 0xF000  # trc[i+1] - trc[i] > THIS counts as overflowing
-    m_offset = 0xFFFF + 1
-
-    @staticmethod
-    def read_i_arr(trace: NDArray[raw_word_type]) -> NDArray[i_arr_type]:
-        """Gets the I portion of a word."""
-        i_arr = np.bitwise_and(
-            np.right_shift(trace, 24), 0xFFFFFF,
-            dtype=np.dtype(BinaryVHFTrace.i_arr_type)
-        )
-        i_arr = i_arr - (i_arr >> 23) * 2**24
-        return i_arr
-
-    @staticmethod
-    def read_q_arr(trace: NDArray[raw_word_type]) -> NDArray[q_arr_type]:
-        """Gets the Q portion of a word."""
-        q_arr = np.bitwise_and(
-            trace, 0xFFFFFF,
-            dtype=np.dtype(BinaryVHFTrace.q_arr_type)
-        )
-        q_arr = q_arr - (q_arr >> 23) * 2**24
-        return q_arr
-
-    @staticmethod
-    def read_m_arr(trace: NDArray[raw_word_type]) -> NDArray[m_arr_type]:
-        """Gets the M portion of a word."""
-        # is it safe to lower the size of this?
-        result = np.right_shift(trace, 48, dtype=np.dtype(np.int64))
-        return result.astype(BinaryVHFTrace.m_arr_type)
 
 
 class TraceTimer:
@@ -449,18 +408,11 @@ class ManifoldRollover:
         if self._potential_overflow(m_block):  # Perform only if necessary
             self.logger.debug("_potential_overflow found!")
             # We first perform the np.diff for the self._trace_blk_id > 1 case:
-            x = None
-            if self._prev_trc_last_m is not None:
-                x = m_block[0] - self._prev_trc_last_m
             # Populate the np.diff for the given block
-            if x is not None:
-                diff_offset = 1
-                diff = np.zeros_like(m_block, dtype=BinaryVHFTrace.m_arr_type)
-                diff[0] = x
-            else:
-                diff_offset = 0
-                diff = np.zeros((m_block.size-1,), dtype=BinaryVHFTrace.m_arr_type)
-            diff[diff_offset:] = np.diff(m_block)
+            diff = np.zeros_like(m_block, dtype=BinaryVHFTrace.m_arr_type)
+            if self._prev_trc_last_m is not None:
+                diff[0] = m_block[0] - self._prev_trc_last_m
+            diff[1:] = np.diff(m_block)
             # Next, get indices and rollover direction
             idx, deltas = self._rollover_lemma(diff)
 
@@ -522,10 +474,10 @@ class ManifoldRollover:
         return m_arr
 
 
-class VHFparser:
+class VHFparser(VHFparser_trait):
     # Written with reference to SVN r14
     """
-    Class that parses binary, hexadecimal and ASCII output from VHF board,
+    Class that parses v1 binary, hexadecimal and ASCII output from VHF board,
     from file objects and data streams.
 
     Init arguments
@@ -628,6 +580,7 @@ class VHFparser:
         # sparse representation of necessary to not multiply reparse all of
         # m-array again to determine how much m-offset is necessary for
         # arbitrary window.
+        self._pre_trace_parsing_called: bool = False
 
         # To avoid AttributeErrors, we initialise them here
         self._data = None
@@ -692,7 +645,7 @@ class VHFparser:
         # derived properties
 
         # post-init/pre-trace: check for manifold rollovers
-        self._pre_trace_parsing()
+        self.resolve_m_overflow_idxs()
 
         # post-init: Populate body "data" to within (start_time, end_time)
         # Available data in file in contrast to header['s']'s expected
@@ -700,7 +653,7 @@ class VHFparser:
 
         # init: get (I, Q, M)
         # these are a function of the specified plot window
-        self.read_words()
+        self._read_words()
 
     def __create_logger(self):
         self.logger = logging.getLogger("vhfparser")
@@ -733,7 +686,7 @@ class VHFparser:
         self._num_head_bytes += header_count  # this is the claimed headersize
         self.headerraw: bytes = buffer.read(header_count - self._bytes_per_word)  # read continues stream position
         self.headerraw = self.headerraw.rstrip(b"\x00")
-        self.parse_header(self.headerraw)
+        self._parse_header(self.headerraw)
 
     def _init_timing_info(self):
         """Populate file timing information.
@@ -749,7 +702,7 @@ class VHFparser:
             self._num_trc_bytes
         )
 
-    def parse_header(self, header_raw: bytes):
+    def _parse_header(self, header_raw: bytes):
         """Convert binary file header into a header property."""
         if header_raw is None or header_raw == b'':
             self.logger.error("parse_header invoked with empty argument: header_raw")
@@ -810,14 +763,14 @@ class VHFparser:
 
         # generate explicit params
         if 'l' in self.header:
-            self.header["base sampling freq"] = 10e6
+            self.header["base sampling freq"] = LOW_BASE_FREQ
         elif 'h' in self.header:
-            self.header["base sampling freq"] = 20e6
+            self.header["base sampling freq"] = HIGH_BASE_FREQ
         else:
             self.logger.warning(
                 "Sampling frequency was not explicitly given in header. "
                 "Defaulting to 20 MHz.")
-            self.header["base sampling freq"] = 20e6
+            self.header["base sampling freq"] = HIGH_BASE_FREQ
 
         if 's' in self.header and self.header['s'] is not None:
             self.header["sampling freq"] = (self.header["base sampling freq"]
@@ -866,14 +819,17 @@ class VHFparser:
         if result.sparse_m_delta_idx.size > 0:
             self._m_mgr = result
 
-    def _pre_trace_parsing(self):
-        """Procedures that have to be done prior to parsing a trace window."""
-        # 1. Checking for manifold rollovers.
-        self._obtain_m_deltas()
+    def resolve_m_overflow_idxs(self):
+        """Update the class to be aware of all m-overflow indices."""
+        if not self._pre_trace_parsing_called:
+            # 1. Checking for manifold rollovers.
+            self._obtain_m_deltas()
+
+            self._pre_trace_parsing_called = True
         self.logger.debug("Pre-trace parsers all completed.")
 
     # Updating all properties that follow from _data and (I, Q, M)
-    def update_plot_timing(self, lazy=False, **kwargs) -> None:
+    def update_plot_timing(self, lazy=False, /, **kwargs: Unpack[_PlotTimingArg]) -> None:
         """Change the view window associated to currently parsed file.
 
         lazy: bool
@@ -919,8 +875,12 @@ class VHFparser:
                               self._data.shape)
         return self._data
 
-    def read_words(self) -> None:
-        """Converts binary words found within VHF Trace data into arrays."""
+    def _read_words(self) -> None:
+        """Converts binary words found within VHF Trace data into arrays.
+
+        This is primarily for fetching from disk and populating into
+        self._i_arr, ....
+        """
         self.logger.debug("read_words called.")
         self._read_words_numpy(self.data)
 
@@ -944,7 +904,7 @@ class VHFparser:
 
         # pre-trace is needed if we only done headers
         if not self._m_mgr_obtained:
-            self._pre_trace_parsing()
+            self.resolve_m_overflow_idxs()
         # we now perform m-overflow fix only if necessary
         if not self._m_mgr_obtained:
             raise RuntimeError(
@@ -964,7 +924,7 @@ class VHFparser:
     @property
     def i_arr(self) -> NDArray[BinaryVHFTrace.i_arr_type]:
         if self._i_arr is None:
-            self.read_words()
+            self._read_words()
         if self._i_arr is None:
             raise RuntimeError  # Suppress returnTypeError
         return self._i_arr
@@ -972,7 +932,7 @@ class VHFparser:
     @property
     def q_arr(self) -> NDArray[BinaryVHFTrace.q_arr_type]:
         if self._q_arr is None:
-            self.read_words()
+            self._read_words()
         if self._q_arr is None:
             raise RuntimeError  # Suppress returnTypeError
         return self._q_arr
@@ -980,7 +940,7 @@ class VHFparser:
     @property
     def m_arr(self) -> NDArray[BinaryVHFTrace.m_arr_type]:
         if self._m_arr is None:
-            self.read_words()
+            self._read_words()
         if self._m_arr is None:
             raise RuntimeError  # Suppress returnTypeError
         return self._m_arr
@@ -993,9 +953,9 @@ class VHFparser:
         phase is obtained by atan(Q/I).
         """
         if self._phase is None:
-            p = -np.arctan2(self.i_arr, self.q_arr)
+            p = np.arctan2(self.i_arr, self.q_arr)
             p /= 2*np.pi
-            p -= self.m_arr
+            p += self.m_arr
             self._phase = p
         return self._phase
 

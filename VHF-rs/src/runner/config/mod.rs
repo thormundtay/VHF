@@ -1,22 +1,20 @@
 /// Convenience functions associated with the parsing of INI and CLI arguments.
 mod utils;
 
-/// Convenience Type definitions associated with properties during the lifetime of the experiment.
-pub(crate) mod typedef;
-
 use super::fold::StreamFold;
 use super::writer::WriterBuilder;
 use crate::{Error, Result};
 use clap::{Arg, ArgAction, ArgGroup, Command, ValueHint, value_parser};
 use configparser::ini;
+use serde::Serialize;
 use std::{
     collections::HashMap,
     ffi::{CString, OsString},
     path::{Path, PathBuf},
     str::FromStr,
 };
-use typedef::*;
 use utils::PythonMath;
+use vhf_common::config_types::{Encode, SamplingSpeed};
 
 /// Parameters used to run VHF board.
 ///
@@ -61,6 +59,9 @@ pub struct Configs {
     pub save_dir: PathBuf,
     pub board: PathBuf,
     pub save_to_file: bool,
+
+    /// V2 m_overflow_idx block length to data length ratio.
+    pub v2_overflow_to_data_ratio: Option<f64>,
 }
 
 impl Default for Configs {
@@ -84,6 +85,8 @@ impl Default for Configs {
             save_dir: PathBuf::from("./Data"),
             board: PathBuf::from("/dev/usbhybrid0"),
             save_to_file: false,
+
+            v2_overflow_to_data_ratio: None,
         }
     }
 }
@@ -111,7 +114,7 @@ impl Configs {
     }
 
     // Assumes ExtendedInterpolation from Python's ConfigParser
-    fn with_config(&mut self, config: ini::Ini) -> Result<()> {
+    pub(crate) fn with_config(&mut self, config: ini::Ini) -> Result<()> {
         // Section: Board
         if let evalexpr::Value::Int(num_samples) = config
             .get("Board", "num_samples")
@@ -143,7 +146,7 @@ impl Configs {
                 log::warn!("Board speed not found in config; Using default.");
                 Error::ParseEmpty
             })
-            .and_then(|e| SamplingSpeed::from_str(e.as_str()))
+            .and_then(|e| SamplingSpeed::from_str(e.as_str()).map_err(Error::from))
             .unwrap_or(Self::default().speed);
 
         self.encode = config
@@ -152,7 +155,7 @@ impl Configs {
                 log::warn!("Board encode not found in config; Using default.");
                 Error::ParseEmpty
             })
-            .and_then(|e| Encode::from_str(e.as_str()))
+            .and_then(|e| Encode::from_str(e.as_str()).map_err(Error::from))
             .unwrap_or(Self::default().encode);
 
         self.gain = utils::if_enabled_value(&config, "Board", "vga_num", |v| v <= 8)?;
@@ -238,7 +241,7 @@ impl Configs {
         &mut self,
         env_args: impl IntoIterator<Item = OsString> + std::fmt::Debug,
     ) -> Result<()> {
-        log::debug!("with_cli called with env_args: {:?}", env_args);
+        log::debug!("with_cli called with env_args: {env_args:?}");
         let args = self.clap_args().get_matches_from(env_args);
 
         if let Some(&num_samples) = args.get_one::<usize>("Number of samples") {
@@ -658,25 +661,6 @@ impl Configs {
         Ok(())
     }
 
-    /// This the frequency in Hertz at which data is being emitted from the board after skip_num (`s`)
-    /// decimation.
-    pub fn sampling_frequency(&self) -> f64 {
-        self.speed.base_sampling_freq() as f64 / (1. + self.skip_num as f64)
-    }
-
-    /// This determines the time difference the first data point of multiple files.
-    pub fn file_timespan(&self) -> jiff::Span {
-        // In case there are drifts...
-        log::debug!(
-            "Timespan of one sample point in nanoseconds = {}",
-            1e9 / self.sampling_frequency()
-        );
-        self.num_samples as i64
-            * jiff::Span::new()
-                .try_nanoseconds((1e9 / self.sampling_frequency()).round() as i64)
-                .unwrap()
-    }
-
     /// This is a string representation of what the C variant would have received from the command
     /// line. This primarily is used just to keep track of experiment properties.
     pub fn details(&self) -> String {
@@ -738,9 +722,11 @@ impl Configs {
         const REDBOLD: &str = "\x1B[31;1m";
         const RESET: &str = "\x1B[0m";
 
-        let sf = self.sampling_frequency();
+        let board_conf = self.build_board_config().unwrap();
+
+        let sf = board_conf.sampling_frequency();
         if sf < 1e3 {
-            println!("Sampling at {:.4} Hz.", sf);
+            println!("Sampling at {sf:.4} Hz.");
         } else if sf < 1e6 {
             println!("Sampling at {:.4} kHz.", sf / 1e3);
         } else if sf < 1e9 {
@@ -750,14 +736,11 @@ impl Configs {
         }
 
         if let Some(filter_const) = self.filter_const {
-            println!(
-                "Filter constant has been set to: {BLUE}{}{RESET}",
-                filter_const
-            );
+            println!("Filter constant has been set to: {BLUE}{filter_const}{RESET}",);
         }
 
         if let Some(gain_const) = self.gain {
-            println!("Onboard gain has been set to: {BLUE}{}{RESET}", gain_const);
+            println!("Onboard gain has been set to: {BLUE}{gain_const}{RESET}");
         }
 
         println!(
@@ -774,7 +757,7 @@ impl Configs {
             println!("Output will be captured from {BLUE}STDIN{RESET}.");
         }
 
-        let total_time = self.num_files as i64 * self.file_timespan();
+        let total_time = self.num_files as i64 * board_conf.file_timespan();
         println!(
             "Sampling is expected to take {REDBOLD}{}{RESET}.",
             total_time
@@ -813,6 +796,7 @@ impl Configs {
 /// Valid representation of board interaction along with process requirements.
 /// (These are placed together as the board has to collect more data in the event that process
 /// decimates the board's collected data.)
+#[derive(Clone, Debug, Serialize)]
 pub struct BoardConfig<'a> {
     /// For a single continuous file, this is the number of samples expected to be at least within
     /// the file.
@@ -861,7 +845,38 @@ impl<'a> BoardConfig<'a> {
 
     /// Gets the parameters of StreamFold part of the configuration.
     pub fn stream_fold_parameters(&self) -> &StreamFold {
-        &self.stream_fold
+        self.stream_fold
+    }
+
+    /// This the frequency in Hertz at which data is being emitted from the board after skip_num (`s`)
+    /// decimation.
+    pub fn sampling_frequency(&self) -> f64 {
+        self.speed.base_sampling_freq() as f64 / (1. + *self.skip_num as f64)
+    }
+
+    /// This determines the time difference the first data point of multiple files.
+    pub fn file_timespan(&self) -> jiff::Span {
+        // In case there are drifts...
+        log::debug!(
+            "Timespan of one sample point in nanoseconds = {}",
+            1e9 / self.sampling_frequency()
+        );
+        *self.num_samples as i64
+            * jiff::Span::new()
+                .try_nanoseconds((1e9 / self.sampling_frequency()).round() as i64)
+                .unwrap()
+    }
+
+    pub fn time_between_vhf_start_and_first_element(&self) -> Result<jiff::Span> {
+        let num_drop = self.stream_fold.words_dropped_before_first_write()?;
+        // let ns: f64 = (num_drop * 1_000_000_000) as f64 / self.sampling_frequency();
+        let ns: f64 = {
+            let numerator = num_drop * 1_000_000_000 * (1 + *self.skip_num as i64);
+            let denominator = self.speed.base_sampling_freq();
+            numerator as f64 / denominator as f64
+        };
+        let ns: i64 = ns.round() as i64;
+        jiff::Span::new().try_nanoseconds(ns).map_err(Error::Jiff)
     }
 }
 

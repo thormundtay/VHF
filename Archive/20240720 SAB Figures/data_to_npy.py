@@ -15,7 +15,7 @@ from typing import Iterable, Optional
 module_path = str(Path(__file__).parents[2])
 if module_path not in sys.path:
     sys.path.append(module_path)
-from VHF.parse import VHFparser
+from VHF.parse import VHF_v1_parser as VHFparser
 from VHF.spec.mlab import cz_spectrogram_amplitude, detrend_linear
 from VHF.stat.roll import Welford
 
@@ -91,7 +91,7 @@ def get_parsed(managed_list: DictProxy, name: Path):
     if name not in managed_list.keys():
         logger.info("Not in memo for path = %s", name)
         result = VHFparser(name, headers_only=True)
-        result._pre_trace_parsing()
+        result.resolve_m_overflow_idxs()
         managed_list.update({name: result})
     else:
         logger.info("In memo for path = %s", name)

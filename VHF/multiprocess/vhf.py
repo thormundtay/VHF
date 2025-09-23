@@ -31,7 +31,7 @@ from typing import Optional, Union
 from .signals import HUP, cont, ChildSignals, Signals
 from ..metatype import abstract_attribute
 from ..runner import VHFRunner
-from ..parse import VHFparser
+from ..parse import VHF_v1_parser
 
 __all__ = [
     "genericVHF",
@@ -210,7 +210,7 @@ class genericVHF(metaclass=ABCMeta):
 
         self._tmpName = None
 
-    def get_parsed(self, perm_target: str) -> Optional[VHFparser]:
+    def get_parsed(self, perm_target: str) -> Optional[VHF_v1_parser]:
         """Binary file obtained from stdout of VHF is parsed here.
 
         Tries to read data out from self._tmp, analyze, and then save into the
@@ -224,10 +224,10 @@ class genericVHF(metaclass=ABCMeta):
             VHFboard into (self.tmp, perm_target). This is the same
             perm_target.
         """
-        def get_data(perm_target: str) -> Optional[VHFparser]:
+        def get_data(perm_target: str) -> Optional[VHF_v1_parser]:
             for attempt in (self._tmpName, perm_target):
                 try:
-                    parsed = VHFparser(attempt)
+                    parsed = VHF_v1_parser(attempt)
                     return parsed
                 except FileNotFoundError:
                     self.logger.warning(
@@ -316,7 +316,7 @@ class genericVHF(metaclass=ABCMeta):
                                     self.vhf_runner.get_params()))
                             )))
                         ):
-                            self.logger.warn("Failed to run VHF.")
+                            self.logger.warning("Failed to run VHF.")
                             self.fail_count += 1
                             if self.fail_count >= self.FAIL_MAX:
                                 self.logger.error(
@@ -368,7 +368,7 @@ class genericVHF(metaclass=ABCMeta):
             self.close()
 
     @abstractmethod
-    def analyse_parse(self, parsed: VHFparser, pname: str, *args):
+    def analyse_parse(self, parsed: VHF_v1_parser, pname: str, *args):
         """After having obtained sampled trace into VHFparser object,
         subclasses are free to utilise the VHFparser object to save into a
         common npz file or any other followup with the parsed trace data.

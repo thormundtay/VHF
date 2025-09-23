@@ -1,25 +1,24 @@
 """Provides VHF class that is to be managed by root process."""
 
 from configparser import ConfigParser, ExtendedInterpolation
-import matplotlib
 from matplotlib import pyplot as plt
 from multiprocessing import Queue
-import multiprocessing
 from multiprocessing.connection import Connection
 from multiprocessing.synchronize import Lock as LockType
-import numpy as np
 from os import PathLike
 from pathlib import Path
 from shlex import quote
-import sys
-from time import sleep
 from typing import Union
+import matplotlib
+import multiprocessing
+import numpy as np
+import sys
 module_path = str(Path(__file__).parents[2])
 if module_path not in sys.path:
     sys.path.append(module_path)
 from VHF.runner import VHFRunner  # noqa
 from VHF.multiprocess.vhf import genericVHF  # noqa
-from VHF.parse import VHFparser  # noqa
+from VHF.parse import VHF_v1_parser as VHFparser  # noqa
 
 _PATH = Union[str, PathLike, Path]
 

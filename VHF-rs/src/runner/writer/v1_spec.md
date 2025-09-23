@@ -33,3 +33,7 @@
 6. All data following the header SHALL consist of consecutive words. All words
    MUST be in little-endian format. Refer to the binary data specification on
    how to parse this data.
+7. In the event that there is software filtering, that modifies the phase value
+   between collection and file writing other than tracking m_overflow, the file
+   MUST NOT be written in the v1 format, as there is no means to indicate the
+   information in the header. Refer to the v2 file format.

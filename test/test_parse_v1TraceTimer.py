@@ -4,10 +4,7 @@ from multiprocessing.pool import Pool
 from pathlib import Path
 import pytest
 import sys
-module_path = str(Path(__file__).parents[1])
-if module_path not in sys.path:
-    sys.path.append(module_path)
-from VHF.parse import TraceTimer  # noqa
+from VHF._parse.v1 import TraceTimer
 
 
 def log_timer(t: TraceTimer):

@@ -25,7 +25,7 @@ from pathlib import Path
 from scipy.ndimage import uniform_filter1d as moving_average
 from scipy.stats import moment
 from typing import Union
-from VHF.parse import VHFparser
+from VHF.parse import VHF_v1_parser as VHFparser
 
 _PATH = Union[str, bytes, PathLike, Path]
 

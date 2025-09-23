@@ -1,14 +1,18 @@
+pub mod repr;
+
 use super::process::{
     consts::{MMAP_PAGE_LEN, VHF_MMAP_WINDOW_LEN},
     pages::MmapPage,
 };
 use super::writer::WriteBlock;
-use crate::{
-    parser::consts::M_OVERFLOW,
-    types::{IQMTriplet, RawVHFWord},
-};
-use std::{cmp::Ordering, hint::unreachable_unchecked, ops::Deref, sync::Arc};
+use crate::{Error, Result, parser::consts::M_OVERFLOW};
+use repr::Representation;
+use serde::Serialize;
+use std::{cmp::Ordering, hint::unreachable_unchecked, num::NonZeroUsize, ops::Deref, sync::Arc};
+use vhf_common::data_types::{IQMTriplet, MOverflowRaw, RawVHFWord};
 
+/// This fully describes and contains all relevant mechanisms for taking the iterator output of
+/// [super::VHFIter] for "in-flight processing."
 #[derive(Clone)]
 pub struct StreamFold {
     /// This the function that has to be applied to every chunked window from [super::VHF].next.
@@ -19,6 +23,15 @@ pub struct StreamFold {
     pub pad: usize,
     /// This is the operation performed.
     pub op: StreamFoldOp,
+    /// This is a representation that aims to convey what was done in the fold. See [repr].
+    ///
+    /// For example,
+    /// 1) Only m-rollover was tracked, and so effectively nothing was done:
+    /// ```json
+    /// { fold: [] }
+    /// ```
+    /// 2) two-pass decimation with different decimation factors and filter kernels.
+    pub repr: Vec<Representation<f64>>,
 }
 
 impl PartialEq for StreamFold {
@@ -26,6 +39,8 @@ impl PartialEq for StreamFold {
         std::ptr::addr_eq(Arc::as_ptr(&self.func), Arc::as_ptr(&other.func))
             && self.step_by == other.step_by
             && self.pad == other.pad
+            && self.op == other.op
+            && self.repr == other.repr
     }
 }
 
@@ -38,22 +53,40 @@ pub enum StreamFoldOp {
     None,
     // Reduce,
     /// Quite literally the map in functional programming.
-    Map,
+    ///
+    /// If the enclosed Option is None, means that the map is *effectively* the same as
+    /// [StreamFoldOp::None]. This is needed for [crate::runner::writer::V1Writer] and
+    /// [crate::runner::writer::V1StdOut], which require that the phase and skip values are not
+    /// altered in the fold process.
+    Map(Option<MapArg>),
+}
+
+/// With the context of [super::Config::skip_num], [StreamFold] will lead to a decrease in number of
+/// elements between the FPGA and what is written to the file.
+/// This struct contains all arguments specific to [StreamFoldOp::Map] that would otherwise
+/// definitely not make sense to be in [StreamFoldOp::None].
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct MapArg {
+    /// This number summarizes the possibly multiple steps performed by [StreamFold::func].
+    pub effective_decimation: NonZeroUsize,
+    /// This is the number of elements that are "dropped" before the first element is written to
+    /// file.
+    pub num_before_first_drop: NonZeroUsize,
 }
 
 impl std::fmt::Debug for StreamFold {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let op_str = match &self.op {
+            StreamFoldOp::None => "none".to_string(),
+            StreamFoldOp::Map(None) => "map: None".to_string(),
+            StreamFoldOp::Map(Some(e)) => format!("map: Some({e:?})"),
+        };
+
         f.debug_struct("StreamFold")
             .field("func", &"...")
             .field("step_by", &self.step_by)
             .field("pad", &self.pad)
-            .field(
-                "op",
-                &match self.op {
-                    StreamFoldOp::None => "none",
-                    StreamFoldOp::Map => "map",
-                },
-            )
+            .field("op", &op_str)
             .finish()
     }
 }
@@ -76,6 +109,7 @@ impl StreamFold {
             step_by: VHF_MMAP_WINDOW_LEN,
             pad: 0,
             op: StreamFoldOp::None,
+            repr: Vec::new(),
         }
     }
 
@@ -89,8 +123,10 @@ impl StreamFold {
         // word to determine if a rollover has occurred. As such, the 0th element has to be chosen
         // from the idx-1th page to ensure that the 0th window returns a sign of 0 change for the
         // 0th element in the stream.
-        fn overlapping_identity((idx, pages): <super::VHFIter as Iterator>::Item) -> WriteBlock {
-            if idx == 0 {
+        fn overlapping_identity(
+            (vhf_iter_idx, pages): <super::VHFIter as Iterator>::Item,
+        ) -> WriteBlock {
+            if vhf_iter_idx == 0 {
                 debug_assert!(matches!(pages[0], MmapPage::Empty));
                 debug_assert!(matches!(pages[1], MmapPage::Page(_)));
             } else {
@@ -107,16 +143,22 @@ impl StreamFold {
             let mut result = WriteBlock::new_from_iter(data_iter);
 
             fn idx_and_sign_for_filter_map(
-                (idx, (a, b)): (usize, (&RawVHFWord, &RawVHFWord)),
-            ) -> Option<(usize, i8)> {
+                (element_idx, (a, b)): (usize, (&RawVHFWord, &RawVHFWord)),
+                vhf_iter_idx: usize,
+            ) -> Option<MOverflowRaw> {
                 let IQMTriplet(_, _, a) = a.into();
                 let IQMTriplet(_, _, b) = b.into();
                 if a.abs_diff(b) >= M_OVERFLOW {
+                    // It takes 200k years to generate
+                    // u64 elements even if there was no USB2.0 throttling; so it is safe to encode
+                    // the index of RawVHFWord by absolute index relative to first FPGA word.
+                    let offset = vhf_iter_idx.checked_mul(MMAP_PAGE_LEN).unwrap();
+
                     match b.cmp(&a) {
                         // The 2nd element of the window found to be less => overflow to negative
-                        Ordering::Less => Some((idx, 1)),
+                        Ordering::Less => Some(MOverflowRaw(element_idx + offset, 1)),
                         // The 2nd element of the window found to be more => underflow to positive
-                        Ordering::Greater => Some((idx, -1)),
+                        Ordering::Greater => Some(MOverflowRaw(element_idx + offset, -1)),
                         // Safety: M_OVERFLOW check above.
                         Ordering::Equal => unsafe { unreachable_unchecked() },
                     }
@@ -126,7 +168,7 @@ impl StreamFold {
             }
 
             use itertools::Itertools;
-            if idx == 0 {
+            if vhf_iter_idx == 0 {
                 // Let the 0th window be the first non-empty page's first element in the tuple 0th
                 // and first. This ensures that the enumerate method's 0th index will be return the
                 // 0 sign change.
@@ -136,7 +178,7 @@ impl StreamFold {
                         .chain(pages.iter().skip(PAGES_START).flat_map(Deref::deref))
                         .tuple_windows()
                         .enumerate()
-                        .filter_map(idx_and_sign_for_filter_map),
+                        .filter_map(|w| idx_and_sign_for_filter_map(w, vhf_iter_idx)),
                 );
             } else {
                 result.with_overflow_from_iter(
@@ -146,7 +188,7 @@ impl StreamFold {
                         .tuple_windows()
                         .skip(PAGES_START * MMAP_PAGE_LEN - 1) // Skip all but last element of 0th page
                         .enumerate()
-                        .filter_map(idx_and_sign_for_filter_map),
+                        .filter_map(|w| idx_and_sign_for_filter_map(w, vhf_iter_idx)),
                 )
             };
 
@@ -157,8 +199,55 @@ impl StreamFold {
             func: Arc::new(overlapping_identity),
             step_by: VHF_MMAP_WINDOW_LEN - PAGES_START,
             pad: PAGES_START,
-            op: StreamFoldOp::Map,
+            op: StreamFoldOp::Map(None),
+            repr: Vec::new(),
         }
+    }
+
+    /// Determine if the process of [self] creates any sort of decimation.
+    /// Related: [super::VHF] has to determine the number of elements to read.
+    pub(super) fn effective_decimation_factor(&self) -> NonZeroUsize {
+        match self.op {
+            StreamFoldOp::None => unsafe { NonZeroUsize::new(1).unwrap_unchecked() },
+            StreamFoldOp::Map(None) => unsafe { NonZeroUsize::new(1).unwrap_unchecked() },
+            StreamFoldOp::Map(Some(MapArg {
+                effective_decimation: e,
+                ..
+            })) => e,
+            // StreamFoldOp::Reduce(_) => 1 //?
+        }
+    }
+
+    /// Determine the number of elements dropped, starting from the first word from FPGA, up to,
+    /// and not including the first element written to the file.
+    pub fn words_dropped_before_first_write(&self) -> Result<i64> {
+        match &self.op {
+            StreamFoldOp::None => Ok(0),
+            StreamFoldOp::Map(None) => Ok(0),
+            StreamFoldOp::Map(Some(MapArg {
+                num_before_first_drop: n,
+                ..
+            })) => {
+                let n: usize = (*n).into();
+                n.try_into().map_err(|_| {
+                    log::error!("Could not get num_words_dropped as i64!");
+                    Error::User
+                })
+            }
+        }
+    }
+}
+
+impl Serialize for StreamFold {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // Rather than specifying #[serde(skip_deserializing)] for all but self.repr.
+        use serde::ser::SerializeStruct;
+        let mut s = serializer.serialize_struct("StreamFold", 1)?;
+        s.serialize_field("fold", &self.repr)?;
+        s.end()
     }
 }
 
