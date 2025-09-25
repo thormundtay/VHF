@@ -119,7 +119,10 @@ pub(super) fn push_arc_pages(
             data.into_iter()
                 .chunks(MMAP_PAGE_LEN)
                 .into_iter()
-                .map(|x| x.collect_array().unwrap())
+                .map(|x| {
+                    x.collect_array()
+                        .expect("Buffer Page Creator: Not enough elements to collect as array!")
+                })
                 .map(Arc::new)
                 .map(MmapPage::Page)
                 .for_each(|x| {
