@@ -28,8 +28,11 @@ use vhf_parse::{VHFWord, VHFparse};
 #[test]
 fn writes_correct_v2_file_basic() {
     let debug_vhf_total_len = 12 * VHF_MMAP_WINDOW_LEN;
-    let params_step_by = 19;
-    let total_window_len = required_window_pages(debug_vhf_total_len, params_step_by);
+    const PARAMS_STEP_BY: usize = VHF_MMAP_WINDOW_LEN.checked_sub(1).unwrap();
+    // Ideally this should be derived from debug_vhf_conf, but we cannot due to circular
+    // requirement; const to enforce at compile time.
+
+    let total_window_len = required_window_pages(debug_vhf_total_len, PARAMS_STEP_BY);
     let total_elements = total_window_len * MMAP_PAGE_LEN;
 
     let tmp_dir = TempDir::new().expect("Could not create temp_dir");
@@ -77,6 +80,7 @@ fn writes_correct_v2_file_basic() {
 
     let params_func = &debug_vhf_conf.stream_fold.func;
     matches!(params_func.op, StreamFoldOp::Map(None));
+    assert_eq!(PARAMS_STEP_BY, params_func.step_by);
 
     // We want to force an unwrapping to occur at least once.
     assert!(total_elements > u16::MAX as usize + 3);
@@ -212,8 +216,11 @@ fn writes_correct_v2_file_basic() {
 #[test]
 fn writes_correct_v2_file_insufficient() {
     let debug_vhf_total_len = 12 * VHF_MMAP_WINDOW_LEN;
-    let params_step_by = 19;
-    let total_window_len = required_window_pages(debug_vhf_total_len, params_step_by);
+    const PARAMS_STEP_BY: usize = VHF_MMAP_WINDOW_LEN.checked_sub(1).unwrap();
+    // Ideally this should be derived from debug_vhf_conf, but we cannot due to circular
+    // requirement; const to enforce at compile time.
+
+    let total_window_len = required_window_pages(debug_vhf_total_len, PARAMS_STEP_BY);
     let total_elements = total_window_len * MMAP_PAGE_LEN;
 
     let tmp_dir = TempDir::new().expect("Could not create temp_dir");
@@ -261,6 +268,7 @@ fn writes_correct_v2_file_insufficient() {
 
     let params_func = &debug_vhf_conf.stream_fold.func;
     matches!(params_func.op, StreamFoldOp::Map(None));
+    assert_eq!(PARAMS_STEP_BY, params_func.step_by);
 
     let signal_radius = 7000.;
     let initial_phase_offset = (i16::MAX as f64 - 70.9) * TAU;
@@ -278,7 +286,7 @@ fn writes_correct_v2_file_insufficient() {
             initial_phase_offset,
         ),
     );
-    assert_eq!(params_step_by, params_func.step_by);
+    assert_eq!(PARAMS_STEP_BY, params_func.step_by);
 
     // Add signal into pages. We now add data into the buffer.
     let push_arc_pages_thread = push_arc_pages(
@@ -407,8 +415,11 @@ fn writes_correct_v2_file_insufficient() {
 #[test]
 fn writes_correct_v2_file_zero() {
     let debug_vhf_total_len = 12 * VHF_MMAP_WINDOW_LEN;
-    let params_step_by = 19;
-    let total_window_len = required_window_pages(debug_vhf_total_len, params_step_by);
+    const PARAMS_STEP_BY: usize = VHF_MMAP_WINDOW_LEN.checked_sub(1).unwrap();
+    // Ideally this should be derived from debug_vhf_conf, but we cannot due to circular
+    // requirement; const to enforce at compile time.
+
+    let total_window_len = required_window_pages(debug_vhf_total_len, PARAMS_STEP_BY);
     let total_elements = total_window_len * MMAP_PAGE_LEN;
 
     let tmp_dir = TempDir::new().expect("Could not create temp_dir");
@@ -458,6 +469,7 @@ fn writes_correct_v2_file_zero() {
 
     let params_func = &debug_vhf_conf.stream_fold.func;
     matches!(params_func.op, StreamFoldOp::Map(None));
+    assert_eq!(PARAMS_STEP_BY, params_func.step_by);
 
     // We want to force an unwrapping to occur at least once.
     assert!(total_elements > u16::MAX as usize + 3);
