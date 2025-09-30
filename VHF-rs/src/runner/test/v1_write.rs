@@ -5,7 +5,7 @@ use super::consts::{MMAP_PAGE_LEN, VHF_MMAP_WINDOW_LEN};
 use super::fold::{StreamFold, StreamFoldOp};
 use super::signals::{LinearPhaseArr, SineArr};
 use super::writer::builder::Writers;
-use super::{debug_vhf_new, push_arc_pages};
+use super::{debug_vhf_new, push_arc_pages, required_window_pages};
 
 use jiff::Zoned;
 use std::collections::HashMap;
@@ -32,15 +32,17 @@ use vhf_parse::{VHFparse, v1::VHFparser as V1parser};
 #[test]
 fn writes_correct_file() {
     let debug_vhf_total_len = 4 * VHF_MMAP_WINDOW_LEN;
-    let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
+    let params_func = StreamFold::none_default().func;
+
+    let total_window_len = required_window_pages(debug_vhf_total_len, params_func.step_by);
+    let total_elements = total_window_len * MMAP_PAGE_LEN;
+
     let debug_vhf_conf = Config::default();
     let (debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
         &debug_vhf_conf,
         NonZeroUsize::new(debug_vhf_total_len).unwrap(),
     );
 
-    let total_elements = total_window_len * MMAP_PAGE_LEN;
-    let params_func = StreamFold::none_default().func;
     matches!(params_func.op, StreamFoldOp::None);
 
     // Define the signal we are testing for.
@@ -232,18 +234,18 @@ fn writes_correct_file() {
 fn creates_multiple_files() {
     let scale_elements = 8; // scale number of generated elements
     let file_save_size = 2; // scale number of elements in file
-
     let debug_vhf_total_len = VHF_MMAP_WINDOW_LEN * scale_elements;
-    log::info!("debug_vhf_total_len = {}", &debug_vhf_total_len);
-    let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
+    let params_func = StreamFold::none_default().func;
+
+    let total_window_len = required_window_pages(debug_vhf_total_len, params_func.step_by);
+    let total_elements = total_window_len * MMAP_PAGE_LEN;
+
     let debug_vhf_conf = Config::default();
     let (debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
         &debug_vhf_conf,
         NonZeroUsize::new(debug_vhf_total_len).unwrap(),
     );
 
-    let total_elements = total_window_len * MMAP_PAGE_LEN;
-    let params_func = StreamFold::none_default().func;
     matches!(params_func.op, StreamFoldOp::None);
 
     // Define the signal we are testing for.
@@ -315,21 +317,21 @@ fn creates_multiple_files() {
 fn creates_correct_multithreaded_files() {
     let scale_elements = 2usize.pow(15); // scale number of generated elements
     let file_save_size = 2usize.pow(14); // scale number of elements in file
+    let params_func = StreamFold::none_default().func;
 
-    debug_assert!(
-        super::super::writer::FILE_LAZY_LEN < VHF_MMAP_WINDOW_LEN * MMAP_PAGE_LEN * file_save_size
-    );
     let debug_vhf_total_len = VHF_MMAP_WINDOW_LEN * scale_elements;
-    log::info!("debug_vhf_total_len = {}", &debug_vhf_total_len);
-    let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
+    let total_window_len = required_window_pages(debug_vhf_total_len, params_func.step_by);
+    let total_elements = total_window_len * MMAP_PAGE_LEN;
+
     let debug_vhf_conf = Config::default();
     let (mut debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
         &debug_vhf_conf,
         NonZeroUsize::new(debug_vhf_total_len).unwrap(),
     );
 
-    let total_elements = total_window_len * MMAP_PAGE_LEN;
-    let params_func = StreamFold::none_default().func;
+    debug_assert!(
+        super::super::writer::FILE_LAZY_LEN < VHF_MMAP_WINDOW_LEN * MMAP_PAGE_LEN * file_save_size
+    );
     matches!(params_func.op, StreamFoldOp::None);
 
     // Define the signal we are testing for.
@@ -420,15 +422,18 @@ fn creates_correct_multithreaded_files() {
 #[test]
 fn python_v1_linear() {
     let debug_vhf_total_len = 12 * VHF_MMAP_WINDOW_LEN;
-    let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
+    let params_func = StreamFold::none_default().func;
+
+    let total_window_len = required_window_pages(debug_vhf_total_len, params_func.step_by);
+    let total_elements = total_window_len * MMAP_PAGE_LEN;
+
     let debug_vhf_conf = Config::default();
     let (debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
         &debug_vhf_conf,
         NonZeroUsize::new(debug_vhf_total_len).unwrap(),
     );
 
-    let total_elements = total_window_len * MMAP_PAGE_LEN;
-    let params_func = StreamFold::none_default().func;
+    matches!(params_func.op, StreamFoldOp::None);
 
     // We want to force an unwrapping to occur at least once.
     assert!(total_elements > u16::MAX as usize + 3);
@@ -523,15 +528,17 @@ fn python_v1_linear() {
 #[test]
 fn python_v1_edgecase() {
     let debug_vhf_total_len = 4 * VHF_MMAP_WINDOW_LEN;
-    let total_window_len = debug_vhf_total_len + VHF_MMAP_WINDOW_LEN;
+    let params_func = StreamFold::none_default().func;
+
+    let total_window_len = required_window_pages(debug_vhf_total_len, params_func.step_by);
+    let total_elements = total_window_len * MMAP_PAGE_LEN;
+
     let debug_vhf_conf = Config::default();
     let (debug_vhf, dbg_vhf_sender, eng) = debug_vhf_new(
         &debug_vhf_conf,
         NonZeroUsize::new(debug_vhf_total_len).unwrap(),
     );
 
-    let total_elements = total_window_len * MMAP_PAGE_LEN;
-    let params_func = StreamFold::none_default().func;
     matches!(params_func.op, StreamFoldOp::None);
 
     // Define the signal we are testing for.
