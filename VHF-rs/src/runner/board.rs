@@ -205,7 +205,7 @@ impl Board {
                 "More than 1 hotplug_path found. Searched with {}",
                 self.board_id
             );
-            log::error!("Found: {:?}", found);
+            log::error!("Found: {found:?}");
             return Err(Error::InternalInconsistency);
         } else if found.is_empty() {
             log::error!("board_id({}) not found in Path", self.board_id);
@@ -235,7 +235,7 @@ impl Board {
             || !Mode::S_IRGRP.intersects(stat_mode)
             || !Mode::S_IWGRP.intersects(stat_mode)
         {
-            log::error! {"interface {:?} does not have correct permissions. Driver installation error?", interface};
+            log::error! {"interface {interface:?} does not have correct permissions. Driver installation error?"};
             return Ok(false);
         }
 
@@ -362,8 +362,8 @@ impl Board {
             match drain.join() {
                 Ok(Ok(v)) => Ok(v),
                 Ok(Err(e)) => {
-                    log::warn!("An error occurred while trying to drain VHF");
-                    log::warn!("{:?}", e);
+                    log::warn!("An error occurred while trying to drain VHF:");
+                    log::warn!("{e:?}");
                     Err(e)
                 }
                 Err(_) => {
@@ -392,7 +392,7 @@ fn hybrid_drain(board: PathBuf) -> Result<()> {
         ..Config::default()
     };
 
-    let mut vhf = VHF::new(&config, &stream_fold)?;
+    let mut vhf = VHF::new(&config, &stream_fold.func)?;
     vhf.start()?;
 
     sleep(Duration::from_millis(500));

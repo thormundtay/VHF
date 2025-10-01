@@ -17,7 +17,7 @@ from time import perf_counter_ns
 module_path = str(Path(__file__).parents[2])
 if module_path not in sys.path:
     sys.path.append(module_path)
-from VHF.parse import VHFparser
+from VHF.parse import VHF_v1_parser as VHFparser
 from VHF.spec.utils import spectrogram_crop, trunc_cmap
 
 

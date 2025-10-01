@@ -27,7 +27,7 @@ impl error::Error for Error {}
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -47,9 +47,21 @@ impl Error {
     }
 }
 
-#[allow(clippy::from_over_into)] // Multiple implementations for .into() otherwise found
-impl Into<Error> for evalexpr::EvalexprError {
-    fn into(self) -> Error {
-        Error::EvalExpr(self.to_string())
+impl From<evalexpr::EvalexprError> for Error {
+    fn from(value: evalexpr::EvalexprError) -> Self {
+        Error::EvalExpr(value.to_string())
+    }
+}
+
+impl From<vhf_common::Error> for Error {
+    fn from(value: vhf_common::Error) -> Self {
+        match value {
+            vhf_common::Error::InternalInconsistency => Self::InternalInconsistency,
+            vhf_common::Error::Io(v) => Self::Io(v),
+            vhf_common::Error::Jiff(v) => Self::Jiff(v),
+            vhf_common::Error::ParseEmpty => Self::ParseEmpty,
+            vhf_common::Error::ParseUnrecognised(v) => Self::ParseUnrecognised(v),
+            vhf_common::Error::ExcessData => Self::ExcessData,
+        }
     }
 }

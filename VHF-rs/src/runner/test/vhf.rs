@@ -1,22 +1,49 @@
-use super::consts::MMAP_PAGE_LEN;
-use super::pages::*;
-use super::*;
-use crate::types::RawVHFWord;
+use super::Config;
+use super::consts::{MMAP_PAGE_LEN, VHF_MMAP_WINDOW_LEN};
+use super::pages::MmapPage;
+use super::signals::{LinearArr, ZeroArr};
+use super::{DEQUE_CAP, VHF};
+use crate::{Error, Result};
+use vhf_common::data_types::RawVHFWord;
 
 use heapless::Deque;
+use jiff::Span;
 use std::{
+    cell::RefCell,
     matches,
+    num::NonZeroUsize,
     ops::Deref,
+    rc::Rc,
     sync::{
-        atomic::{AtomicU64, AtomicUsize, Ordering},
+        Arc, Condvar, RwLock,
+        atomic::{AtomicBool, Ordering},
         mpsc::{SyncSender, sync_channel},
     },
-    time::Duration,
+    thread::{self, JoinHandle},
+    time::{Duration, Instant},
 };
 use tempfile::{NamedTempFile, TempDir};
 use test_log::test;
 
-// Create a VHF struct with false child thread "map_reader".
+/// Rounds up to the appropriate number of pages so that mocked engine pushes all pages through
+/// step_by iterator.
+pub(super) fn required_window_pages(intended_pages: usize, step_by: usize) -> usize {
+    assert!(step_by < VHF_MMAP_WINDOW_LEN);
+    let a = VHF_MMAP_WINDOW_LEN - step_by; // 20 (VHF_MMAP_WINDOW_LEN) - 19 (STEP_BY) = 1 (OVERLAP EXPECTED)
+
+    (VHF_MMAP_WINDOW_LEN.max(intended_pages) - a).div_ceil(step_by) * step_by
+}
+
+/// Create a VHF struct with false child thread "map_reader".
+///
+/// Arguments:
+/// - configuration: Basic properties of the mock VHF engine being expected.
+/// - total_to_read: number of pages that the false map_reader should be reading.
+///
+/// Returns:
+/// - VHF: Iterate to get MmapPages for processing.
+/// - SyncSender: Used to push pages from some signal generator into VHF.
+/// - Engine: Used for coordinate VHF with the signal generator.
 pub(super) fn debug_vhf_new<'a>(
     configuration: &'a Config,
     total_to_read: NonZeroUsize,
@@ -65,8 +92,17 @@ pub(super) fn debug_vhf_new<'a>(
 }
 
 /// Pushes [pages::Page]s from slice into [VHF].buffer.
+/// Note that this bypasses the MmapReader.
+///
+/// Arguments:
+/// - buffer_sender: Sender end of channel for pushing into [VHF].
+/// - empty_pages: Number of empty pages as given by [super::fold::StreamFold].
+/// - data: Any Iterator of [RawVHFWord].
+/// - sleep_between_pages: Time spent sleeping between each page push.
+/// - engine: Synchronization used to determine if VHF is running.
 pub(super) fn push_arc_pages(
     buffer_sender: SyncSender<MmapPage>,
+    empty_pages: usize,
     data: impl Iterator<Item = RawVHFWord> + Send + 'static,
     sleep_between_pages: Duration,
     engine: Arc<AtomicBool>,
@@ -75,6 +111,11 @@ pub(super) fn push_arc_pages(
         .name("Unit Test: Buffer Page Creator".to_string())
         .spawn(move || {
             use itertools::Itertools;
+            (0..empty_pages).for_each(|_| {
+                buffer_sender
+                    .send(MmapPage::Empty)
+                    .expect("Failed to to push empty page onto buffer.");
+            });
             data.into_iter()
                 .chunks(MMAP_PAGE_LEN)
                 .into_iter()
@@ -93,39 +134,6 @@ pub(super) fn push_arc_pages(
         .map_err(Error::Io)
 }
 
-// Generate the zero-constant iterator on demand.
-struct ZeroArr {
-    total_len: usize,
-    current_idx: AtomicUsize,
-    engine_running: Arc<AtomicBool>,
-}
-
-impl Iterator for ZeroArr {
-    type Item = RawVHFWord;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.current_idx.load(Ordering::Acquire) >= self.total_len {
-            self.engine_running.fetch_and(false, Ordering::AcqRel);
-            None
-        } else {
-            self.current_idx.fetch_add(1, Ordering::Relaxed);
-            Some(0)
-        }
-    }
-}
-
-impl ZeroArr {
-    fn new(total_len: usize, engine_running: Arc<AtomicBool>) -> Self {
-        if total_len % MMAP_PAGE_LEN != 0 {
-            log::warn!("ZeroArr did not receive an integer multiple of MMAP_PAGE_LEN");
-        }
-        Self {
-            total_len,
-            current_idx: AtomicUsize::new(0),
-            engine_running,
-        }
-    }
-}
-
 /// We check if the iterator method does drop the Arc when .iter() has completed consuming.
 #[test]
 fn vhf_drops_arc() {
@@ -138,7 +146,7 @@ fn vhf_drops_arc() {
     );
 
     // We now add a weakpointer to the first object.
-    let testing_page = Arc::new([0; MMAP_PAGE_LEN]);
+    let testing_page = Arc::new([RawVHFWord::from(0); MMAP_PAGE_LEN]);
     let to_drop = Arc::downgrade(&testing_page);
 
     // We now add data into the buffer.
@@ -147,6 +155,7 @@ fn vhf_drops_arc() {
         .expect("Failed to push_back testing page.");
     let push_arc_pages_thread = push_arc_pages(
         dbg_vhf_sender,
+        0,
         ZeroArr::new((total_window_len - 1) * MMAP_PAGE_LEN, eng.clone()),
         Duration::default(),
         eng,
@@ -159,7 +168,7 @@ fn vhf_drops_arc() {
         first_window.into_iter().for_each(|page| {
             assert!(matches!(page, MmapPage::Page(_)));
             match page {
-                MmapPage::Page(x) => assert_eq!(x.deref(), &[0; MMAP_PAGE_LEN]),
+                MmapPage::Page(x) => assert_eq!(x.deref(), &[RawVHFWord::from(0); MMAP_PAGE_LEN]),
                 _ => unreachable!(),
             };
         });
@@ -169,37 +178,6 @@ fn vhf_drops_arc() {
     assert_eq!(to_drop.strong_count(), 0);
 
     push_arc_pages_thread.join().expect("Failed to join");
-}
-
-struct LinearArr {
-    total_len: u64,
-    current_idx: AtomicU64,
-    engine_running: Arc<AtomicBool>,
-}
-
-impl Iterator for LinearArr {
-    type Item = RawVHFWord;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.current_idx.load(Ordering::Acquire) >= self.total_len {
-            self.engine_running.fetch_and(false, Ordering::AcqRel);
-            None
-        } else {
-            Some(self.current_idx.fetch_add(1, Ordering::AcqRel))
-        }
-    }
-}
-
-impl LinearArr {
-    fn new(total_len: usize, engine_running: Arc<AtomicBool>) -> Self {
-        if total_len % MMAP_PAGE_LEN != 0 {
-            log::warn!("LinearArr did not receive an integer multiple of MMAP_PAGE_LEN");
-        }
-        Self {
-            total_len: total_len.try_into().unwrap(),
-            current_idx: AtomicU64::new(0),
-            engine_running,
-        }
-    }
 }
 
 /// We check that the VHF struct is yielding the correct windows with next.
@@ -217,16 +195,29 @@ fn next_window_linear() {
     let signal = LinearArr::new(total_window_len * MMAP_PAGE_LEN, eng.clone());
 
     // Add signal into pages. We now add data into the buffer.
-    push_arc_pages(dbg_vhf_sender, signal, Duration::default(), eng)
-        .expect("push_arc_pages failed");
+    push_arc_pages(
+        dbg_vhf_sender,
+        debug_vhf_conf
+            .build_board_config()
+            .expect("Could not build board config")
+            .stream_fold_parameters()
+            .pad,
+        signal,
+        Duration::default(),
+        eng,
+    )
+    .expect("push_arc_pages failed");
 
     let mut debug_vhf_iter = debug_vhf.iter();
     for _ in 0..debug_vhf_total_len {
         if let Some((idx, window)) = debug_vhf_iter.next() {
-            let expected_first: RawVHFWord = (idx * MMAP_PAGE_LEN).try_into().unwrap();
-            let expected_last: RawVHFWord = ((idx + VHF_MMAP_WINDOW_LEN) * MMAP_PAGE_LEN - 1)
+            let expected_first: u64 = (idx * MMAP_PAGE_LEN).try_into().unwrap();
+            let expected_last: u64 = ((idx + VHF_MMAP_WINDOW_LEN) * MMAP_PAGE_LEN - 1)
                 .try_into()
                 .unwrap();
+
+            let expected_first = RawVHFWord::from(expected_first);
+            let expected_last = RawVHFWord::from(expected_last);
             assert_eq!(
                 *window.first().unwrap().deref().first().unwrap(),
                 expected_first
@@ -244,8 +235,8 @@ fn next_window_linear() {
     let actual = debug_vhf_iter.next();
     if let Some(x) = actual.clone() {
         log::warn!(
-            "Got page from vhf where none was expected: page[0]/MMAP_PAGE_LEN = {}; page[-1] = {}",
-            x.1.first().unwrap().deref().first().unwrap() / (MMAP_PAGE_LEN as RawVHFWord),
+            "Got page from vhf where none was expected: page[0]/MMAP_PAGE_LEN = {}; page[-1] = {:?}",
+            x.1.first().unwrap().deref().first().unwrap().as_u64() / (MMAP_PAGE_LEN as u64),
             x.1.last().unwrap().deref().last().unwrap()
         );
     }

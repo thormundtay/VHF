@@ -19,9 +19,9 @@ to `VHF/init_board/`, but the information still remains relevant for triage.
 ---
 ### Setup
 
-Run the Makefile by typing
+Run the make script by typing
 ```bash
-  make init
+  ./make.sh init
 ```
 
 The board can then save files to one's desired locations as specified by

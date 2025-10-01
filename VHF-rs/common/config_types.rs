@@ -1,8 +1,11 @@
+//! Types associated to configuration of VHF board.
+
 use crate::{Error, Result};
+use serde::Serialize;
 use std::str::FromStr;
 
 /// VHF Board collecting data in 10MHz or 20MHz mode.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Serialize)]
 pub enum SamplingSpeed {
     Low,
     High,
@@ -20,9 +23,9 @@ impl ToString for SamplingSpeed {
 }
 
 impl FromStr for SamplingSpeed {
-    type Err = crate::Error;
+    type Err = Error;
     fn from_str(value: &str) -> Result<Self> {
-        match value.chars().next() {
+        match value.chars().next().as_ref().map(char::to_ascii_lowercase) {
             None => Err(Error::ParseEmpty),
             Some('l') => Ok(SamplingSpeed::Low),
             Some('h') => Ok(SamplingSpeed::High),
@@ -53,7 +56,7 @@ impl SamplingSpeed {
     }
 
     /// This is for being in the header
-    pub(crate) fn as_char(&self) -> &str {
+    pub fn as_char(&self) -> &str {
         match self {
             SamplingSpeed::High => "h",
             SamplingSpeed::Low => "l",
@@ -66,6 +69,7 @@ impl SamplingSpeed {
 pub enum Encode {
     Binary,
     Hexadecimal,
+    #[allow(clippy::upper_case_acronyms)]
     ASCII,
 }
 
@@ -98,7 +102,7 @@ impl FromStr for Encode {
 }
 
 impl Encode {
-    pub(crate) fn as_char(&self) -> &str {
+    pub fn as_char(&self) -> &str {
         match self {
             Self::Binary => "b",
             Self::Hexadecimal => "x",
