@@ -35,6 +35,28 @@ const MMAP_BYTES_LEN: usize = 1 << 22;
 /// The size of the only continuous ring buffer that is [heapless::Deque].
 pub(super) const DEQUE_CAP: usize = 256;
 
+/// Logs messages as debug in #[cfg(test)], otherwise at their respective levels for #..not(test)
+macro_rules! my_log {
+    (error, $msg:expr $(, $($arg:tt)*)?) => {
+        #[cfg(not(test))]
+        log::error!($msg $(, $($arg)*)?);
+        #[cfg(test)]
+        log::debug!($msg $(, $($arg)*)?);
+    };
+    (warn, $msg:expr $(, $($arg:tt)*)?) => {
+        #[cfg(not(test))]
+        log::warn!($msg $(, $($arg)*)?);
+        #[cfg(test)]
+        log::debug!($msg $(, $($arg)*)?);
+    };
+    (info, $msg:expr $(, $($arg:tt)*)?) => {
+        #[cfg(not(test))]
+        log::info!($msg $(, $($arg)*)?);
+        #[cfg(test)]
+        log::debug!($msg $(, $($arg)*)?);
+    };
+}
+
 /// Everything necessary to ensure the lifetime of pulling memory out from the VHF for its runtime
 pub struct VHF<'a> {
     pub(super) configuration: BoardConfig<'a>,
@@ -268,7 +290,7 @@ impl<'a> VHF<'a> {
     pub fn stop(&mut self) -> Result<()> {
         #[cfg(not(feature = "clear-fifo"))]
         {
-            log::info!("VHF stop has been invoked.");
+            my_log!(info, "VHF stop has been invoked.");
         }
         #[cfg(feature = "clear-fifo")]
         {
@@ -306,11 +328,21 @@ impl<'a> VHF<'a> {
             .write(b"stop; config 0;")
             .map_err(Error::Io)?;
         // Stop hostside USB device.
-        let result = board_ioctl_consts::ioctl_end(self.handle).map(|_| ());
+        let result = {
+            #[cfg(not(test))]
+            {
+                board_ioctl_consts::ioctl_end(self.handle).map(|_| ())
+            }
+            #[cfg(test)]
+            {
+                // There is no need to perform ioctl_end in unit tests
+                Ok(())
+            }
+        };
 
         #[cfg(not(feature = "clear-fifo"))]
         {
-            log::info!("VHF stopped!");
+            my_log!(info, "VHF stopped!");
         }
         #[cfg(feature = "clear-fifo")]
         {
