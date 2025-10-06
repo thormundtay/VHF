@@ -43,3 +43,23 @@ stream: VHF-rs/src/bin/stream.rs
 .PHONY: clear-fifo
 clear-fifo: VHF-rs/src/bin/clear-fifo.rs
 	cargo build $(BUILD_FLAG)--bin clear-fifo --features clear-fifo
+
+# Documentation
+PRIV ?= n
+ifeq ($(PRIV), y)
+	DOC_PRIV = --document-private-items
+else
+	DOC_PRIV =
+endif
+
+DOC_TARGETS = $(filter docs%,$(MAKECMDGOALS))
+.PHONY = DOC_TARGETS
+
+docs: docs_images
+	cargo doc $(DOC_PRIV)
+
+docs_images:
+	$(MAKE) -C VHF-rs/src/runner/fold/filters/images all
+
+docs_clean:
+	$(MAKE) -C VHF-rs/src/runner/fold/filters/images clean
