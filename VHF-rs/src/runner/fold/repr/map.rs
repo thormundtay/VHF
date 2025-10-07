@@ -69,7 +69,7 @@ where
     pub step_by: usize,
 }
 
-/// Possible filter types used by [StreamFoldMapRepr][super::StreamFoldMapRepr].
+/// Possible filter types used by [StreamFoldMapRepr].
 ///
 /// Currently written with reference to SciPy.
 ///
