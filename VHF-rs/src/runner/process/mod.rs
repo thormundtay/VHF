@@ -36,6 +36,7 @@ const MMAP_BYTES_LEN: usize = 1 << 22;
 pub(super) const DEQUE_CAP: usize = 256;
 
 /// Logs messages as debug in #[cfg(test)], otherwise at their respective levels for #..not(test)
+#[cfg(not(feature = "clear-fifo"))]
 macro_rules! my_log {
     (error, $msg:expr $(, $($arg:tt)*)?) => {
         #[cfg(not(test))]
