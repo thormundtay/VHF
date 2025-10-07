@@ -16,7 +16,11 @@ name = "vhf"
 [features]
 # default = ["o3"]
 default = []
+# Specific to clear-fifo binary.
 clear-fifo = ["nix/user", "prettytable-rs"]
+# This is for documentation images. We require running `make` before hand for the doc to not fail.
+doc-images = ["embed-doc-image"]
+# Python interop.
 o3 = ["numpy", "pyo3", "pyo3-pylogger", "VHF-parse/o3"]
 
 [dependencies]
@@ -24,6 +28,7 @@ bytemuck = { version = "1.23.2", features = ["aarch64_simd"] }
 byteorder = { version = "1.5.0" }
 clap = { version = "4.5.48", features = ["derive"] }
 configparser = { version = "3.1.0", default-features = false }
+embed-doc-image = { version = "0.1.4", optional = true }
 evalexpr = { version = "12.0.2", features = ["regex"] }
 heapless = { version = "0.9.1" }
 itertools = { version = "0.14.0" }

@@ -11,6 +11,8 @@ pub use func::{MapArg, StreamFoldOp};
 pub mod repr;
 pub use repr::StreamFoldRepr;
 
+mod filters;
+
 use super::process::{
     consts::{MMAP_PAGE_LEN, VHF_MMAP_WINDOW_LEN},
     pages::MmapPage,

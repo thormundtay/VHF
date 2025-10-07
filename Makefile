@@ -3,6 +3,9 @@
 clean:
 # Clean children
 	$(MAKE) -C VHF/board_init clean
+	$(MAKE) docs_clean
+# Clean ourselves
+	cargo clean
 
 all: init
 
@@ -56,7 +59,10 @@ DOC_TARGETS = $(filter docs%,$(MAKECMDGOALS))
 .PHONY = DOC_TARGETS
 
 docs: docs_images
-	cargo doc $(DOC_PRIV)
+ifeq ($(PRIV), n)
+	@echo "Run 'make docs PRIV=y' for private documentation."
+endif
+	cargo doc --features=doc-images $(DOC_PRIV)
 
 docs_images:
 	$(MAKE) -C VHF-rs/src/runner/fold/filters/images all
