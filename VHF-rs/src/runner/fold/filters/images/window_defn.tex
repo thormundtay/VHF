@@ -1,5 +1,62 @@
 \documentclass[11pt, convert={outext=.png}]{standalone}
+\usepackage{tikz}
+\usetikzlibrary{math}
+\usepgflibrary{patterns.meta}
+\usetikzlibrary{patterns.meta}
 
 \begin{document}
-Lorum Ipsum
+\begin{tikzpicture}
+	% Constants
+	\tikzmath{\pagewidth = 2.1; \pageheight=0.8; \textstagger=-0.30;}
+
+	\begin{scope}
+		\node[anchor=east] at (0, \pageheight/2) {\texttt{vhf\_iter\_idx = 0}};
+
+		% Pages
+		\draw[pattern={Lines[angle=-45,distance={3pt}]},pattern color=blue] (0,0) rectangle +(\pagewidth,\pageheight)
+		node [anchor=center, fill=white] at (\pagewidth/2, \pageheight/2) {\scriptsize \textbf{Empty}};
+		\draw (\pagewidth,0) rectangle ++(\pagewidth,\pageheight)
+		++(0,-\pageheight) rectangle ++(\pagewidth,\pageheight)
+		++(0,-\pageheight) node[anchor=center] at (3.5 * \pagewidth, \pageheight/2) {$\cdots$} ++(\pagewidth,\pageheight)
+		++(0,-\pageheight) rectangle ++(\pagewidth,\pageheight);
+		\draw[pattern={Lines[angle=30,distance={3pt}]},pattern color=red] (5*\pagewidth,0)  rectangle +(\pagewidth,\pageheight);
+
+		% Page index
+		\node[anchor=350] at (-0.2, \pageheight) {\texttt{Page index}}; % Anchor by angle, to account for g tail displacing
+		\node[anchor=south] at (0.5 * \pagewidth, \pageheight) {\texttt{0}};
+		\node[anchor=south] at (1.5 * \pagewidth, \pageheight) {\texttt{1}};
+		\node[anchor=south] at (2.5 * \pagewidth, \pageheight) {\texttt{2}};
+		\node[anchor=south] at (4.5 * \pagewidth, \pageheight) {\texttt{18}};
+		\node[anchor=south] at (5.5 * \pagewidth, \pageheight) {\texttt{19}};
+
+		% Labels
+		\draw[|-|] (0, \textstagger) -- (\pagewidth, \textstagger) node[midway,fill=white] {\texttt{Pad (1)}};
+		\draw[|-|] (0, 2*\textstagger) -- (6*\pagewidth, 2*\textstagger) node[midway,fill=white] {\texttt{VHF\_MMAP\_WINDOW\_LEN (20)}};
+	\end{scope}
+
+	\begin{scope}[shift={(0,4.5*\textstagger-\pageheight)}]
+		\node[anchor=east] at (0, \pageheight/2) {\texttt{vhf\_iter\_idx = 1}};
+
+		% Pages
+		\draw[pattern={Lines[angle=30,distance={3pt}]},pattern color=red] (0,0)  rectangle +(\pagewidth,\pageheight);
+		\draw (\pagewidth,0) rectangle ++(\pagewidth,\pageheight)
+		++(0,-\pageheight) rectangle ++(\pagewidth,\pageheight)
+		++(0,-\pageheight) node[anchor=center] at (3.5 * \pagewidth, \pageheight/2) {$\cdots$} ++(\pagewidth,\pageheight)
+		++(0,-\pageheight) rectangle ++(\pagewidth,\pageheight);
+		\draw[pattern={Lines[angle=30,distance={3pt}]},pattern color=red] (5*\pagewidth,0)  rectangle +(\pagewidth,\pageheight);
+
+		% Page index
+		\node[anchor=350] at (-0.2, \pageheight) {\texttt{Page index}};
+		\node[anchor=south] at (0.5 * \pagewidth, \pageheight) {\texttt{19}};
+		\node[anchor=south] at (1.5 * \pagewidth, \pageheight) {\texttt{20}};
+		\node[anchor=south] at (2.5 * \pagewidth, \pageheight) {\texttt{21}};
+		\node[anchor=south] at (4.5 * \pagewidth, \pageheight) {\texttt{37}};
+		\node[anchor=south] at (5.5 * \pagewidth, \pageheight) {\texttt{38}};
+
+		% % Labels
+		% \draw[|-|] (0, \textstagger) -- (\pagewidth, \textstagger) node[midway,fill=white] {\texttt{Pad (1)}};
+		% \draw[|-|] (0, 2*\textstagger) -- (6*\pagewidth, 2*\textstagger) node[midway,fill=white] {\texttt{VHF\_MMAP\_WINDOW\_LEN (20)}};
+	\end{scope}
+
+\end{tikzpicture}
 \end{document}
