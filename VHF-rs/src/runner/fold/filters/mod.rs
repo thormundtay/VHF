@@ -1,6 +1,7 @@
 //! All filter functions.
 #![cfg_attr(feature = "doc-images", cfg_attr(all(),
-    doc = embed_doc_image::embed_image!("window_defn", "src/runner/fold/filters/images/window_defn.png")
+    doc = embed_doc_image::embed_image!("window_defn", "src/runner/fold/filters/images/window_defn.png"),
+    doc = embed_doc_image::embed_image!("filter_wo_decimation", "src/runner/fold/filters/images/filter_wo_decimation.png"),
 ))]
 #![cfg_attr(
     not(feature = "doc-images"),
@@ -53,4 +54,28 @@
 //!    window without duplication, accounting for the previous window's of data having been
 //!    "exhuasted."
 //!
+//! # Constructing appropriate filters: A worked example with Lfilter
+//!
+//! We use a single pass FIR Lfilter as an example to elaborate further on points 2 and 3.
+//!
+//! To ensure consistent understanding, we remind what a FIR Lfilter does.  
+//! A FIR filter of order `P` is a (`P+1`)-list of coefficients, often denoted as `[b_0, b_1, ...,
+//! b_P]`. Thereafter for a discrete input signal `x[n]` (indexed by `n`), the resulting signal
+//! `y[n]` is then given by
+//! ```custom,{class=language-latex}
+//! \[ y[n] = \sum_{i=0}^N b_i x[n-i]. \]
+//! ```
+//! For brevity, no initial conditions associated with the [typical
+//! Lfilter][crate::runner::fold::repr::KernReprs::DiscreteFIRCoeff] will be described.
+//!
+//! Next, the filter operates on the window of data with the intent of [decimation]. Up to some
+//! properties of the filter, the filtering process aims to preserve some spectral content
+//! accurately during the down-sampling. The "decimation factor", say `d` is thus the every `d`-th
+//! data point that is kept after the filter is applied onto every data point.
+//!
+//! Let us diagramatically represent the filtering process across a data slice straddling the
+//! boundary of two non-empty pages.
+//! ![filter_wo_decimation]
+//!
 //! [fold operations]: https://en.wikipedia.org/wiki/Fold_(higher-order_function)
+//! [decimation]: https://en.wikipedia.org/wiki/Downsampling_(signal_processing)
