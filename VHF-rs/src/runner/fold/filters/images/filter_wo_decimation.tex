@@ -3,6 +3,8 @@
 \usetikzlibrary{math}
 \usepgflibrary{patterns.meta}
 \usetikzlibrary{patterns.meta}
+\usetikzlibrary{shapes.geometric}
+
 \begin{document}
 \begin{tikzpicture}
 	% Constants
@@ -55,6 +57,19 @@
 			evaluate=\convidx as \convx using (\convidx * \datawidth + \startrectx),
 		] in {1, 2, ..., \convrect} {
 				\draw(\convx, \startrecty) rectangle ++(0, \dataheight);
+
+				\foreach \convidx [
+					evaluate=\convidx as \convx using (\convidx * \datawidth + \startrectx),
+				] in {0, 1, ..., \convrect} {
+						\begin{scope}
+							\coordinate (ac) at (\convx + \datawidth/2, \startrecty + \dataheight/2); % Anchor center
+
+							\node (mult) [anchor=center, trapezium, trapezium angle=60, fill=gray!25, rotate=180] at (ac) {\phantom {\tiny o}};
+							\node[anchor=center] at (ac) {$\scriptstyle b_\convidx$};
+
+							\draw (mult.south) -- ++(0, {- \startrecty - \dataheight/2});
+						\end{scope}
+					}
 			}
 		\draw[blue] (\startrectx, \startrecty) rectangle ++(\convrectlen * \datawidth, \dataheight);
 	\end{scope}
