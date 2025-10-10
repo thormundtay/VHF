@@ -9,7 +9,10 @@
 	\tikzmath{
 		int \numrect, \totalrect, \dataindex;
 		\numrect = 8; \totalrect = int(2 * \numrect);
+		\convrectlen = 7; \convrect = int(\convrectlen - 1); \convrows = int(\totalrect - \convrectlen);
+		\convrowsdraw = min(\convrows, 4); % This is the number of convolution rows to draw
 		\datawidth = 0.9; \dataheight=0.9; \textstagger=-0.30;
+		\convstagger = 0.09;
 	}
 
 	\begin{scope}
@@ -38,6 +41,39 @@
 		\draw[|->] (0, {\dataheight-3*\textstagger}) -- ++({-(\numrect + 0.2)*\datawidth}, 0) node[midway, anchor=center, fill = white] {$n$};
 		\node[anchor=332] at ({-(\numrect + 1.2)*\datawidth}, {\dataheight-2*\textstagger}) {\texttt{Page index}};
 		\draw[|->] (0, {\dataheight-3*\textstagger}) -- ++({ (\numrect + 0.2)*\datawidth}, 0) node[midway, anchor=center, fill = white] {$n+1$};
+	\end{scope}
+
+	% First Convolution kernel
+	\begin{scope}
+		\tikzmath{ % Using the same expression as the scoped block so as to not require manually re-evaluating all coords
+			\rowidx = 1;
+			\startrectx = (\rowidx - 1 - \numrect) * \datawidth;
+			\startrecty = \textstagger -(\rowidx - 1 + 1) * \dataheight - (\rowidx * \convstagger);
+		}
+		% Box for each convolution point. Faked by just drawing divisors
+		\foreach \convidx [
+			evaluate=\convidx as \convx using (\convidx * \datawidth + \startrectx),
+		] in {1, 2, ..., \convrect} {
+				\draw(\convx, \startrecty) rectangle ++(0, \dataheight);
+			}
+		\draw[blue] (\startrectx, \startrecty) rectangle ++(\convrectlen * \datawidth, \dataheight);
+	\end{scope}
+
+	% All remaining convolution kernels
+	\begin{scope}[opacity=0.4]
+		\foreach \rowidx [
+			evaluate=\rowidx as \startrectx using (\rowidx - 1 - \numrect) * \datawidth,
+			evaluate=\rowidx as \startrecty using \textstagger -(\rowidx - 1 + 1) * \dataheight - (\rowidx * \convstagger),
+		] in {2, 3, ..., \convrowsdraw} {
+				% Box for each convolution point. Faked by just drawing divisors
+				\foreach \convidx [
+					evaluate=\convidx as \convx using (\convidx * \datawidth + \startrectx),
+				] in {1, 2, ..., \convrect} {
+						\draw(\convx, \startrecty) rectangle ++(0, \dataheight);
+					}
+				% Total Convolution kernel
+				\draw[blue] (\startrectx, \startrecty) rectangle ++(\convrectlen * \datawidth, \dataheight);
+			}
 	\end{scope}
 \end{tikzpicture}
 \end{document}
