@@ -1,9 +1,29 @@
 \documentclass[11pt, convert={outext=.png}]{standalone}
+\usepackage{amsmath}
+\usepackage{etoolbox}
+\usepackage{ifthen}
 \usepackage{tikz}
 \usetikzlibrary{math}
 \usepgflibrary{patterns.meta}
 \usetikzlibrary{patterns.meta}
 \usetikzlibrary{shapes.geometric}
+
+\makeatletter
+\newcommand{\changeoperator}[1]{%
+  \csletcs{#1@saved}{#1@}%
+  \csdef{#1@}{\changed@operator{#1}}%
+}
+\newcommand{\changed@operator}[1]{%
+  \mathop{%
+    \mathchoice{\textstyle\csuse{#1@saved}}
+               {\csuse{#1@saved}}
+               {\csuse{#1@saved}}
+               {\csuse{#1@saved}}%
+  }%
+}
+\makeatother
+
+\changeoperator{sum}
 
 \begin{document}
 \begin{tikzpicture}
@@ -14,6 +34,7 @@
 		\convrectlen = 7; \convrect = int(\convrectlen - 1); \convrows = int(\totalrect - \convrectlen);
 		\convrowsdraw = min(\convrows, 4); % This is the number of convolution rows to draw
 		\datawidth = 0.9; \dataheight=0.9; \textstagger=-0.30;
+		\secondconvoffset = 0.8;
 		\convstagger = 0.09;
 	}
 
@@ -62,12 +83,23 @@
 					evaluate=\convidx as \convx using (\convidx * \datawidth + \startrectx),
 				] in {0, 1, ..., \convrect} {
 						\begin{scope}
-							\coordinate (ac) at (\convx + \datawidth/2, \startrecty + \dataheight/2); % Anchor center
+							\coordinate (mc) at (\convx + \datawidth/2, \startrecty + \dataheight/2); % Mult center
+							\coordinate (sc) at (\convx + \datawidth/2, \startrecty + \textstagger); % Sum center
 
-							\node (mult) [anchor=center, trapezium, trapezium angle=60, fill=gray!25, rotate=180] at (ac) {\phantom {\tiny o}};
-							\node[anchor=center] at (ac) {$\scriptstyle b_\convidx$};
+							\node (mult) [anchor=center, trapezium, trapezium angle=60, fill=gray!25, rotate=180] at (mc) {\phantom {\tiny o}};
+							\node[anchor=center] at (mc) {$\scriptstyle b_\convidx$};
+
+							\ifthenelse { \convidx =  0 } {
+								\node (sum) [anchor=center, scale=0.0] at (sc) {};
+							} {
+								\node (sum) [anchor=center, circle, fill=gray!25, scale=0.8] at (sc) {\phantom {\tiny o}};
+								\node[anchor=center] at (sc) {$\scriptscriptstyle \sum$}; % amsmath + etoolbox
+							}
 
 							\draw (mult.south) -- ++(0, {- \startrecty - \dataheight/2});
+							\draw (mult.north) -- (sum.north);
+
+							\ifthenelse {\convidx < \convrect}{ \draw (sum.east) -- ++(\datawidth, 0); }{ \draw (sum.south) -- ++(0, -4); } % Draw to right for all but last
 						\end{scope}
 					}
 			}
@@ -78,7 +110,7 @@
 	\begin{scope}[opacity=0.4]
 		\foreach \rowidx [
 			evaluate=\rowidx as \startrectx using (\rowidx - 1 - \numrect) * \datawidth,
-			evaluate=\rowidx as \startrecty using \textstagger -(\rowidx - 1 + 1) * \dataheight - (\rowidx * \convstagger),
+			evaluate=\rowidx as \startrecty using \textstagger -(\rowidx - 1 + 1) * \dataheight - (\rowidx * \convstagger) - \secondconvoffset,
 		] in {2, 3, ..., \convrowsdraw} {
 				% Box for each convolution point. Faked by just drawing divisors
 				\foreach \convidx [
