@@ -1,8 +1,30 @@
 \documentclass[11pt, convert={outext=.png}]{standalone}
+\usepackage{amsmath}
+\usepackage{etoolbox}
+\usepackage{ifthen}
 \usepackage{tikz}
 \usetikzlibrary{math}
 \usepgflibrary{patterns.meta}
 \usetikzlibrary{patterns.meta}
+\usetikzlibrary{shapes.geometric}
+
+\makeatletter
+\newcommand{\changeoperator}[1]{%
+  \csletcs{#1@saved}{#1@}%
+  \csdef{#1@}{\changed@operator{#1}}%
+}
+\newcommand{\changed@operator}[1]{%
+  \mathop{%
+    \mathchoice{\textstyle\csuse{#1@saved}}
+               {\csuse{#1@saved}}
+               {\csuse{#1@saved}}
+               {\csuse{#1@saved}}%
+  }%
+}
+\makeatother
+
+\changeoperator{sum}
+
 \begin{document}
 \begin{tikzpicture}
 	% Constants
@@ -10,11 +32,14 @@
 		int \numrect, \totalrect, \dataindex;
 		\numrect = 8; \totalrect = int(2 * \numrect);
 		\convrectlen = 7; \convrect = int(\convrectlen - 1); \convrows = int(\totalrect - \convrectlen);
-		\convrowsdraw = min(\convrows, 4); % This is the number of convolution rows to draw
+		\convrowsdraw = int(min(\convrows, 4)); % This is the number of convolution rows to draw
 		\datawidth = 0.9; \dataheight=0.9; \textstagger=-0.30;
+		\secondconvoffset = 0.6; % Offset specific to second convolution row and further
 		\convstagger = 0.09;
+		\outy = \textstagger - (\convrowsdraw + 1) * (\dataheight + \convstagger) - \secondconvoffset; % This is the y-coord of bottom of out data
 	}
 
+	% In data
 	\begin{scope}
 		\foreach \i [
 			% Each data point
@@ -43,6 +68,21 @@
 		\draw[|->] (0, {\dataheight-3*\textstagger}) -- ++({ (\numrect + 0.2)*\datawidth}, 0) node[midway, anchor=center, fill = white] {$n+1$};
 	\end{scope}
 
+	% Out data
+	\begin{scope}
+		\node[anchor=east] at ({-(\numrect + 1.8)*\datawidth}, {\outy + \dataheight/2}) {\texttt{Out}};
+
+		% Box for each convolution point. Faked by just drawing divisors
+		\foreach \i [ evaluate=\i as \drawcoord using (\i - \numrect - 1) * \datawidth ] in {1, 2, ...,  \totalrect} {
+				\draw (\drawcoord, \outy) rectangle ++(\datawidth, \dataheight); % Box for point
+			}
+		\draw [thick, red!70!blue] ({-(\numrect + 1.5)*\datawidth}, \outy) -- ({(\numrect + 1.5)*\datawidth}, \outy);
+		\draw [thick, red!70!blue] ({-(\numrect + 1.5)*\datawidth}, \outy + \dataheight) -- ({(\numrect + 1.5)*\datawidth}, \outy + \dataheight);
+		% Additional data points
+		\node[anchor=center] at ({-(\numrect + 0.75)*\datawidth}, \outy + \dataheight/2) {$\cdots$};
+		\node[anchor=center] at ({ (\numrect + 0.75)*\datawidth}, \outy + \dataheight/2) {$\cdots$};
+	\end{scope}
+
 	% First Convolution kernel
 	\begin{scope}
 		\tikzmath{ % Using the same expression as the scoped block so as to not require manually re-evaluating all coords
@@ -55,15 +95,43 @@
 			evaluate=\convidx as \convx using (\convidx * \datawidth + \startrectx),
 		] in {1, 2, ..., \convrect} {
 				\draw(\convx, \startrecty) rectangle ++(0, \dataheight);
+
+				\foreach \convidx [
+					evaluate=\convidx as \convx using (\convidx * \datawidth + \startrectx),
+				] in {0, 1, ..., \convrect} {
+						\begin{scope}
+							\coordinate (mc) at (\convx + \datawidth/2, \startrecty + \dataheight/2); % Mult center
+							\coordinate (sc) at (\convx + \datawidth/2, \startrecty + \textstagger); % Sum center
+
+							\node (mult) [anchor=center, trapezium, trapezium angle=60, fill=gray!25, rotate=180] at (mc) {\phantom {\tiny o}};
+							\node[anchor=center] at (mc) {$\scriptstyle b_\convidx$};
+
+							\ifthenelse { \convidx =  0 } {
+								\node (sum) [anchor=center, scale=0.0] at (sc) {};
+							} {
+								\node (sum) [anchor=center, circle, fill=gray!25, scale=0.8] at (sc) {\phantom {\tiny o}};
+								\node[anchor=center] at (sc) {$\scriptscriptstyle \sum$}; % amsmath + etoolbox
+							}
+
+							\draw (mult.south) -- (mult |-, 0); % Tikz syntax for getting x coord
+							\draw (mult.north) -- (sum.north);
+
+							\ifthenelse {\convidx < \convrect}{ \draw (sum.east) -- ++(\datawidth, 0); }
+							{ \draw [red] (sum.south) -- (sum |-, {\outy+\dataheight}); } % Draw to right for all but last
+						\end{scope}
+					}
 			}
 		\draw[blue] (\startrectx, \startrecty) rectangle ++(\convrectlen * \datawidth, \dataheight);
+
+		% Result of convolution
+		\draw[red] ({ ( -\numrect + \convrectlen - 1 ) * \datawidth }, \outy) rectangle ++(\datawidth, \dataheight);
 	\end{scope}
 
 	% All remaining convolution kernels
 	\begin{scope}[opacity=0.4]
 		\foreach \rowidx [
 			evaluate=\rowidx as \startrectx using (\rowidx - 1 - \numrect) * \datawidth,
-			evaluate=\rowidx as \startrecty using \textstagger -(\rowidx - 1 + 1) * \dataheight - (\rowidx * \convstagger),
+			evaluate=\rowidx as \startrecty using \textstagger -(\rowidx - 1 + 1) * \dataheight - (\rowidx * \convstagger) - \secondconvoffset,
 		] in {2, 3, ..., \convrowsdraw} {
 				% Box for each convolution point. Faked by just drawing divisors
 				\foreach \convidx [
