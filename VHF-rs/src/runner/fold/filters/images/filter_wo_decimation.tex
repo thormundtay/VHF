@@ -32,12 +32,14 @@
 		int \numrect, \totalrect, \dataindex;
 		\numrect = 8; \totalrect = int(2 * \numrect);
 		\convrectlen = 7; \convrect = int(\convrectlen - 1); \convrows = int(\totalrect - \convrectlen);
-		\convrowsdraw = min(\convrows, 4); % This is the number of convolution rows to draw
+		\convrowsdraw = int(min(\convrows, 4)); % This is the number of convolution rows to draw
 		\datawidth = 0.9; \dataheight=0.9; \textstagger=-0.30;
-		\secondconvoffset = 0.8;
+		\secondconvoffset = 0.6; % Offset specific to second convolution row and further
 		\convstagger = 0.09;
+		\outy = \textstagger - (\convrowsdraw + 1) * (\dataheight + \convstagger) - \secondconvoffset; % This is the y-coord of bottom of out data
 	}
 
+	% In data
 	\begin{scope}
 		\foreach \i [
 			% Each data point
@@ -64,6 +66,21 @@
 		\draw[|->] (0, {\dataheight-3*\textstagger}) -- ++({-(\numrect + 0.2)*\datawidth}, 0) node[midway, anchor=center, fill = white] {$n$};
 		\node[anchor=332] at ({-(\numrect + 1.2)*\datawidth}, {\dataheight-2*\textstagger}) {\texttt{Page index}};
 		\draw[|->] (0, {\dataheight-3*\textstagger}) -- ++({ (\numrect + 0.2)*\datawidth}, 0) node[midway, anchor=center, fill = white] {$n+1$};
+	\end{scope}
+
+	% Out data
+	\begin{scope}
+		\node[anchor=east] at ({-(\numrect + 1.8)*\datawidth}, {\outy + \dataheight/2}) {\texttt{Out}};
+
+		% Box for each convolution point. Faked by just drawing divisors
+		\foreach \i [ evaluate=\i as \drawcoord using (\i - \numrect - 1) * \datawidth ] in {1, 2, ...,  \totalrect} {
+				\draw (\drawcoord, \outy) rectangle ++(\datawidth, \dataheight); % Box for point
+			}
+		\draw [thick, red!70!blue] ({-(\numrect + 1.5)*\datawidth}, \outy) -- ({(\numrect + 1.5)*\datawidth}, \outy);
+		\draw [thick, red!70!blue] ({-(\numrect + 1.5)*\datawidth}, \outy + \dataheight) -- ({(\numrect + 1.5)*\datawidth}, \outy + \dataheight);
+		% Additional data points
+		\node[anchor=center] at ({-(\numrect + 0.75)*\datawidth}, \outy + \dataheight/2) {$\cdots$};
+		\node[anchor=center] at ({ (\numrect + 0.75)*\datawidth}, \outy + \dataheight/2) {$\cdots$};
 	\end{scope}
 
 	% First Convolution kernel
@@ -96,14 +113,18 @@
 								\node[anchor=center] at (sc) {$\scriptscriptstyle \sum$}; % amsmath + etoolbox
 							}
 
-							\draw (mult.south) -- ++(0, {- \startrecty - \dataheight/2});
+							\draw (mult.south) -- (mult |-, 0); % Tikz syntax for getting x coord
 							\draw (mult.north) -- (sum.north);
 
-							\ifthenelse {\convidx < \convrect}{ \draw (sum.east) -- ++(\datawidth, 0); }{ \draw (sum.south) -- ++(0, -4); } % Draw to right for all but last
+							\ifthenelse {\convidx < \convrect}{ \draw (sum.east) -- ++(\datawidth, 0); }
+							{ \draw [red] (sum.south) -- (sum |-, {\outy+\dataheight}); } % Draw to right for all but last
 						\end{scope}
 					}
 			}
 		\draw[blue] (\startrectx, \startrecty) rectangle ++(\convrectlen * \datawidth, \dataheight);
+
+		% Result of convolution
+		\draw[red] ({ ( -\numrect + \convrectlen - 1 ) * \datawidth }, \outy) rectangle ++(\datawidth, \dataheight);
 	\end{scope}
 
 	% All remaining convolution kernels
