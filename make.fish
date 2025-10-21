@@ -6,10 +6,12 @@ set reset "\e[0m"
 
 set pyenv_venv_ver "3.12.1"
 set pyenv_venv_name "o3"
+if test -w "/var/compressed/"
+  set -x TMPDIR /var/compressed
+end
 
 function main
   set cmd $argv[1]
-  set -e $argv[1]
 
   switch "$cmd"
     case "help" "--help" "-h"
@@ -26,6 +28,11 @@ function main
       create_pyenvvirtualenv
     case "run_bind"
       run_bind $argv[2..]
+    case "bacon"
+      activate_venv
+      bacon --watch vhf_parse $argv[2..]
+    case "doc" "docs"
+      make docs PRIV=y
     case "test_full"
       test_cargo $argv[2..]
       activate_venv
@@ -48,6 +55,7 @@ function show_help
   echo "python_test - For testing the project (Python)"
   echo ""
   printf $un"Environment Variables$reset\n"
+  echo "TMPDIR: $TMPDIR"
   echo "RUSTFLAGS: $RUSTFLAGS"
   echo "PYENV_VIRTUAL_ENV: $PYENV_VIRTUAL_ENV"
   echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
@@ -97,19 +105,19 @@ function create_pyenvvirtualenv
   pyenv shell $pyenv_venv_ver
   if test $status -ne 0
     echo "Failed to activate pyenv shell"
-    exit 2
+    exit $status
   end
   sleep 0.2
   pyenv virtualenv $pyenv_venv_name
   if test $status -ne 0
     echo "Failed to created pyenv"
-    exit 2
+    exit $status
   end
   sleep 0.2
   pyenv activate o3
   if test $status -ne 0
     echo "Failed to activate pyenv"
-    exit 2
+    exit $status
   end
   sleep 0.2
   python -m pip install -r requirements.txt
