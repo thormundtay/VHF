@@ -3,6 +3,7 @@
     doc = embed_doc_image::embed_image!("window_defn", "src/runner/fold/filters/images/window_defn.png"),
     doc = embed_doc_image::embed_image!("filter_wo_decimation", "src/runner/fold/filters/images/filter_wo_decimation.png"),
     doc = embed_doc_image::embed_image!("final_window_case_a", "src/runner/fold/filters/images/final_window_case_a.png"),
+    doc = embed_doc_image::embed_image!("final_window_case_b", "src/runner/fold/filters/images/final_window_case_b.png"),
 ))]
 #![cfg_attr(
     not(feature = "doc-images"),
@@ -114,6 +115,12 @@
 //!   Here, the window has a page that is explicitly declared as
 //!   [empty][crate::runner::process::pages::MmapPage::End] towards the back of the window, and
 //!   thus is trivial.
+//! - Case 2: ![final_window_case_b]
+//!   Suppose that the filter is acting on the window with `vhf_iter_idx=1`, where all pages are
+//!   filled. There is no guarantee that there exists a window with `vhf_iter_idx=2`, and thus, all
+//!   data located within the end `Pad`ding should be processed and written to file.
+//!   Note!: This principle can be violated at your own risk of coordination with
+//!   [VHFIter][crate::runner::VHFIter].
 //!
 //! [fold operations]: https://en.wikipedia.org/wiki/Fold_(higher-order_function)
 //! [decimation]: https://en.wikipedia.org/wiki/Downsampling_(signal_processing)
