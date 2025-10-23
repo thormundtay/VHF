@@ -76,17 +76,17 @@ impl TraceTimer {
             log::warn!("Nones were passed to update_plot_timing");
             return Ok(false);
         }
-        if let Some(StartTime::Rel(ref s)) = start {
-            if s.is_negative() {
-                log::warn!("Negative relative start time were passed to update_plot_timing");
-                return Err(ParseError::ValueError);
-            }
+        if let Some(StartTime::Rel(ref s)) = start
+            && s.is_negative()
+        {
+            log::warn!("Negative relative start time were passed to update_plot_timing");
+            return Err(ParseError::ValueError);
         }
-        if let Some(DurationOrEndTime::Rel(ref d)) = duration_or_end {
-            if d.is_negative() {
-                log::warn!("Negative duration was passed to update_plot_timing");
-                return Err(ParseError::ValueError);
-            }
+        if let Some(DurationOrEndTime::Rel(ref d)) = duration_or_end
+            && d.is_negative()
+        {
+            log::warn!("Negative duration was passed to update_plot_timing");
+            return Err(ParseError::ValueError);
         }
 
         let original_plot_start = self.plot_start;

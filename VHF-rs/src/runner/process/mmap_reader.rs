@@ -117,8 +117,8 @@ impl MMapReader {
     fn get_mmap_iter(&self, prev: usize, next: usize) -> impl Iterator<Item = &'_ u64> {
         use bytemuck::try_cast_slice;
         // Bytes rounded to page length should have
-        debug_assert!(prev % (8 * MMAP_PAGE_LEN) == 0);
-        debug_assert!(next % (8 * MMAP_PAGE_LEN) == 0);
+        debug_assert!(prev.is_multiple_of(8 * MMAP_PAGE_LEN));
+        debug_assert!(next.is_multiple_of(8 * MMAP_PAGE_LEN));
         if prev < next {
             try_cast_slice(&self.mmap[prev..next])
                 .unwrap()
@@ -303,6 +303,7 @@ impl core::ops::Drop for MMapReader {
 }
 
 /// Used as the child thread of [super::VHF] at driving [MMapReader].
+#[allow(clippy::too_many_arguments)]
 pub(super) fn mmap_thread(
     mmap: Mmap,
     engine: Arc<AtomicBool>,

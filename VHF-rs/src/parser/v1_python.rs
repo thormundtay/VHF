@@ -114,7 +114,7 @@ impl VHFparser {
     /// Get parser.header and parser.headerraw
     fn fetch_header(parser: &Py<PyAny>) -> ParseResult<(Vec<u8>, Py<PyDict>)> {
         Python::with_gil(|py| -> ParseResult<_> {
-            let h_str: Vec<_> = parser
+            let h_str = parser
                 .getattr(py, "headerraw")
                 .map_err(ParseError::PyError)?
                 .downcast_bound::<PyBytes>(py)
@@ -122,9 +122,7 @@ impl VHFparser {
                 .clone()
                 .unbind()
                 .as_bytes(py)
-                .into_iter()
-                .cloned()
-                .collect();
+                .to_vec();
             let dict = parser
                 .getattr(py, "header")
                 .map_err(ParseError::PyError)?

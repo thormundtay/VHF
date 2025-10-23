@@ -28,6 +28,7 @@ pub struct WriteBlock {
     m_overflow_value: Option<Vec<i8>>,
 }
 
+#[allow(clippy::derivable_impls)] // The default is not guranteed to be trivial.
 impl Default for WriteBlock {
     fn default() -> Self {
         WriteBlock {
