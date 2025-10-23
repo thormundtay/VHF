@@ -6,12 +6,17 @@ use super::super::writer::WriteBlock;
 use crate::{Error, Result};
 use std::{num::NonZeroUsize, sync::Arc};
 
+/// Functions that act on items yielded from [VHFIter].next().
+///
+/// Requires that the function is [Send] and [Sync].
+pub type VHFItemFn = dyn Fn(<VHFIter as Iterator>::Item) -> WriteBlock + Send + Sync;
+
 /// This fully contains all relevant mechanisms for taking the iterator output of
 /// [super::super::VHFIter] for "in-flight processing."
 #[derive(Clone)]
 pub struct StreamFoldFunction {
     /// This the function that has to be applied to every chunked window from [super::super::VHF].next.
-    pub func: Arc<dyn Fn(<VHFIter as Iterator>::Item) -> WriteBlock + Send + Sync>,
+    pub func: Arc<VHFItemFn>,
     /// This is the number of windows to step by each time prior to par_iter.
     pub step_by: usize,
     /// This is the number of windows to pad to the start.
