@@ -35,7 +35,7 @@ itertools = { version = "0.14.0" }
 jiff = { version = "0.2.15", features = ["alloc", "serde"] }
 libc = { version = "0.2" }
 log = { version = "0.4.28" }
-log4rs = { version = "1.3.0", features = ["console_appender"] }
+log4rs = { version = "1.4.0", features = ["console_appender"] }
 mmap-rs = { version = "0.7.0" }
 nix = { version = "0.29.0", features = ["fs", "ioctl", "user"] }
 numpy = { version = "0.25.0", default-features = false, optional = true }
