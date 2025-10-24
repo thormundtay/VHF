@@ -193,6 +193,7 @@ impl RollOver {
         }
     }
 
+    /// Mutates `m_arr` to account for any m_overflow.
     pub(super) fn fix_m_overflow(
         &self,
         m_arr: &mut Array1<M>,

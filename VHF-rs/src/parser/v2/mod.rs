@@ -3,7 +3,7 @@
 mod rollover;
 mod trace_timer;
 
-use super::{DurationOrEndTime, StartTime};
+use super::{DurationOrEndTime, StartTime, WordT};
 use crate::{M, ReducedPhase};
 use crate::{ParseError, ParseResult, VHFparse};
 use bytemuck::checked::try_cast_slice;
@@ -19,7 +19,7 @@ use std::{
     f64::consts::TAU,
     fs::{self, File},
     io::{BufReader, Read},
-    path::Path,
+    path::{Path, PathBuf},
     str::FromStr,
 };
 use trace_timer::TraceTimer;
@@ -214,8 +214,8 @@ impl TraceDetails {
 // 'a: Lifetime of file (as path) being read from.
 // 'd: Lifetime of mmap created during change of view window.
 #[derive(Debug)]
-pub struct VHFparser<'a> {
-    file: &'a Path,
+pub struct VHFparser {
+    file: PathBuf,
     /// This is the number of bytes associated header str.
     header_len: usize,
     /// This is the number of words associated to m_overflow indices.
@@ -232,10 +232,10 @@ pub struct VHFparser<'a> {
     /// Records m-offset of trace.
     m_mgr: Box<Option<RollOver>>,
     /// This is the internal store of the view window.
-    data: Option<Array1<u64>>, // No Rc<RefCell> due to passing out lifetime
+    data: Option<Array1<WordT>>, // No Rc<RefCell> due to passing out lifetime
 }
 
-impl<'a> VHFparser<'a> {
+impl VHFparser {
     /// V2 Binary file format parser.
     ///
     /// Data is only fetched when data or phase is requested.
@@ -244,7 +244,7 @@ impl<'a> VHFparser<'a> {
     /// - file: [Path] to file.
     /// - headers_only: If false, ManifoldManger is invoked not at init time, but at first data
     ///   fetch.
-    pub fn new(file: &'a Path, headers_only: bool) -> ParseResult<Self> {
+    pub fn new(file: &Path, headers_only: bool) -> ParseResult<Self> {
         log::debug!("Creating v2::VHFparser with {}", file.display());
 
         let mut file_bytes = BufReader::new(File::open(file)?).bytes();
@@ -339,9 +339,9 @@ impl<'a> VHFparser<'a> {
                 log::error!("Could not convert file_size from u64 to usize: {e}");
                 ParseError::ValueError
             })?;
-        let data_len_bytes =
+        let data_len_bytes: usize =
             file_len - ((PRE_REMAININGHEADER + header_len).div_ceil(8) * 8) - (m_overflow_len * 8);
-        if data_len_bytes % 8 != 0 {
+        if !data_len_bytes.is_multiple_of(8) {
             log::error!(
                 "Was the file truncated whilst writing data? Data length is not multiple of 8 bytes."
             );
@@ -371,7 +371,7 @@ impl<'a> VHFparser<'a> {
         };
 
         let mut s = Self {
-            file,
+            file: file.to_path_buf(),
             header_len,
             m_overflow_len,
             header,
@@ -425,7 +425,7 @@ impl<'a> VHFparser<'a> {
     }
 
     /// Similar to Python, self._m_arr will always already have m_overflow unwrapped.
-    fn m_arr(&'a self) -> ParseResult<Array1<M>> {
+    fn m_arr(&self) -> ParseResult<Array1<M>> {
         if self.m_mgr.is_none() {
             log::error!("Please run resolve_m_overflow_idxs first!");
             return Err(ParseError::ValueError);
@@ -444,7 +444,7 @@ impl<'a> VHFparser<'a> {
     }
 }
 
-impl<'a> VHFparse for VHFparser<'a> {
+impl VHFparse for VHFparser {
     type DataReturn = Array1<u64>;
     type TransformReturn<T> = Array1<T>;
 
@@ -498,7 +498,7 @@ impl<'a> VHFparse for VHFparser<'a> {
         if self.m_mgr.is_none() {
             let offset = (PRE_REMAININGHEADER + self.header_len).div_ceil(8) * 8;
             self.m_mgr.replace(RollOver::new(
-                self.file,
+                &self.file,
                 offset,
                 self.m_overflow_len,
                 self.m_offset,
@@ -533,7 +533,7 @@ impl<'a> VHFparse for VHFparser<'a> {
 
 #[cfg(feature = "internals")]
 /// Methods here are intended for unit tests.
-impl VHFparser<'_> {
+impl VHFparser {
     pub fn get_m_mgr(&self) -> Option<RollOverMgr<'_>> {
         self.m_mgr.as_ref().as_ref().map(RollOverMgr)
     }
