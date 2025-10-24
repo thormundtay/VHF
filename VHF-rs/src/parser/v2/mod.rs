@@ -543,22 +543,21 @@ impl VHFparse for VHFparser {
 
     fn reduced_phase(&self) -> ParseResult<Self::ReducedPhase<'_>> {
         let data = self.data()?;
+        if data.is_empty() {
+            return Ok(DataView {
+                data: Array1::zeros(0),
+                _lifetime: PhantomData,
+            });
+        }
+
         let mut result = data.mapv(|d| {
-            let IQMTriplet(i, _, _) = RawVHFWord::from(d).into();
-            i as f64
-        });
-        let q_arr = data.mapv(|d| {
-            let IQMTriplet(_, q, _) = RawVHFWord::from(d).into();
-            q as f64
+            let IQMTriplet(i, q, _) = RawVHFWord::from(d).into();
+            (i as f64).atan2(q as f64) / TAU
         });
         let m_arr = self.m_arr()?;
 
         debug_assert_eq!(m_arr.len(), result.len());
-        ndarray::par_azip!(
-            (i in &mut result, &q in &q_arr, &m in &m_arr) {
-                *i = (i.atan2(q)/TAU) + (m as f64)
-            }
-        );
+        result = result + m_arr.mapv_into_any(f64::from);
 
         Ok(DataView {
             data: result,
