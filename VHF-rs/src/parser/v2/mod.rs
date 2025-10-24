@@ -3,7 +3,7 @@
 mod rollover;
 mod trace_timer;
 
-use super::{DurationOrEndTime, StartTime, WordT};
+use super::{DataView, DurationOrEndTime, StartTime, WordT};
 use crate::{M, ReducedPhase};
 use crate::{ParseError, ParseResult, VHFparse};
 use bytemuck::checked::try_cast_slice;
@@ -19,6 +19,7 @@ use std::{
     f64::consts::TAU,
     fs::{self, File},
     io::{BufReader, Read},
+    marker::PhantomData,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -444,10 +445,30 @@ impl VHFparser {
     }
 }
 
+/// Data related to v2 VHF file.
+///
+/// Data returned by VHFparse is designed to not outlive the parser.
+/// ```compile_fail
+/// use vhf_parse::VHFparse;
+/// use vhf_parse::v2::VHFparser;
+/// let mut v = VHFparser::new(
+///     std::env::temp_dir().join("v2_linear.bin").as_path(), false
+/// ).unwrap();
+/// v.update_plot_timing(
+///     None,
+///     Some(vhf_parse::py_binds::DurationOrEndTime::Rel(RelTime(
+///         Span::new().seconds(1),
+///     ))),
+///     false,
+/// )
+/// .unwrap();
+///
+/// let rp = { v.reduced_phase().unwrap() };
+/// drop(v);
+///
+/// println!("rp", rp); // This has rp live longer than v!
+/// ```
 impl VHFparse for VHFparser {
-    type DataReturn = Array1<u64>;
-    type TransformReturn<T> = Array1<T>;
-
     fn update_plot_timing(
         &mut self,
         start: Option<StartTime>,
@@ -475,7 +496,12 @@ impl VHFparse for VHFparser {
         Ok(())
     }
 
-    fn data(&self) -> ParseResult<Self::DataReturn> {
+    type Data<'d>
+        = ArrayView1<'d, WordT>
+    where
+        Self: 'd;
+
+    fn data(&self) -> ParseResult<Self::Data<'_>> {
         if self.m_mgr.is_none() {
             log::error!(
                 "Unable to fetch data as init was lazy! Consider running resolve_m_overflow_idxs first!"
@@ -490,8 +516,10 @@ impl VHFparse for VHFparser {
             return Err(ParseError::ValueError);
         };
 
-        // .cloned() needed as Self::DataReturn having &_ lifetime is still under work.
-        self.data.as_ref().cloned().ok_or(ParseError::ValueError)
+        self.data
+            .as_ref()
+            .map(Array1::view)
+            .ok_or(ParseError::ValueError)
     }
 
     fn resolve_m_overflow_idxs(&mut self) -> ParseResult<()> {
@@ -508,7 +536,12 @@ impl VHFparse for VHFparser {
         Ok(())
     }
 
-    fn reduced_phase(&self) -> ParseResult<Self::TransformReturn<ReducedPhase>> {
+    type ReducedPhase<'d>
+        = DataView<'d, ReducedPhase>
+    where
+        Self: 'd;
+
+    fn reduced_phase(&self) -> ParseResult<Self::ReducedPhase<'_>> {
         let data = self.data()?;
         let mut result = data.mapv(|d| {
             let IQMTriplet(i, _, _) = RawVHFWord::from(d).into();
@@ -527,7 +560,10 @@ impl VHFparse for VHFparser {
             }
         );
 
-        Ok(result)
+        Ok(DataView {
+            data: result,
+            _lifetime: PhantomData,
+        })
     }
 }
 
