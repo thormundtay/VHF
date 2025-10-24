@@ -1,25 +1,28 @@
 //! Types associated to data created by VHF board.
 use std::f64::consts::TAU;
 
+/// Inner type to [RawVHFWord].
+pub type VHFWordT = u64;
+
 /// This is one word of VHF data as seen from the DMA buffer.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(transparent)]
-pub struct RawVHFWord(u64);
+pub struct RawVHFWord(VHFWordT);
 
-impl From<u64> for RawVHFWord {
-    fn from(value: u64) -> Self {
+impl From<VHFWordT> for RawVHFWord {
+    fn from(value: VHFWordT) -> Self {
         Self(value)
     }
 }
 
-impl From<RawVHFWord> for u64 {
+impl From<RawVHFWord> for VHFWordT {
     fn from(val: RawVHFWord) -> Self {
         val.0
     }
 }
 
 impl RawVHFWord {
-    pub fn as_u64(&self) -> u64 {
+    pub fn as_u64(&self) -> VHFWordT {
         self.0
     }
 
@@ -35,7 +38,7 @@ impl RawVHFWord {
 }
 
 impl std::ops::Deref for RawVHFWord {
-    type Target = u64;
+    type Target = VHFWordT;
 
     fn deref(&self) -> &Self::Target {
         &self.0

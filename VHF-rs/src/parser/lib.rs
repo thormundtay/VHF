@@ -69,6 +69,7 @@ impl From<bytemuck::checked::CheckedCastError> for ParseError {
 // Expectation for Data Types returned by parse methods.
 /// Raw VHF word prior to any parsing.
 pub use vhf_common::data_types::RawVHFWord as VHFWord;
+pub use vhf_common::data_types::VHFWordT as WordT;
 /// M component of [VHFWord].
 type M = i32;
 /// Unwrapped reduced phase of [VHFWord].
