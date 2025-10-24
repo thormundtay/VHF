@@ -25,6 +25,8 @@ use jiff::ZonedRound;
 #[cfg(feature = "o3")]
 use std::num::NonZeroU64;
 #[cfg(feature = "o3")]
+use std::ops::Deref;
+#[cfg(feature = "o3")]
 use vhf_parse::{VHFparse, v1::VHFparser as V1parser};
 
 /// Write a file that has data with m-overflow.
@@ -219,7 +221,7 @@ fn writes_correct_file() {
 
         expected_reduced_phases
             .into_iter()
-            .zip(actual_reduced_phases)
+            .zip(actual_reduced_phases.deref())
             .enumerate()
             .for_each(|(_, (e, a))| {
                 assert_relative_eq!(e, a);
@@ -501,7 +503,7 @@ fn python_v1_linear() {
         use approx::assert_relative_eq;
         assert_eq!(result_reduced_phase.len(), total_elements);
         expected_linear
-            .zip(result_reduced_phase)
+            .zip(result_reduced_phase.deref())
             .enumerate()
             .for_each(|(_i, (e, a))| {
                 // use vhf_common::data_types::IQMTriplet;
@@ -648,7 +650,7 @@ fn python_v1_edgecase() {
         use vhf_parse::unwrap_phase::VHFWordToUnwrappedPhaseByIter;
         let expected_reduced_phases = signal_expected.to_unwrapped_phase(0);
         expected_reduced_phases
-            .zip(actual_reduced_phases)
+            .zip(actual_reduced_phases.deref())
             .enumerate()
             .for_each(|(i, (e, a))| {
                 if i == 0 {
