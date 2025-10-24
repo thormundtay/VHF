@@ -108,12 +108,23 @@ impl<T> DataView<'_, T> {
 
 /// Expected methods of any VHF parser. Mirrors Python's expectations.
 pub trait VHFparse {
-    /// v1 Writer unfortunately has to return as an Owned Array, but it is quite likely that v2
-    /// will return as a View Array.
-    type DataReturn;
+    /// Return type of `data` method.
+    ///
+    /// May vary by implementation.
+    // v1 Writer unfortunately has to return as an Owned Array by the current PyO3 bindings, but it
+    // is quite likely that v2 will return as a View Array.
+    type Data<'d>
+    where
+        Self: 'd;
 
-    // /// This changes in accordance with if Map is collected, or if taken from Python etc.
-    type TransformReturn<T>;
+    /// Return type of `reduced phase` method.
+    ///
+    /// May vary by implementation.
+    // Note: In the context of v2 parsing, note that ArrayView + ArrayView is not allowed. As such,
+    // it is also likely that this has a similar issue to needing [DataView].
+    type ReducedPhase<'d>
+    where
+        Self: 'd;
 
     /// Update the class to be aware of all m-overflow indices. This is in the event that the
     /// parser tries to be lazy at init time.
@@ -134,10 +145,10 @@ pub trait VHFparse {
     ) -> ParseResult<()>;
 
     /// Block of binary trace in accordance with plot window specified.
-    fn data(&self) -> ParseResult<Self::DataReturn>;
+    fn data<'a>(&'a self) -> ParseResult<Self::Data<'a>>;
 
     /// Block of binary trace with unwrapped phase / 2pi.
-    fn reduced_phase(&self) -> ParseResult<Self::TransformReturn<ReducedPhase>>;
+    fn reduced_phase<'a>(&'a self) -> ParseResult<Self::ReducedPhase<'a>>;
 }
 
 pub mod unwrap_phase;
