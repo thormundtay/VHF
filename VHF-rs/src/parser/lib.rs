@@ -75,6 +75,37 @@ type M = i32;
 /// Unwrapped reduced phase of [VHFWord].
 pub type ReducedPhase = f64;
 
+use ndarray::Array1;
+use std::marker::PhantomData;
+
+/// Data/TransformedView within file as constrained by temporal bounds set in [VHFparse::update_plot_timing].
+///
+/// This can be thought of as a [Array1] but with lifetime bounded to function returning this type.
+/// Consume this struct through the `take` method.
+// Note: Deliberately not implementing Clone currently, as this requires cloning all elements
+// within the Array1 currently.
+#[derive(Debug)]
+pub struct DataView<'d, T> {
+    pub data: Array1<T>,
+    _lifetime: PhantomData<&'d T>,
+}
+
+impl<'d, T> std::ops::Deref for DataView<'d, T> {
+    type Target = Array1<T>;
+
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl<T> DataView<'_, T> {
+    /// This is a convenience method so that cloning arbitrarily shouldn't be a thing.
+    pub fn take(self) -> Array1<T> {
+        self.data
+    }
+}
+
 /// Expected methods of any VHF parser. Mirrors Python's expectations.
 pub trait VHFparse {
     /// v1 Writer unfortunately has to return as an Owned Array, but it is quite likely that v2
