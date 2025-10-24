@@ -2,9 +2,6 @@ use super::super::{DurationOrEndTime, StartTime};
 use crate::{ParseError, ParseResult};
 use jiff::{SignedDuration, Span, Zoned};
 
-/// This is the rounding tolerance for f64 to usize in TraceTimer.
-const TOL: f64 = 0.0001;
-
 #[derive(Debug)]
 pub(super) struct TraceTimer {
     /// Timing associated with the 0th data point in the trace.
@@ -41,26 +38,27 @@ impl TraceTimer {
     // Determine the index of an absolute time in the context of the trace. Guaranteed to be within
     // the trace.
     fn abs_as_index(&self, time: &Zoned) -> ParseResult<usize> {
-        let rel = time.duration_since(&self.trace_start);
-        debug_assert!(!rel.is_negative());
+        let mut rel = time.duration_since(&self.trace_start);
+        if rel.is_negative() {
+            rel = SignedDuration::new(0, 0);
+        }
         let dt = self.sample_interval;
 
         let n = rel.div_duration_f64(dt);
-        assert!((n - n.round()).abs() < TOL);
-        Ok(n.round() as _)
+        Ok((n.round() as usize).clamp(0, self.trace_len as _))
     }
 
     // Determine the index of an absolute time in the context of the trace. Guaranteed to be within
     // the trace.
     fn span_as_offset(&self, duration: &Span) -> ParseResult<usize> {
-        debug_assert!(!duration.is_negative());
+        let mut dur: SignedDuration = (*duration).try_into().map_err(ParseError::JiffError)?;
+        if dur.is_negative() {
+            dur = SignedDuration::new(0, 0);
+        }
         let dt = self.sample_interval;
 
-        let d: SignedDuration = (*duration).try_into().map_err(ParseError::JiffError)?;
-
-        let n = d.div_duration_f64(dt);
-        assert!((n - n.round()).abs() < TOL);
-        Ok(n.round() as _)
+        let n = dur.div_duration_f64(dt);
+        Ok((n.round() as usize).clamp(0, self.trace_len as _))
     }
 
     /// Updates the internal state of the plot window. Returns true if the internal state has
