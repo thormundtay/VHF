@@ -61,6 +61,7 @@ pub struct Configs {
     pub save_to_file: bool,
 
     /// V2 m_overflow_idx block length to data length ratio.
+    // Ideally, this would be in v2 specific setting, which would be aligned with StreamFold
     pub v2_overflow_to_data_ratio: Option<f64>,
 }
 
@@ -812,8 +813,14 @@ pub struct BoardConfig<'a> {
     pub speed: &'a SamplingSpeed,
 
     /// This is the dynamic gain (-g)
+    // WARN: [vhf::runner::process::VHF::new] forcibly writes a 0 still! This is to ensure that
+    // there is no lingering configuration on the FPGA.
+    // The json serialization is kept as `null` to show that value was disabled!
     pub gain: &'a Option<u8>,
     /// This is the hardware filter (-F) used by the FPGA for low pass filtering.
+    // WARN: [vhf::runner::process::VHF::new] forcibly writes a 0 still! This is to ensure that
+    // there is no lingering configuration on the FPGA.
+    // The json serialization is kept as `null` to show that value was disabled!
     pub filter_const: &'a Option<u8>,
 
     /// Runtime processing method

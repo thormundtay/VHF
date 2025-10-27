@@ -510,6 +510,9 @@ fn writes_correct_v2_file_zero() {
     // std::fs::copy(&tmp_file, env::temp_dir().join("v2_zero.bin")).expect("failed_to copy");
     let mut parser = v2::VHFparser::new(&tmp_file, true).expect("Could not make v2 parser");
 
+    // Test that headers do null.
+    assert_eq!(parser.get_header().gain, None);
+
     // Test that the fold (as represented in the header) is empty.
     parser
         .get_header()
