@@ -330,11 +330,11 @@ mod tests {
         let num_points = 100;
 
         log::info!("Testing by random sample");
-        let is = (&mut rng1).sample_iter(uni).take(num_points).into_iter();
+        let is = (&mut rng1).sample_iter(uni).take(num_points);
         for i in is {
-            let qs = (&mut rng2).sample_iter(uni).take(num_points).into_iter();
+            let qs = (&mut rng2).sample_iter(uni).take(num_points);
             for q in qs {
-                let ms = (&mut rng3).sample_iter(m_uni).take(30).into_iter();
+                let ms = (&mut rng3).sample_iter(m_uni).take(30);
                 for m in ms {
                     if i == 0 && q == 0 {
                         continue;

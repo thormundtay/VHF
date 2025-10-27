@@ -31,7 +31,7 @@ impl ZeroArr {
     /// Creates [ZeroArr] which yields 0s for total_len number of elements.
     /// Strongly recommended to have an integer multiple of [MMAP_PAGE_LEN].
     pub fn new(total_len: usize, engine_running: Arc<AtomicBool>) -> Self {
-        if total_len % MMAP_PAGE_LEN != 0 {
+        if !total_len.is_multiple_of(MMAP_PAGE_LEN) {
             log::warn!("ZeroArr did not receive an integer multiple of MMAP_PAGE_LEN");
         }
         Self {
@@ -64,7 +64,7 @@ impl Iterator for LinearArr {
 
 impl LinearArr {
     pub fn new(total_len: usize, engine_running: Arc<AtomicBool>) -> Self {
-        if total_len % MMAP_PAGE_LEN != 0 {
+        if !total_len.is_multiple_of(MMAP_PAGE_LEN) {
             log::warn!("LinearArr did not receive an integer multiple of MMAP_PAGE_LEN");
         }
         Self {
@@ -117,7 +117,7 @@ impl LinearPhaseArr {
         initial_params: (f64, f64, f64),
         engine_running: Arc<AtomicBool>,
     ) -> Self {
-        if total_len % MMAP_PAGE_LEN != 0 {
+        if !total_len.is_multiple_of(MMAP_PAGE_LEN) {
             log::warn!("LinearArr did not receive an integer multiple of MMAP_PAGE_LEN");
         }
         Self {
@@ -186,7 +186,7 @@ impl SineArr {
         engine_running: Arc<AtomicBool>,
         params: (f64, f64, f64, f64, f64),
     ) -> Self {
-        if total_len % MMAP_PAGE_LEN != 0 {
+        if !total_len.is_multiple_of(MMAP_PAGE_LEN) {
             log::warn!("SineArr did not receive an integer multiple of MMAP_PAGE_LEN");
         }
         Self {

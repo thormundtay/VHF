@@ -44,7 +44,7 @@ impl RollOver {
         initial_m_offset: M,
         data_raw_map: &super::VHFparser,
     ) -> ParseResult<Self> {
-        if offset % 8 != 0 {
+        if !offset.is_multiple_of(8) {
             log::error!("Header not flushed to word boundary!");
             return Err(ParseError::ValueError);
         }
