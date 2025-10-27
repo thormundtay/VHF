@@ -1,7 +1,7 @@
 //! This file uses the Python parsing through PyO3 for v1 file types. As such, it is dependent on
 //! it being in the correct environment.
 
-use super::{DurationOrEndTime, ParseError, ParseResult, StartTime, VHFWord, VHFparse};
+use super::{DataView, DurationOrEndTime, ParseError, ParseResult, StartTime, VHFWord, VHFparse};
 use crate::ReducedPhase;
 use crate::py_binds::AbsTime;
 use jiff::Zoned;
@@ -22,6 +22,7 @@ use pyo3::types::PyInt;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::marker::PhantomData;
 use std::num::NonZeroU64;
 use std::path::Path;
 use vhf_common::config_types::SamplingSpeed;
@@ -142,8 +143,15 @@ impl VHFparser {
 }
 
 impl VHFparse for VHFparser {
-    type DataReturn = Array1<VHFWord>;
-    type TransformReturn<T> = Array1<T>;
+    type Data<'d>
+        = DataView<'d, VHFWord>
+    where
+        Self: 'd;
+
+    type ReducedPhase<'d>
+        = DataView<'d, ReducedPhase>
+    where
+        Self: 'd;
 
     fn resolve_m_overflow_idxs(&mut self) -> ParseResult<()> {
         Python::with_gil(|py| -> PyResult<()> {
@@ -233,7 +241,7 @@ impl VHFparse for VHFparser {
     ///
     /// WARN: To preserve the idiomatic Rust code, data has to be allocated on to the Rust heap
     /// on top of the Python heap.
-    fn data(&self) -> ParseResult<Self::DataReturn> {
+    fn data(&self) -> ParseResult<Self::Data<'_>> {
         // Fetch from Python.
         if self.data_rs.borrow().is_none() {
             let array = Python::with_gil(|py| -> ParseResult<Array1<u64>> {
@@ -256,11 +264,15 @@ impl VHFparse for VHFparser {
         self.data_rs
             .borrow()
             .clone()
+            .map(|data| DataView {
+                data,
+                _lifetime: PhantomData,
+            })
             .ok_or(ParseError::InternalError)
     }
 
     /// For now, fetches from Python; Will chang to using Rust Mapv.
-    fn reduced_phase(&self) -> ParseResult<Self::TransformReturn<ReducedPhase>> {
+    fn reduced_phase(&self) -> ParseResult<Self::ReducedPhase<'_>> {
         // Fetch from Python.
         if self.phase_rs.borrow().is_none() {
             let array = Python::with_gil(|py| -> ParseResult<Array1<ReducedPhase>> {
@@ -281,6 +293,10 @@ impl VHFparse for VHFparser {
         self.phase_rs
             .borrow()
             .clone()
+            .map(|d| DataView {
+                data: d,
+                _lifetime: PhantomData,
+            })
             .ok_or(ParseError::InternalError)
     }
 }

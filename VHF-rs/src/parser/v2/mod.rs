@@ -3,7 +3,7 @@
 mod rollover;
 mod trace_timer;
 
-use super::{DurationOrEndTime, StartTime};
+use super::{DataView, DurationOrEndTime, StartTime, WordT};
 use crate::{M, ReducedPhase};
 use crate::{ParseError, ParseResult, VHFparse};
 use bytemuck::checked::try_cast_slice;
@@ -19,7 +19,8 @@ use std::{
     f64::consts::TAU,
     fs::{self, File},
     io::{BufReader, Read},
-    path::Path,
+    marker::PhantomData,
+    path::{Path, PathBuf},
     str::FromStr,
 };
 use trace_timer::TraceTimer;
@@ -214,8 +215,8 @@ impl TraceDetails {
 // 'a: Lifetime of file (as path) being read from.
 // 'd: Lifetime of mmap created during change of view window.
 #[derive(Debug)]
-pub struct VHFparser<'a> {
-    file: &'a Path,
+pub struct VHFparser {
+    file: PathBuf,
     /// This is the number of bytes associated header str.
     header_len: usize,
     /// This is the number of words associated to m_overflow indices.
@@ -232,10 +233,10 @@ pub struct VHFparser<'a> {
     /// Records m-offset of trace.
     m_mgr: Box<Option<RollOver>>,
     /// This is the internal store of the view window.
-    data: Option<Array1<u64>>, // No Rc<RefCell> due to passing out lifetime
+    data: Option<Array1<WordT>>, // No Rc<RefCell> due to passing out lifetime
 }
 
-impl<'a> VHFparser<'a> {
+impl VHFparser {
     /// V2 Binary file format parser.
     ///
     /// Data is only fetched when data or phase is requested.
@@ -244,7 +245,7 @@ impl<'a> VHFparser<'a> {
     /// - file: [Path] to file.
     /// - headers_only: If false, ManifoldManger is invoked not at init time, but at first data
     ///   fetch.
-    pub fn new(file: &'a Path, headers_only: bool) -> ParseResult<Self> {
+    pub fn new(file: &Path, headers_only: bool) -> ParseResult<Self> {
         log::debug!("Creating v2::VHFparser with {}", file.display());
 
         let mut file_bytes = BufReader::new(File::open(file)?).bytes();
@@ -339,9 +340,9 @@ impl<'a> VHFparser<'a> {
                 log::error!("Could not convert file_size from u64 to usize: {e}");
                 ParseError::ValueError
             })?;
-        let data_len_bytes =
+        let data_len_bytes: usize =
             file_len - ((PRE_REMAININGHEADER + header_len).div_ceil(8) * 8) - (m_overflow_len * 8);
-        if data_len_bytes % 8 != 0 {
+        if !data_len_bytes.is_multiple_of(8) {
             log::error!(
                 "Was the file truncated whilst writing data? Data length is not multiple of 8 bytes."
             );
@@ -371,7 +372,7 @@ impl<'a> VHFparser<'a> {
         };
 
         let mut s = Self {
-            file,
+            file: file.to_path_buf(),
             header_len,
             m_overflow_len,
             header,
@@ -425,7 +426,7 @@ impl<'a> VHFparser<'a> {
     }
 
     /// Similar to Python, self._m_arr will always already have m_overflow unwrapped.
-    fn m_arr(&'a self) -> ParseResult<Array1<M>> {
+    fn m_arr(&self) -> ParseResult<Array1<M>> {
         if self.m_mgr.is_none() {
             log::error!("Please run resolve_m_overflow_idxs first!");
             return Err(ParseError::ValueError);
@@ -444,10 +445,30 @@ impl<'a> VHFparser<'a> {
     }
 }
 
-impl<'a> VHFparse for VHFparser<'a> {
-    type DataReturn = Array1<u64>;
-    type TransformReturn<T> = Array1<T>;
-
+/// Data related to v2 VHF file.
+///
+/// Data returned by VHFparse is designed to not outlive the parser.
+/// ```compile_fail
+/// use vhf_parse::VHFparse;
+/// use vhf_parse::v2::VHFparser;
+/// let mut v = VHFparser::new(
+///     std::env::temp_dir().join("v2_linear.bin").as_path(), false
+/// ).unwrap();
+/// v.update_plot_timing(
+///     None,
+///     Some(vhf_parse::py_binds::DurationOrEndTime::Rel(RelTime(
+///         Span::new().seconds(1),
+///     ))),
+///     false,
+/// )
+/// .unwrap();
+///
+/// let rp = { v.reduced_phase().unwrap() };
+/// drop(v);
+///
+/// println!("rp", rp); // This has rp live longer than v!
+/// ```
+impl VHFparse for VHFparser {
     fn update_plot_timing(
         &mut self,
         start: Option<StartTime>,
@@ -475,7 +496,12 @@ impl<'a> VHFparse for VHFparser<'a> {
         Ok(())
     }
 
-    fn data(&self) -> ParseResult<Self::DataReturn> {
+    type Data<'d>
+        = ArrayView1<'d, WordT>
+    where
+        Self: 'd;
+
+    fn data(&self) -> ParseResult<Self::Data<'_>> {
         if self.m_mgr.is_none() {
             log::error!(
                 "Unable to fetch data as init was lazy! Consider running resolve_m_overflow_idxs first!"
@@ -490,15 +516,17 @@ impl<'a> VHFparse for VHFparser<'a> {
             return Err(ParseError::ValueError);
         };
 
-        // .cloned() needed as Self::DataReturn having &_ lifetime is still under work.
-        self.data.as_ref().cloned().ok_or(ParseError::ValueError)
+        self.data
+            .as_ref()
+            .map(Array1::view)
+            .ok_or(ParseError::ValueError)
     }
 
     fn resolve_m_overflow_idxs(&mut self) -> ParseResult<()> {
         if self.m_mgr.is_none() {
             let offset = (PRE_REMAININGHEADER + self.header_len).div_ceil(8) * 8;
             self.m_mgr.replace(RollOver::new(
-                self.file,
+                &self.file,
                 offset,
                 self.m_overflow_len,
                 self.m_offset,
@@ -508,32 +536,39 @@ impl<'a> VHFparse for VHFparser<'a> {
         Ok(())
     }
 
-    fn reduced_phase(&self) -> ParseResult<Self::TransformReturn<ReducedPhase>> {
+    type ReducedPhase<'d>
+        = DataView<'d, ReducedPhase>
+    where
+        Self: 'd;
+
+    fn reduced_phase(&self) -> ParseResult<Self::ReducedPhase<'_>> {
         let data = self.data()?;
+        if data.is_empty() {
+            return Ok(DataView {
+                data: Array1::zeros(0),
+                _lifetime: PhantomData,
+            });
+        }
+
         let mut result = data.mapv(|d| {
-            let IQMTriplet(i, _, _) = RawVHFWord::from(d).into();
-            i as f64
-        });
-        let q_arr = data.mapv(|d| {
-            let IQMTriplet(_, q, _) = RawVHFWord::from(d).into();
-            q as f64
+            let IQMTriplet(i, q, _) = RawVHFWord::from(d).into();
+            (i as f64).atan2(q as f64) / TAU
         });
         let m_arr = self.m_arr()?;
 
         debug_assert_eq!(m_arr.len(), result.len());
-        ndarray::par_azip!(
-            (i in &mut result, &q in &q_arr, &m in &m_arr) {
-                *i = (i.atan2(q)/TAU) + (m as f64)
-            }
-        );
+        result = result + m_arr.mapv_into_any(f64::from);
 
-        Ok(result)
+        Ok(DataView {
+            data: result,
+            _lifetime: PhantomData,
+        })
     }
 }
 
 #[cfg(feature = "internals")]
 /// Methods here are intended for unit tests.
-impl VHFparser<'_> {
+impl VHFparser {
     pub fn get_m_mgr(&self) -> Option<RollOverMgr<'_>> {
         self.m_mgr.as_ref().as_ref().map(RollOverMgr)
     }
