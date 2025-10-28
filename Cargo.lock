@@ -22,6 +22,7 @@ dependencies = [
  "log",
  "log4rs",
  "mmap-rs",
+ "ndarray",
  "nix 0.29.0",
  "num-traits",
  "numpy",
@@ -864,6 +865,7 @@ dependencies = [
  "portable-atomic-util",
  "rawpointer",
  "rayon",
+ "serde",
 ]
 
 [[package]]
