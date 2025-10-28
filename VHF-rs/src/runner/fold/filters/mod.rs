@@ -179,11 +179,7 @@ struct PolarAndOverflowRaw {
 ///   [WriteBlock]. Corresponding to `word_offset` argument, all MOverflowRaw from words in `words`
 ///   argument will not be returned!
 #[inline]
-fn unwrap_phases_in_window(
-    words: [Page; WINDOW_LEN],
-    word_offset: usize,
-    get_overflow_raw: bool,
-) -> PolarAndOverflowRaw {
+fn unwrap_phases_in_window(words: [Page; WINDOW_LEN], word_offset: usize) -> PolarAndOverflowRaw {
     let mut words = {
         use std::ops::Deref;
         words.iter().flat_map(Deref::deref).copied().enumerate()
@@ -225,14 +221,14 @@ fn unwrap_phases_in_window(
                 match mb.cmp(&ma) {
                     Ordering::Less => {
                         m_offset += 1;
-                        if !get_overflow_raw && elem_idx >= word_offset {
+                        if elem_idx >= word_offset {
                             indices.push(elem_idx.saturating_sub(word_offset));
                             signs.push(1);
                         }
                     }
                     Ordering::Greater => {
                         m_offset -= 1;
-                        if !get_overflow_raw && elem_idx >= word_offset {
+                        if elem_idx >= word_offset {
                             indices.push(elem_idx.saturating_sub(word_offset));
                             signs.push(-1);
                         }
