@@ -112,7 +112,8 @@ impl StreamFold {
             if vhf_iter_idx == 0 {
                 // Let the 0th window be the first non-empty page's first element in the tuple 0th
                 // and first. This ensures that the enumerate method's 0th index will be return the
-                // 0 sign change.
+                // zero sign change. As such, any idx_and_sign occurs on the second element of the
+                // tupled window, which the enumerated index corresponds with.
                 result.with_overflow_from_iter(
                     ([pages[PAGES_START].first().unwrap()])
                         .into_iter()

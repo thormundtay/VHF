@@ -125,3 +125,139 @@
 //! [fold operations]: https://en.wikipedia.org/wiki/Fold_(higher-order_function)
 //! [decimation]: https://en.wikipedia.org/wiki/Downsampling_(signal_processing)
 //! [sec:data_from_vhf_iter]: #data-from-vhfiter
+
+use crate::parser::consts::M_OVERFLOW;
+use crate::runner::VHFIter;
+use crate::runner::consts::{MMAP_PAGE_LEN as PAGE_LEN, VHF_MMAP_WINDOW_LEN as WINDOW_LEN};
+use crate::runner::process::pages::MmapPage as Page;
+use std::cmp::Ordering;
+use std::hint::unreachable_unchecked;
+use vhf_common::data_types::{IQMTriplet, Polar};
+
+/// Filter functions denoting that all phase has the same type as ReducedPhase, but this is scaled
+/// to the unit-circle instead of multiples of `m` (or equivalently, wavelength).
+type Phase = vhf_parse::ReducedPhase;
+/// The magnitude component of an unwrapped RawVHFWord.
+///
+/// Specific to just filtering functions for now.
+type Radius = f64; /* This is just that we requires floats. */
+
+/// Return type specifically for [unwrap_phases_in_window].
+struct PolarAndOverflowRaw {
+    /// Unwrapped Phase (i.e.: i16 limitation of m has been accounted for.)
+    ///
+    /// This is not normalized by 2π, i.e.: The phase here is not reduced (aka wavelength).
+    phase: Vec<Phase>,
+    /// Magnitude of Polar representation of [vhf_parse::VHFWord].
+    radius: Vec<Radius>,
+    // TODO: Tie the types here with the inner-types of MOverflowRaw.
+    overflow_raw: Option<(Vec<usize>, Vec<i8>)>,
+}
+
+/// Yield unwrapped_phase view of [VHFIter]::Item.
+///
+/// [VHFIter] releases windows where it is possible that the VHFWord's m_component requires
+/// unwrapping. This function takes care of having to check if the m value has overflowed, and
+/// returns the corresponding *phase* (not reduced_phase!) along with the radius value, and
+/// corresponding overflow indices and overflow sign.
+///
+/// # Input
+/// `words`: Iter view of all data originating from [VHFIter]::Item.
+/// `word_offset`: This is the caller's intended 0th element, and is the n-th element starting from
+/// the 0th-element of the 0th-nonempty page.
+///   The rationale is that it might be possible for the caller to demand a larger view into data
+///   prior to the 0th element for filtering reasons, but only has intent to write data out
+///   starting from the caller's intended 0th element.
+/// `get_overflow_raw`: Skip obtaining Option<...> in the return if false.
+///
+/// # Return
+/// - `Vec<...>`:
+///   - Phase: VHFWord -> Phase after accounting for need to m_overwrap.
+///   - Radius: VHFWord -> Magnitude.
+/// - `Option<...>`:
+///   These are the private fields that should eventually populate into the private fields of
+///   [WriteBlock]. Corresponding to `word_offset` argument, all MOverflowRaw from words in `words`
+///   argument will not be returned!
+#[inline]
+fn unwrap_phases_in_window(
+    words: [Page; WINDOW_LEN],
+    word_offset: usize,
+    get_overflow_raw: bool,
+) -> PolarAndOverflowRaw {
+    let mut words = {
+        use std::ops::Deref;
+        words.iter().flat_map(Deref::deref).copied().enumerate()
+    };
+
+    let mut phase = Vec::with_capacity(WINDOW_LEN * PAGE_LEN);
+    let mut radius = Vec::with_capacity(WINDOW_LEN * PAGE_LEN);
+    let mut indices = Vec::new();
+    let mut signs = Vec::new();
+
+    // Pull out the 0th element from the iterator.
+    let zeroth = words.next(); /* next does "move" the internal pointer */
+    if zeroth.is_none() {
+        return PolarAndOverflowRaw {
+            phase: Vec::new(),
+            radius: Vec::new(),
+            overflow_raw: None,
+        };
+    };
+    let zeroth = zeroth.unwrap();
+    {
+        let Polar {
+            radius: r,
+            phase: p,
+        } = (&zeroth.1).into();
+        phase.push(p);
+        radius.push(r);
+    };
+
+    // Now have to use the zeroth element and the rest of `words` to populate all the values.
+    use itertools::Itertools;
+    [zeroth].into_iter().chain(words).tuple_windows().fold(
+        0i32,
+        |mut m_offset, ((_, wa), (elem_idx, wb))| {
+            // First check if there's a need to change the m_offset
+            let IQMTriplet(_, _, ma) = wa.into();
+            let IQMTriplet(_, _, mb) = wb.into();
+            if ma.abs_diff(mb) >= M_OVERFLOW {
+                match mb.cmp(&ma) {
+                    Ordering::Less => {
+                        m_offset += 1;
+                        if !get_overflow_raw && elem_idx >= word_offset {
+                            indices.push(elem_idx.saturating_sub(word_offset));
+                            signs.push(1);
+                        }
+                    }
+                    Ordering::Greater => {
+                        m_offset -= 1;
+                        if !get_overflow_raw && elem_idx >= word_offset {
+                            indices.push(elem_idx.saturating_sub(word_offset));
+                            signs.push(-1);
+                        }
+                    }
+                    Ordering::Equal => unsafe { unreachable_unchecked() },
+                }
+            };
+            let Polar {
+                radius: r,
+                phase: p,
+            } = wb.into();
+            phase.push(p.mul_add(m_offset as _, std::f64::consts::TAU * ((1 << 16) as f64)));
+            radius.push(r);
+
+            m_offset
+        },
+    );
+
+    PolarAndOverflowRaw {
+        phase,
+        radius,
+        overflow_raw: if indices.is_empty() {
+            None
+        } else {
+            Some((indices, signs))
+        },
+    }
+}
