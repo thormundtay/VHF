@@ -1,5 +1,6 @@
 //! Structs related to representing [map operations][super::super::StreamFoldOp::Map].
 
+use ndarray::Array2;
 use serde::Serialize;
 use serde::ser::SerializeMap;
 
@@ -246,14 +247,19 @@ where
     /// >>> D = 1
     /// ```
     /// `input` specifies the appropriate index in the event there is more than 1 input.
-    // Ideally we would use Array2<T> instead of Vec<<Vec<T>>, but we don't need ndarray in VHF
-    // crate so far
-    #[allow(non_snake_case)]
-    SS {
-        A: Vec<Vec<T>>,
-        B: Vec<Vec<T>>,
-        C: Vec<Vec<T>>,
-        D: Vec<Vec<T>>,
-        input: usize,
-    },
+    SS(Box<StateSpace<T>>),
+}
+
+/// See [KernReprs::SS].
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[allow(non_snake_case)]
+pub struct StateSpace<T>
+where
+    T: num_traits::Num + Serialize,
+{
+    A: Array2<T>,
+    B: Array2<T>,
+    C: Array2<T>,
+    D: Array2<T>,
+    input: usize,
 }
