@@ -70,12 +70,20 @@ fn main() -> Result<()> {
         Err(e) => log::error!("Main loop occurred with error = {e:?}"),
     };
 
-    // VHF cleanup
-    vhf.stop()?;
-
-    // File writer clean up
+    // VHF and file_writer cleanup
+    let vhf_stop = vhf.stop();
     drop(writer_send);
-    writer_thread.join().expect("Could not close writer thread");
+
+    if vhf_stop.is_err() {
+        log::error!("Error occured while trying to stop VHF!");
+        vhf_stop?;
+    }
+
+    let writer_stop = writer_thread.join();
+    if writer_stop.is_err() {
+        log::error!("Error occured while trying to stop writer!");
+        return Err(Error::InternalInconsistency);
+    }
 
     Ok(())
 }
