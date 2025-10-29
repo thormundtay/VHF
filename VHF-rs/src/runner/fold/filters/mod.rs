@@ -130,9 +130,11 @@ use crate::parser::consts::M_OVERFLOW;
 use crate::runner::VHFIter;
 use crate::runner::consts::{MMAP_PAGE_LEN as PAGE_LEN, VHF_MMAP_WINDOW_LEN as WINDOW_LEN};
 use crate::runner::process::pages::MmapPage as Page;
+use crate::runner::writer::WriteBlock;
 use std::cmp::Ordering;
 use std::hint::unreachable_unchecked;
 use vhf_common::data_types::{IQMTriplet, Polar};
+use vhf_parse::VHFWord;
 
 /// Filter functions denoting that all phase has the same type as ReducedPhase, but this is scaled
 /// to the unit-circle instead of multiples of `m` (or equivalently, wavelength).
@@ -256,4 +258,63 @@ fn unwrap_phases_in_window(words: [Page; WINDOW_LEN], word_offset: usize) -> Pol
             Some((indices, signs))
         },
     }
+}
+
+/// Packs (radius, unwrapped phase) back into VHFWord for writing.
+///
+/// # Input
+/// - `radius`: This is the values that were obtained prior to the filtering, which are decimated
+///   as necessary to represent the phase.
+/// - `phase`: This is the phase values that were obtained as a result of filtering.
+/// - `idx`: The 0th element from `phase` has the corresponding `index` in the result of the
+///   filtered stream.
+///
+/// # Assumptions
+/// Assumes that both phase and idx
+fn pack_into_write_block(
+    mut radius: impl Iterator<Item = Radius>,
+    phase: impl Iterator<Item = Phase>,
+    idx: usize,
+) -> WriteBlock {
+    let mut m_idx = Vec::new();
+    let mut m_sign = Vec::new();
+    let mut result = Vec::with_capacity({
+        let r = radius.size_hint();
+        let p = phase.size_hint();
+        r.0.max(r.1.unwrap_or(0)).max(p.0).max(p.1.unwrap_or(0))
+    });
+
+    let mut phase = phase.enumerate(); // We only need to enumerate on a single of the two iterators.
+
+    // Perform a "peek" to allow for use of `tuple_windows` method later.
+    let Some(ip0) = phase.next() else {
+        return WriteBlock::default();
+    };
+    let Some(r0) = radius.next() else {
+        panic!("Expected to find radius since phase was empty");
+    };
+    // Peeked value has to be packed into VHFWord.
+    result.push({
+        Polar {
+            radius: r0,
+            phase: ip0.1,
+        }
+        .into()
+    });
+
+    let phase = [ip0].into_iter().chain(phase);
+    let radius = [r0].into_iter().chain(radius);
+
+    use itertools::Itertools;
+    result.extend(phase.zip(radius).tuple_windows().map(
+        |(((_, pa), ra), ((ub, pb), rb))| -> VHFWord {
+            todo!();
+        },
+    ));
+
+    let mut result = WriteBlock::new(result);
+    if !m_idx.is_empty() {
+        result.with_overflow(m_idx, m_sign);
+    }
+    result
 }

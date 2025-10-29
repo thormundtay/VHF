@@ -58,7 +58,6 @@ impl WriteBlock {
 
     /// For signs of m-overflows relative to start of Writeblock data, along with the indices
     /// relative to the start of write-block data.
-    #[allow(dead_code)]
     pub(super) fn with_overflow(&mut self, index: Vec<usize>, sign: Vec<i8>) {
         debug_assert_eq!(index.len(), sign.len());
         self.m_overflow_idx = Some(index);
