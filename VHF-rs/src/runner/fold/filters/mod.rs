@@ -262,6 +262,9 @@ fn unwrap_phases_in_window(words: [Page; WINDOW_LEN], word_offset: usize) -> Pol
 
 /// Packs (radius, unwrapped phase) back into VHFWord for writing.
 ///
+/// This is used by filters which act on unwrapped phase (with possible radius being left
+/// untouched), who then have to re-pack the filtered output for [crate::runner::writer].
+///
 /// # Input
 /// - `radius`: This is the values that were obtained prior to the filtering, which are decimated
 ///   as necessary to represent the phase.
@@ -270,7 +273,10 @@ fn unwrap_phases_in_window(words: [Page; WINDOW_LEN], word_offset: usize) -> Pol
 ///   filtered stream.
 ///
 /// # Assumptions
-/// Assumes that both phase and idx
+/// Assumes that both phase and idx have the same number of elements.
+///
+/// # Returns
+/// WriteBlock as returned by [super::func::VHFItemFn].
 fn pack_into_write_block(
     mut radius: impl Iterator<Item = Radius>,
     phase: impl Iterator<Item = Phase>,
@@ -286,7 +292,8 @@ fn pack_into_write_block(
 
     let mut phase = phase.enumerate(); // We only need to enumerate on a single of the two iterators.
 
-    // Perform a "peek" to allow for use of `tuple_windows` method later.
+    // Perform a "peek" to determine the initial state for the scan later. We cannot use a generic
+    // initial element in scan because it could be misinterpreted as an overflow.
     let Some(ip0) = phase.next() else {
         assert!(
             radius.next().is_none(),
@@ -297,22 +304,44 @@ fn pack_into_write_block(
     let r0 = radius
         .next()
         .expect("Expected to find radius since phase was empty");
+    let word0: VHFWord = Polar {
+        radius: r0,
+        phase: ip0.1,
+    }
+    .into();
     // Peeked value has to be packed into VHFWord.
-    result.push({
-        Polar {
-            radius: r0,
-            phase: ip0.1,
-        }
-        .into()
-    });
+    result.push(word0);
 
-    let phase = [ip0].into_iter().chain(phase);
-    let radius = [r0].into_iter().chain(radius);
+    result.extend(phase.zip(radius).scan(
+        word0,
+        |prev_word, ((elem_idx, phase), radius)| -> Option<VHFWord> {
+            // Obtain subsequent packed word in this scan step.
+            let next_word: VHFWord = Polar { radius, phase }.into();
 
-    use itertools::Itertools;
-    result.extend(phase.zip(radius).tuple_windows().map(
-        |(((_, pa), ra), ((ub, pb), rb))| -> VHFWord {
-            todo!();
+            // Check for m-overflow
+            let IQMTriplet(_, _, ma) = (*prev_word).into();
+            let IQMTriplet(_, _, mb) = next_word.into();
+
+            // Push onto m_idx and m_sign if so.
+            if ma.abs_diff(mb) >= M_OVERFLOW {
+                match mb.cmp(&ma) {
+                    // WARN: This currently strong limits the number of elements that can be
+                    // written out to file!
+                    Ordering::Less => {
+                        m_idx.push(elem_idx.checked_add(idx).expect("Getting the index relative to the position with the stream is currently too large!"));
+                        m_sign.push(1);
+                    }
+                    Ordering::Greater => {
+                        m_idx.push(elem_idx.checked_add(idx).expect("Getting the index relative to the position with the stream is currently too large!"));
+                        m_sign.push(-1);
+                    }
+                    Ordering::Equal => unsafe { unreachable_unchecked() },
+                }
+            };
+
+            // Complete scan step
+            *prev_word = next_word;
+            Some(next_word)
         },
     ));
 
