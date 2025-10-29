@@ -288,11 +288,15 @@ fn pack_into_write_block(
 
     // Perform a "peek" to allow for use of `tuple_windows` method later.
     let Some(ip0) = phase.next() else {
+        assert!(
+            radius.next().is_none(),
+            "phase was found to be empty while radius was not"
+        );
         return WriteBlock::default();
     };
-    let Some(r0) = radius.next() else {
-        panic!("Expected to find radius since phase was empty");
-    };
+    let r0 = radius
+        .next()
+        .expect("Expected to find radius since phase was empty");
     // Peeked value has to be packed into VHFWord.
     result.push({
         Polar {
