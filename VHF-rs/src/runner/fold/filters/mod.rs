@@ -145,6 +145,7 @@ type Phase = vhf_parse::ReducedPhase;
 type Radius = f64; /* This is just that we requires floats. */
 
 /// Return type specifically for [unwrap_phases_in_window].
+#[derive(Default)]
 struct PolarAndOverflowRaw {
     /// Unwrapped Phase (i.e.: i16 limitation of m has been accounted for.)
     ///
@@ -193,15 +194,9 @@ fn unwrap_phases_in_window(words: [Page; WINDOW_LEN], word_offset: usize) -> Pol
     let mut signs = Vec::new();
 
     // Pull out the 0th element from the iterator.
-    let zeroth = words.next(); /* next does "move" the internal pointer */
-    if zeroth.is_none() {
-        return PolarAndOverflowRaw {
-            phase: Vec::new(),
-            radius: Vec::new(),
-            overflow_raw: None,
-        };
+    let Some(zeroth) = words.next() else {
+        return PolarAndOverflowRaw::default();
     };
-    let zeroth = zeroth.unwrap();
     {
         let Polar {
             radius: r,
