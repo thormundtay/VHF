@@ -131,8 +131,12 @@ use crate::runner::VHFIter;
 use crate::runner::consts::{MMAP_PAGE_LEN as PAGE_LEN, VHF_MMAP_WINDOW_LEN as WINDOW_LEN};
 use crate::runner::process::pages::MmapPage as Page;
 use crate::runner::writer::WriteBlock;
+use ndarray::{Array1, ArrayView1};
+use sci_rs::signal::filter::prelude::FftProcessor;
 use std::cmp::Ordering;
 use std::hint::unreachable_unchecked;
+use std::num::NonZeroUsize;
+use std::sync::{Arc, Mutex};
 use vhf_common::data_types::{IQMTriplet, Polar};
 use vhf_parse::VHFWord;
 
@@ -345,4 +349,73 @@ fn pack_into_write_block(
         result.with_overflow(m_idx, m_sign);
     }
     result
+}
+
+/// Filtfilt but specialized for 1D-arrays with decimation and FFT-styled convolution.
+///
+/// # Notes
+/// Default parameters of scipy's filtfilt is currently used.
+///
+/// Currently only supports FIR filters. See [sci_rs::signal::filter::filtfilt1_fir_fft].
+///
+/// # Inputs
+/// - `data`: The signal where `filtfilt` is being applied to.
+/// - `decimation_factor`: Every `decimation_factor`th point is taken.  
+///   In more convoluted words, a `decimation_factor` of 1 does not decimate.
+/// - `initial_skip`: Ignores the first `initial_skip` number of points.  
+///   In other words, having a value of 0 here means the 0th data point in the result of `filtfilt`
+///   will be included in the returned result.
+/// - `b`: Numerator of filter.
+/// - `a`: Denominator of filter.
+/// - `proc`: Implementation detail - For optimizing FFT's that utilise the same convolution
+///   kernel.
+///
+/// # Output
+/// The result is an iterator to minimize the number of heap-allocations.
+/// - `decimated_array`: The filtfilt resulting array is decimated in accordance to the
+///   `initial_skip` and `decimation_factor`.
+///
+/// # Errors
+/// See [sci_rs::signal::filter::filtfilt1_fir_fft].
+/// As we expect this function to be ran in an unfallible context, a () as error is used.
+///
+/// # Assumptions
+/// Number of elements in `data` (and hence the result of `filtfilt`) is greater than
+/// `initial_skip`. This thus ensures that is at least one element returned from this function.
+/// This way, the filtering process is not extremely lossy, as there is at least one data point per
+/// input window.
+/// Ideally, the lossiness of the filtering process is limited strictly to `pad`-overlapped
+/// regions.
+#[allow(unused_variables)]
+#[inline]
+fn filtfilt_f64(
+    data: Array1<f64>,
+    decimation_factor: NonZeroUsize,
+    initial_skip: usize,
+    b: ArrayView1<f64>,
+    a: ArrayView1<f64>,
+    proc: Arc<Mutex<impl FftProcessor<f64, f64>>>,
+) -> core::result::Result<impl Iterator<Item = f64>, ()> {
+    // /* WARN: Responsibility of caller to check ! */
+    // assert_eq!(a.len(), 1, "filtfilt currently only supports FIR");
+
+    let decimation_factor = decimation_factor.get();
+
+    // Ideally this assertion should occur prior to the construction of the VHFItemFn.
+    assert!(
+        initial_skip < data.len(),
+        "[filtfilt_f64] Decimation-related parameters is greater than number of available elements"
+    );
+
+    use sci_rs::signal::filter::{FiltFiltPad, filtfilt1_fir_fft};
+    filtfilt1_fir_fft(
+        b,
+        data,
+        Some(FiltFiltPad::default()),
+        &mut *proc.lock().expect("Failed to get FFTProcessor mutex"),
+    )
+    .map_err(|e| {
+        log::error!("[filtfilt_f64] Error occurred trying to perform filtfilt1_fir_fft!: {e}");
+    })
+    .map(|v| v.into_iter().skip(initial_skip).step_by(decimation_factor))
 }
