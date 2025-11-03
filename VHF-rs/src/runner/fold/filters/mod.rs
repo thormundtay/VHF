@@ -126,6 +126,7 @@
 //! [decimation]: https://en.wikipedia.org/wiki/Downsampling_(signal_processing)
 //! [sec:data_from_vhf_iter]: #data-from-vhfiter
 
+use super::repr::StreamFoldMapKernRepr;
 use crate::parser::consts::M_OVERFLOW;
 use crate::runner::VHFIter;
 use crate::runner::consts::{MMAP_PAGE_LEN as PAGE_LEN, VHF_MMAP_WINDOW_LEN as WINDOW_LEN};
@@ -418,4 +419,68 @@ fn filtfilt_f64(
         log::error!("[filtfilt_f64] Error occurred trying to perform filtfilt1_fir_fft!: {e}");
     })
     .map(|v| v.into_iter().skip(initial_skip).step_by(decimation_factor))
+}
+
+impl super::StreamFold {
+    /// Constructs StreamFold which returns function that filters from VHFIter that allows for
+    /// writing.
+    ///
+    /// Constructed filter follows scipy, but uses fourier convolution unlike scipy, and assumes
+    /// *default* additional parameters to the filtfilt function. In principle one can think of the
+    /// function as having, filtfilt applied to the data, before decimation is applied. This filter
+    /// is applied on both unwrapped phase and radius before packed into writing.
+    ///
+    /// # Arguments
+    /// - `decimation_factor`: Every `decimation_factor`th point is taken. In more convoluted
+    ///   words, a `decimation_factor` of 1 does not decimate.
+    /// - `filtfilt_b`: The numerator coeffecients used by
+    ///   [sci_rs::signal::filter::FiltFilt::filtfilt] filter.
+    /// - `filtfilt_a`: The denominator coeffecients used by
+    ///   [sci_rs::signal::filter::FiltFilt::filtfilt] filter.
+    ///   See panics section: Only a FIR filter is currently supported.
+    /// - `filter_details`: How the values of filtfilt_b and filtfilt_a were created.
+    ///   - `name`: This is the name of the filter.
+    ///   - `args`: Additional parameters passed to name in the creation of the filter.
+    ///   - `value`: This is the numerical values that used to perform the filters. They should be
+    ///     identical to values used in `filtfilt_b` and `filtfilt_a`.
+    ///
+    /// # Notes
+    /// For performance reasons, the filter used is in fact
+    /// [sci_rs::signal::filter::filtfilt1_fir_fft].
+    ///
+    /// # Panics
+    /// - Assumes filtfilt_b to be at least 1-element long.
+    /// - filtfilt_a should currently be just `[1.0]`, as only FIR filtfilt is supported.
+    // We expect this function to be called at config time, where the numerical values are being
+    // interpreted from somewhere else.
+    // In the case where the use demands that they wish to use Firwin to generate the values, we
+    // leave it to the caller to generate the corresponding `b, a` values.
+    pub fn filtfilt(
+        decimation_factor: NonZeroUsize,
+        filtfilt_b: &[f64],
+        filtfilt_a: &[f64],
+        filter_details: StreamFoldMapKernRepr<f64>,
+    ) -> Self {
+        // FIR specific assumptions for now.
+        assert_eq!(filtfilt_a.len(), 1, "filtfilt currently only supports FIR");
+        assert_eq!(
+            *filtfilt_a.first().unwrap(),
+            1.,
+            "filtfilt currently only supports FIR"
+        );
+        // FIR: Normalize against a[0].
+        let (b, a): (_, Array1<f64>) = {
+            let a0 = *filtfilt_a.first().unwrap();
+            (
+                if a0 != 1. {
+                    Array1::from_iter(filtfilt_b.iter().map(|&v| v / a0))
+                } else {
+                    Array1::from_iter(filtfilt_b.iter().cloned())
+                },
+                Array1::ones(1),
+            )
+        };
+
+        todo!()
+    }
 }
