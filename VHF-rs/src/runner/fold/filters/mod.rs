@@ -126,7 +126,13 @@
 //! [decimation]: https://en.wikipedia.org/wiki/Downsampling_(signal_processing)
 //! [sec:data_from_vhf_iter]: #data-from-vhfiter
 
-use super::repr::StreamFoldMapKernRepr;
+use super::{
+    super::fold::MapArg,
+    StreamFoldFunction, StreamFoldOp, StreamFoldRepr,
+    repr::{
+        Filter, StreamFoldMapFilterRepr, StreamFoldMapKernRepr, StreamFoldMapRepr, StreamFoldOpRepr,
+    },
+};
 use crate::parser::consts::M_OVERFLOW;
 use crate::runner::VHFIter;
 use crate::runner::consts::{MMAP_PAGE_LEN as PAGE_LEN, VHF_MMAP_WINDOW_LEN as WINDOW_LEN};
@@ -481,6 +487,7 @@ impl super::StreamFold {
                 Array1::ones(1),
             )
         };
+        let b_len = b.len();
 
         // For every window, the pages_start offset serves as a look-back into the previous window.
         // As such, we require that closure which performs filtering on VHFIter::Item to assert
@@ -562,6 +569,30 @@ impl super::StreamFold {
             pack_into_write_block(radius, decimated_phase, write_idx)
         };
 
-        todo!()
+        let func = StreamFoldFunction {
+            func: Arc::new(func),
+            step_by: WINDOW_LEN
+                .checked_sub(pages_start)
+                // Safety: Check was done at top of this function.
+                .unwrap(),
+            pad: pages_start,
+            op: StreamFoldOp::Map(Some(MapArg {
+                effective_decimation: decimation_factor,
+                // NonZeroUsize::max(self, other) is nightly)
+                num_before_first_drop: NonZeroUsize::new(b_len.max(decimation_factor.get()))
+                    // Safety: decimation_factor is already a NonZeroUsize
+                    .unwrap(),
+            })),
+        };
+
+        let repr = StreamFoldRepr(Box::new([StreamFoldOpRepr::Map(Box::new(
+            StreamFoldMapRepr::Filter(StreamFoldMapFilterRepr {
+                filter_type: Filter::LFilter,
+                filt_args: filter_details,
+                step_by: decimation_factor.get(),
+            }),
+        ))]));
+
+        Self { func, repr }
     }
 }

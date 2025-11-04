@@ -126,6 +126,9 @@ where
     /// `args` will be silently discarded if name was not given.
     ///
     /// [1]: #structfield.value
+    // Note: We don't need this for the serde properties, only that it is convenient to represent
+    // all valid Python args/kwargs. It is not yet apparent how well this will translate to other
+    // serialization schemes, such as (b)XML for the likes of NetCDF writer.
     pub arg: serde_json::Value,
     /// The value used by the function during the processing step.
     ///
