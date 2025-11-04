@@ -155,10 +155,11 @@ struct PolarAndOverflowRaw {
     /// Unwrapped Phase (i.e.: i16 limitation of m has been accounted for.)
     ///
     /// This is not normalized by 2π, i.e.: The phase here is not reduced (aka wavelength).
-    phase: Vec<Phase>,
+    unwrapped_phase: Vec<Phase>,
     /// Magnitude of Polar representation of [vhf_parse::VHFWord].
     radius: Vec<Radius>,
     // TODO: Tie the types here with the inner-types of MOverflowRaw.
+    #[allow(dead_code)]
     overflow_raw: Option<(Vec<usize>, Vec<i8>)>,
 }
 
@@ -250,7 +251,7 @@ fn unwrap_phases_in_window(words: [Page; WINDOW_LEN], word_offset: usize) -> Pol
     );
 
     PolarAndOverflowRaw {
-        phase,
+        unwrapped_phase: phase,
         radius,
         overflow_raw: if indices.is_empty() {
             None
@@ -479,6 +480,86 @@ impl super::StreamFold {
                 },
                 Array1::ones(1),
             )
+        };
+
+        // For every window, the pages_start offset serves as a look-back into the previous window.
+        // As such, we require that closure which performs filtering on VHFIter::Item to assert
+        // that the assumption is upheld.
+        let pages_start = decimation_factor.get().div_ceil(PAGE_LEN);
+        // Clippy: !(pages_start < WINDOW_LEN)
+        if pages_start >= WINDOW_LEN {
+            log::error!(
+                "decimation_factor (={decimation_factor}) provided into StreamFold::filtfilt is larger than what VHF_MMAP_WINDOW_LEN can support!"
+            );
+            assert!(
+                pages_start < WINDOW_LEN,
+                "Provided decimation_factor is too large for StreamFold!"
+            );
+        };
+
+        let fft_processor = {
+            use sci_rs::signal::filter::prelude::get_fft_processor;
+            // WARN: This is likely to hinder the multiprocessed nature of the filtering step.
+            // However this is necessary as it is either pariter::scope or .parallel_map_scoped
+            // that cannot accept a FnMut. (See `stream.rs`.)
+            Arc::new(Mutex::new(get_fft_processor()))
+        };
+
+        let func = move |(vhf_iter_idx, pages): <VHFIter as Iterator>::Item| -> WriteBlock {
+            // Check assumptions of pages_start are valid
+            {
+                if vhf_iter_idx == 0 {
+                    pages.iter().take(pages_start).for_each(|p| {
+                        debug_assert!(matches!(p, Page::Empty));
+                    });
+                    debug_assert!(matches!(pages[pages_start], Page::Page(_)));
+                } else {
+                    pages.iter().take(pages_start + 1).for_each(|p| {
+                        debug_assert!(matches!(p, Page::Page(_)));
+                    });
+                };
+            };
+
+            // Start off by phase unwrapping `pages` input.
+            // We have to redo the idx_and_sign variable ourselves after filtfilt_f64.
+            let PolarAndOverflowRaw {
+                unwrapped_phase,
+                radius,
+                ..
+            } = {
+                // word_offset is 0, which takes in the context of the entire WINDOW for
+                // m_overflow unwrapping.
+                let word_offset = 0 /* TODO: Determine! */;
+                unwrap_phases_in_window(pages, word_offset)
+            };
+
+            let initial_skip = 0; /* TODO: Determine! */
+            // We can now decimate the phase.
+            let decimated_phase = filtfilt_f64(
+                Array1::from_vec(unwrapped_phase),
+                decimation_factor,
+                initial_skip,
+                b.view(),
+                a.view(),
+                fft_processor.clone(),
+            )
+            .expect("filtfilt_f64 on unwrapped phase failed!");
+            // We need to also take the correct values of phase. We average in accordance with the
+            // weights provided by `b` and `a`.
+            let radius = filtfilt_f64(
+                Array1::from_vec(radius),
+                decimation_factor,
+                initial_skip,
+                b.view(),
+                a.view(),
+                fft_processor.clone(),
+            )
+            .expect("filtfilt_f64 on radius failed!");
+
+            // We take the decimated phase and regenerate the corresponding raw words and
+            // idx_and_sign offset. This gives us the desired WriteBlock
+            let write_idx = 0; /* TODO: Determine */
+            pack_into_write_block(radius, decimated_phase, write_idx)
         };
 
         todo!()
