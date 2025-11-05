@@ -15,4 +15,4 @@ clean_aux:
 %.png: %.tex
 # shell-escape needed to emit as png
 # -halt-on-error for easier Makefile
-	pdflatex -halt-on-error -shell-escape $<
+	pdflatex -interaction=nonstopmode -halt-on-error -shell-escape $< < /dev/null
