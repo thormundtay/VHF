@@ -4,6 +4,7 @@
     doc = embed_doc_image::embed_image!("filter_wo_decimation", "src/runner/fold/filters/images/filter_wo_decimation.png"),
     doc = embed_doc_image::embed_image!("final_window_case_a", "src/runner/fold/filters/images/final_window_case_a.png"),
     doc = embed_doc_image::embed_image!("final_window_case_b", "src/runner/fold/filters/images/final_window_case_b.png"),
+    doc = embed_doc_image::embed_image!("initial_pages", "src/runner/fold/filters/images/initial_pages.png"),
 ))]
 #![cfg_attr(
     not(feature = "doc-images"),
@@ -121,6 +122,23 @@
 //!   data located within the end `Pad`ding should be processed and written to file.
 //!   Note!: This principle can be violated at your own risk of coordination with
 //!   [VHFIter][crate::runner::VHFIter].
+//!
+//! With the steady-state and terminal case considered, we now talk about the initial conditions,
+//! that is, the pages in the front of `(VHF_)MMAP_WINDOW`, which includes up to the first page
+//! after all pages within the `PAD`. As has been mentioned about the terminal case, we know that
+//! the output from the filtering process of previous `MMAP_WINDOW` would have already been written
+//! out. As such, repeated filtering of such data should be discarded prior to file writing. As a
+//! more concrete example, suppose in the diagram below that page `p` is within the `PAD`
+//! specified. As it is on the left, it means that all output data derived exclusively from data
+//! within page `p` and prior is to be discarded, as it has already been processed and written to
+//! file by the filter acting on the previous `MMAP_WINDOW`. Consequently, as long as any element
+//! from page `p+1` is used by the filter context, the corresponding output must thus be written to
+//! the output.
+//!
+//! ![initial_pages]
+//!
+//! The diagram shows the rejection of data being passed into the output if all input is array
+//! elements from the `PAD` region.
 //!
 //! [fold operations]: https://en.wikipedia.org/wiki/Fold_(higher-order_function)
 //! [decimation]: https://en.wikipedia.org/wiki/Downsampling_(signal_processing)
