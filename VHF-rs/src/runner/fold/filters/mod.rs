@@ -506,6 +506,7 @@ impl super::StreamFold {
             )
         };
         let b_len = b.len();
+        let a_len = a.len();
 
         // For every window, the pages_start offset serves as a look-back into the previous window.
         // As such, we require that closure which performs filtering on VHFIter::Item to assert
@@ -521,6 +522,16 @@ impl super::StreamFold {
                 "Provided decimation_factor is too large for StreamFold!"
             );
         };
+        // See initial_skip derivation below.
+        assert!(
+            b_len.max(a_len)
+                < WINDOW_LEN
+                    .checked_sub(pages_start)
+                    .unwrap()
+                    .checked_mul(PAGE_LEN)
+                    .expect("(window_len - page_start) * PAGE_LEN > usize::MAX"),
+            "Given filter is too long!"
+        );
 
         let fft_processor = {
             use sci_rs::signal::filter::prelude::get_fft_processor;
@@ -544,6 +555,7 @@ impl super::StreamFold {
                     });
                 };
             };
+            let pad = pages_start;
 
             // Start off by phase unwrapping `pages` input.
             // We have to redo the idx_and_sign variable ourselves after filtfilt_f64.
@@ -554,11 +566,110 @@ impl super::StreamFold {
             } = {
                 // word_offset is 0, which takes in the context of the entire WINDOW for
                 // m_overflow unwrapping.
-                let word_offset = 0 /* TODO: Determine! */;
+                let word_offset = 0;
                 unwrap_phases_in_window(pages, word_offset)
             };
 
-            let initial_skip = 0; /* TODO: Determine! */
+            // filtfilt_f64 first performs the filtering on the m-overflow unwrapped window.
+            // Thereafter, we're skipping as elements until the filter does utilise the 0th
+            // element of the (PAD+1)th page. However, decimation skipping from previous pages
+            // must be accounted for, and thus might not simply just be the first filter utilising
+            // the 0th element of (PAD+1)th page
+            let initial_skip = if vhf_iter_idx != 0 {
+                // This is written to not assume FIR
+                let filter_len = b_len.max(a_len);
+                // In the previous (vhf_iter_idx - 1) windows, there are
+                // * (WINDOW_LEN - 2*PAD)*vhf_iter_idx non-overlapping pages.
+                // * PAD*(vhf_iter_idx⊖ 1) overlapping pages.
+                // where ⊖  denotes saturating_sub. (This is the same as regular subtraction as
+                // vhf_iter_idx ≥ 1 here.)
+                // This gives a total of `(WINDOW_LEN-PAD)*vhf_iter_idx - PAD` pages over all
+                // previous windows.
+                //
+                // Next, we have PAD number of pages in this window, which gives the 0th element in
+                // the `PAD+1` page in this window to have an absolute index of
+                // `(WINDOW_LEN-PAD)*vhf_iter_idx * PAGE_LEN + 1`.
+                //
+                // Since the 0th through `decimation_factor - 1`th element (as in the 0th window)
+                // is dropped, it means that only integer multiple of `decimation_factor`th
+                // elements are taken.
+                // Thus, we need to find the lowest value of `j` where
+                // `filter_len + j * decimation_factor ≥ (WINDOW_LEN-PAD)*vhf_iter_idx * PAGE_LEN + 1`.
+                // The solution to `j` is
+                // `((WINDOW_LEN-PAD)*vhf_iter_idx * PAGE_LEN + 1 - filter_len).div_ceil(decimation_factor)`
+                //
+                // We now need to offset by the fact this window only has elements that starts from
+                // index ``.
+                // This would give the initial_skip value of
+                // `((WINDOW_LEN-PAD)*vhf_iter_idx * PAGE_LEN + 1 - filter_len).div_ceil(decimation_factor) * decimation_factor
+                //   - (((WINDOW_LEN-PAD)*vhf_iter_idx - PAD) * PAGE_LEN + 1)`
+                //
+                // Simplify by:
+                // v = WINDOW_LEN-PAD
+                // p = PAGE_LEN
+                // df = decimation_factor
+                // f = filter_len
+                // i = vhf_iter_idx
+                // Initial skip is thus
+                // `(vip + 1 - f).div_ceil(df)*df - ((vi - PAD)*p + 1)`
+                // `= (vip + 1 - f).div_ceil(df)*df - (vip + 1 - p*PAD)`
+                // Further simplify with
+                // x = vip + 1 - f,
+                // x+y = (vip - p*PAD + 1)
+                //   ⇒ y = f - p*PAD
+                // which gives Initial skip to be
+                // x.div_ceil(df)*df - x - y
+                //
+                // Use Identity:
+                // `a.div_ceil(b) * b - a = (b - a mod b) mod b`.
+                // Proof: by using q = floor(a/b), r = a mod b;
+                //   Clearly, 0 ≤ r < b.
+                //   Case 1: r = 0
+                //     a.div_ceil(b) = q
+                //     LHS = qb - a = qb - qb = 0
+                //     RHS = (b - r) mod b = (b - 0) mod b = 0.
+                //   Case 2: r ≠ 0
+                //     a.div_ceil(b) = q + 1
+                //     LHS = (q+1)b - a = qb + b - (qb+r) = b-r
+                //     RHS = (b - r) mod b = b-r ∵ 0 ≤ r < b ⇒ 0 ≤ b-r < b
+                //
+                // Thus, Initial skip is
+                // (df - x mod df) mod df - y
+                //
+                // usize safety:
+                // `(ab) mod c = (a mod c)(b mod c) mod c` and
+                // `(a + b) mod c = ((a mod c) + (b mod c)) mod c`
+                // simplify x mod df into ...
+                //   (vip % df + 1 % df - f % df) % df
+                // Asserted above that vp - f >= 0
+                let df = decimation_factor.get();
+                let term1 = {
+                    let inner1 = WINDOW_LEN.checked_sub(pages_start).unwrap().rem_euclid(df);
+                    let inner2 = 1; // df above is nonzero => ∀df, 1 % df = 1.
+                    let inner3 = filter_len.rem_euclid(df);
+
+                    inner1
+                        .checked_add(inner2)
+                        .and_then(|i| i.checked_sub(inner3))
+                        // x mod df
+                        .map(|i| i.rem_euclid(df))
+                        // df - x mod df
+                        .and_then(|i| df.checked_sub(i))
+                        // (df - x mod df) mod df
+                        .map(|i| i.rem_euclid(df))
+                        .unwrap()
+                };
+                let term2 = isize::try_from(filter_len)
+                    .unwrap()
+                    .checked_sub((PAGE_LEN * pad) as _)
+                    .unwrap();
+
+                term1.checked_sub_signed(term2).expect("y term too large")
+            } else {
+                // This is written to not assume FIR
+                b_len.max(a_len).saturating_sub(1)
+            };
+
             // We can now decimate the phase.
             let decimated_phase = filtfilt_f64(
                 Array1::from_vec(unwrapped_phase),
