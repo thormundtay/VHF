@@ -669,6 +669,34 @@ impl super::StreamFold {
                 // This is written to not assume FIR
                 b_len.max(a_len).saturating_sub(1)
             };
+            // This is the write_idx used later down. It is placed up here to panic faster if
+            // necessary.
+            let write_idx = {
+                // As mentioned above, there are `(WINDOW_LEN-PAD)*vhf_iter_idx - PAD` pages over
+                // all previous windows.
+                // Thus, finding the lowest value of `j` where
+                // `filter_len + j * decimation_factor ≥ (WINDOW_LEN-PAD)*vhf_iter_idx * PAGE_LEN + 1`.
+                // is in fact the value of j such that it's being written out to file
+                if vhf_iter_idx != 0 {
+                    let decimation_factor = decimation_factor.get();
+                    let filter_len = b_len.max(a_len);
+
+                    WINDOW_LEN
+                        .checked_sub(pad)
+                        .and_then(|v| v.checked_mul(vhf_iter_idx))
+                        .and_then(|vi| vi.checked_mul(PAGE_LEN))
+                        .and_then(|vip| vip.checked_add(1))
+                        .and_then(|vip_add_1| vip_add_1.checked_sub_signed(filter_len as _))
+                        .and_then(|vip_prime| {
+                            vip_prime
+                                .div_ceil(decimation_factor)
+                                .checked_mul(decimation_factor)
+                        })
+                        .unwrap()
+                } else {
+                    0
+                }
+            };
 
             // We can now decimate the phase.
             let decimated_phase = filtfilt_f64(
@@ -694,7 +722,6 @@ impl super::StreamFold {
 
             // We take the decimated phase and regenerate the corresponding raw words and
             // idx_and_sign offset. This gives us the desired WriteBlock
-            let write_idx = 0; /* TODO: Determine */
             pack_into_write_block(radius, decimated_phase, write_idx)
         };
 
