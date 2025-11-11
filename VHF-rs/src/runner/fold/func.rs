@@ -30,8 +30,8 @@ impl StreamFoldFunction {
     /// Related: [super::super::VHF] has to determine the number of elements to read.
     pub(in super::super) fn effective_decimation_factor(&self) -> NonZeroUsize {
         match self.op {
-            StreamFoldOp::None => unsafe { NonZeroUsize::new(1).unwrap_unchecked() },
-            StreamFoldOp::Map(None) => unsafe { NonZeroUsize::new(1).unwrap_unchecked() },
+            StreamFoldOp::None => unsafe { NonZeroUsize::new_unchecked(1) },
+            StreamFoldOp::Map(None) => unsafe { NonZeroUsize::new_unchecked(1) },
             StreamFoldOp::Map(Some(MapArg {
                 effective_decimation: e,
                 ..

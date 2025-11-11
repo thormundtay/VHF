@@ -302,7 +302,7 @@ impl<'a> V2BinWriter<'a> {
             // m_idx_overflow block.
             self.header_len = Some(unsafe {
                 // SAFETY: Nonzero is guaranteed by V2_MAGIC_HEADER.
-                NonZeroUsize::new(written_so_far.div_ceil(8) * 8).unwrap_unchecked()
+                NonZeroUsize::new_unchecked(written_so_far.div_ceil(8) * 8)
             });
 
             // Write m_overflow_idx block.

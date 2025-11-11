@@ -117,12 +117,11 @@ impl<'a> VHF<'a> {
         // This will have to be changed as filtering etc means data points are not being passed to
         // file writer.
         let total_elements_to_read: NonZeroUsize =
-            unsafe { NonZeroUsize::new(config.total_elements_to_read()).unwrap_unchecked() }
+            unsafe { NonZeroUsize::new_unchecked(config.total_elements_to_read()) }
                 .checked_mul(params.effective_decimation_factor())
                 .ok_or(Error::ExcessData)?;
         let total_pages_to_read: NonZeroUsize = unsafe {
-            NonZeroUsize::new(usize::from(total_elements_to_read).div_ceil(MMAP_PAGE_LEN))
-                .unwrap_unchecked()
+            NonZeroUsize::new_unchecked(usize::from(total_elements_to_read).div_ceil(MMAP_PAGE_LEN))
         };
 
         let engine_running = Arc::new(AtomicBool::new(false));
