@@ -1,12 +1,12 @@
 //! This file is to test if [super::super::Writer] works, particularly so in the context of v2 file
 //! writer.
 
-use super::super::fold::StreamFoldOp;
-use super::super::writer::builder::Writers;
 use super::Config;
 use super::consts::{MMAP_PAGE_LEN, VHF_MMAP_WINDOW_LEN};
+use super::fold::StreamFoldOp;
 use super::get_only_file;
 use super::signals::{LinearPhaseArr, SineArr};
+use super::writer::builder::Writers;
 use super::{debug_vhf_new, push_arc_pages, required_window_pages};
 
 use approx::{AbsDiffEq, RelativeEq};
