@@ -735,9 +735,7 @@ impl super::StreamFold {
             op: StreamFoldOp::Map(Some(MapArg {
                 effective_decimation: decimation_factor,
                 // NonZeroUsize::max(self, other) is nightly)
-                num_before_first_drop: NonZeroUsize::new(b_len.max(decimation_factor.get()))
-                    // Safety: decimation_factor is already a NonZeroUsize
-                    .unwrap(),
+                num_before_first_drop: b_len.max(decimation_factor.get()).checked_sub(1).unwrap(),
             })),
         };
 

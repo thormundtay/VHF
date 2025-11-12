@@ -42,6 +42,8 @@ impl StreamFoldFunction {
 
     /// Determine the number of elements dropped, starting from the first word from FPGA, up to,
     /// and not including the first element written to the file.
+    ///
+    /// Returns i64 is for jiff reasons.
     pub fn words_dropped_before_first_write(&self) -> Result<i64> {
         match &self.op {
             StreamFoldOp::None => Ok(0),
@@ -49,13 +51,10 @@ impl StreamFoldFunction {
             StreamFoldOp::Map(Some(MapArg {
                 num_before_first_drop: n,
                 ..
-            })) => {
-                let n: usize = (*n).into();
-                n.try_into().map_err(|_| {
-                    log::error!("Could not get num_words_dropped as i64!");
-                    Error::User
-                })
-            }
+            })) => (*n).try_into().map_err(|_| {
+                log::error!("Could not get num_words_dropped as i64!");
+                Error::User
+            }),
         }
     }
 }
@@ -111,8 +110,16 @@ pub enum StreamFoldOp {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct MapArg {
     /// This number summarizes the possibly multiple steps performed by [super::StreamFold::func].
+    ///
+    /// When this value is 1, it means that no values were dropped.
+    /// When this value is n, it means only every n-th value was taken, i.e.: every (n-1)th value
+    /// was skipped, and the n-th value was taken.
     pub effective_decimation: NonZeroUsize,
     /// This is the number of elements that are "dropped" before the first element is written to
     /// file.
-    pub num_before_first_drop: NonZeroUsize,
+    // This could be 0 as nothing was dropped.
+    // For example, with lfilter/filtfilt where the filter is a length of 1, and the
+    // effective_decimation factor is 1, we do not expect any elements to be drop after the
+    // filtering process.
+    pub num_before_first_drop: usize,
 }
