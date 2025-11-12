@@ -448,9 +448,12 @@ impl VHFparser {
 /// Data related to v2 VHF file.
 ///
 /// Data returned by VHFparse is designed to not outlive the parser.
-/// ```compile_fail
+// The error number in the compile_fail test is ignored on non-nightly.
+/// ```compile_fail,E0505
+/// use jiff::Span;
 /// use vhf_parse::VHFparse;
 /// use vhf_parse::v2::VHFparser;
+/// use vhf_parse::py_binds::RelTime;
 /// let mut v = VHFparser::new(
 ///     std::env::temp_dir().join("v2_linear.bin").as_path(), false
 /// ).unwrap();
@@ -466,7 +469,7 @@ impl VHFparser {
 /// let rp = { v.reduced_phase().unwrap() };
 /// drop(v);
 ///
-/// println!("rp", rp); // This has rp live longer than v!
+/// println!("rp: {:?}", rp); // This has rp live longer than v!
 /// ```
 impl VHFparse for VHFparser {
     fn update_plot_timing(
