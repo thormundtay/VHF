@@ -9,7 +9,7 @@ use super::signals::{LinearPhaseArr, SineArr};
 use super::writer::builder::Writers;
 use super::{debug_vhf_new, push_arc_pages, required_window_pages};
 
-use approx::{AbsDiffEq, RelativeEq};
+use approx::{AbsDiffEq, RelativeEq, assert_relative_eq};
 use configparser::ini::Ini;
 use jiff::Zoned;
 #[allow(unused_imports)]
@@ -192,7 +192,7 @@ fn writes_correct_v2_file_basic() {
             .all(|(a, e)| a as i16 == e)
     );
 
-    // Check reduced phases
+    // Check reduced phases via linear gradient
     let reduced_phase = parser.reduced_phase().expect("Could not get reduced_phase");
     assert!(
         reduced_phase
@@ -203,7 +203,7 @@ fn writes_correct_v2_file_basic() {
     reduced_phase
         .windows(2)
         .into_iter()
-        .all(|w| (w[1]).abs_diff_eq(&w[0], 1e-5));
+        .for_each(|w| assert_relative_eq!(w[1] - w[0], reduced_phase_gradient, epsilon = 5e-5));
 
     tmp_dir.close().expect("Could not close temp_dir.");
     push_arc_pages_thread.join().expect("Failed to join");
@@ -274,7 +274,7 @@ fn writes_correct_v2_file_insufficient() {
     let initial_phase_offset = (i16::MAX as f64 - 70.9) * TAU;
     let phase_ang_freq = TAU / 755.876;
     let phase_ang_phi = 0.;
-    let phase_ampl = 14883.3;
+    let phase_ampl = 883.3;
     let sinusoidal = SineArr::new(
         total_elements,
         eng.clone(),
@@ -285,6 +285,10 @@ fn writes_correct_v2_file_insufficient() {
             signal_radius,
             initial_phase_offset,
         ),
+    );
+    assert!(
+        phase_ampl < initial_phase_offset / 4.,
+        "Variation in the Φ(t) is too large for test!"
     );
     assert_eq!(PARAMS_STEP_BY, params_func.step_by);
 
@@ -400,9 +404,19 @@ fn writes_correct_v2_file_insufficient() {
             .relative_eq(&expected_zeroth_phase, 1e-6, 1e-6)
     );
     reduced_phase
-        .windows(2)
+        .take()
         .into_iter()
-        .all(|w| (w[1]).abs_diff_eq(&w[0], 1e-5));
+        .enumerate()
+        .map(|(idx, r)| {
+            (
+                r * TAU,
+                (idx as f64)
+                    .mul_add(phase_ang_freq, phase_ang_phi)
+                    .sin()
+                    .mul_add(phase_ampl, initial_phase_offset),
+            )
+        })
+        .for_each(|(r, e)| assert_relative_eq!(r, e, max_relative = 1e-8, epsilon = 5e-5));
 
     tmp_dir.close().expect("Could not close temp_dir.");
     push_arc_pages_thread.join().expect("Failed to join");
@@ -579,7 +593,7 @@ fn writes_correct_v2_file_zero() {
             .all(|(a, e)| a as i16 == e)
     );
 
-    // Check reduced phases
+    // Check reduced phases via the linear gradient
     let reduced_phase = parser.reduced_phase().expect("Could not get reduced_phase");
     assert!(
         reduced_phase
@@ -590,7 +604,7 @@ fn writes_correct_v2_file_zero() {
     reduced_phase
         .windows(2)
         .into_iter()
-        .all(|w| (w[1]).abs_diff_eq(&w[0], 1e-5));
+        .for_each(|w| assert_relative_eq!(w[1] - w[0], reduced_phase_gradient, epsilon = 5e-5));
 
     tmp_dir.close().expect("Could not close temp_dir.");
     push_arc_pages_thread.join().expect("Failed to join");
