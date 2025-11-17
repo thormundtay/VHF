@@ -66,3 +66,6 @@ mod o3_test_setup {
 
 /// Specifically to v2 file writer, test if the file writing is sound (up to some concerns).
 mod v2_write;
+
+/// Combining v2 file writer with [filtfilt][vhf::runner::fold::filters::StreamFold::filtfilt].
+mod v2_filtfilt;
