@@ -446,6 +446,52 @@ fn filtfilt_f64(
     .map(|v| v.into_iter().skip(initial_skip).step_by(decimation_factor))
 }
 
+/// Gets the user input and target filter.
+///
+/// # Examples
+/// 1. The user may have specified a filter `[1.]`, but [filtfilt_f64] (FIR) requires at least a
+///    length of 2.
+///    This function `trim_and_pad_zeros(user, 2)` thus gives the user input as `[1.]` and the
+///    target as `[1., 0.]`.
+///
+/// 2. The user may have specified a filter `[0.5, 0., 0., 0.]` which has spurious 0s, but the
+///    trailing 0s in our filter has no impact, which means the user actually gave `[1.]`.
+///    However, [filtfilt_f64] (FIR) requires at least a length of 2.
+///    This function `trim_and_pad_zeros(user, 2)` thus gives the user input as `[0.5]` and the
+///    target as `[0.5, 0.]`.
+///
+/// # Errors
+/// The only error occurs if all elements are zero or empty.
+fn trim_and_pad_zeros(
+    user_input: &[f64],
+    min_len: usize,
+) -> core::result::Result<(Array1<f64>, Array1<f64>), ()> {
+    let last_nonzero_b = user_input
+        .iter()
+        .enumerate()
+        .rev()
+        .find(|(_, e)| **e != 0.)
+        .ok_or(())
+        .map(|(i, _)| i)?;
+
+    let user = Array1::from_iter(
+        user_input
+            .iter()
+            .cloned()
+            .take(last_nonzero_b.checked_add(1).expect("Added with overflow")),
+    );
+
+    let target = if user.len() < min_len {
+        let pad = (0..(min_len.saturating_sub(user.len()))).map(|_| 0.);
+        let result = user.iter().cloned().chain(pad);
+        Array1::from_iter(result)
+    } else {
+        user.clone()
+    };
+
+    Ok((user, target))
+}
+
 impl super::StreamFold {
     /// Constructs StreamFold which returns function that filters from VHFIter that allows for
     /// writing.
@@ -748,5 +794,163 @@ impl super::StreamFold {
         ))]));
 
         Self { func, repr }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn trim_and_pad_zeros_possibly_trailing() {
+        // No trailing
+        {
+            let user_input = vec![2.];
+            {
+                let target_len = 0;
+
+                let (ex_user, ex_target) = (
+                    Array1::from_vec(user_input.clone()),
+                    Array1::from_vec(vec![2.]),
+                );
+
+                assert_eq!(
+                    (ex_user, ex_target),
+                    trim_and_pad_zeros(&user_input, target_len).expect("trim_and_pad errored")
+                );
+            }
+            {
+                let target_len = 1;
+
+                let (ex_user, ex_target) = (
+                    Array1::from_vec(user_input.clone()),
+                    Array1::from_vec(vec![2.]),
+                );
+
+                assert_eq!(
+                    (ex_user, ex_target),
+                    trim_and_pad_zeros(&user_input, target_len).expect("trim_and_pad errored")
+                );
+            }
+            {
+                let target_len = 2;
+
+                let (ex_user, ex_target) = (
+                    Array1::from_vec(user_input.clone()),
+                    Array1::from_vec(vec![2., 0.]),
+                );
+
+                assert_eq!(
+                    (ex_user, ex_target),
+                    trim_and_pad_zeros(&user_input, target_len).expect("trim_and_pad errored")
+                );
+            }
+        }
+
+        // User has some trailing
+        {
+            let user_input = vec![2., 0.];
+            {
+                let target_len = 1;
+
+                let (ex_user, ex_target) = (Array1::from_vec(vec![2.]), Array1::from_vec(vec![2.]));
+
+                assert_eq!(
+                    (ex_user, ex_target),
+                    trim_and_pad_zeros(&user_input, target_len).expect("trim_and_pad errored")
+                );
+            }
+            {
+                let target_len = 2;
+
+                let (ex_user, ex_target) =
+                    (Array1::from_vec(vec![2.]), Array1::from_vec(vec![2., 0.]));
+
+                assert_eq!(
+                    (ex_user, ex_target),
+                    trim_and_pad_zeros(&user_input, target_len).expect("trim_and_pad errored")
+                );
+            }
+            {
+                let target_len = 3;
+
+                let (ex_user, ex_target) = (
+                    Array1::from_vec(vec![2.]),
+                    Array1::from_vec(vec![2., 0., 0.]),
+                );
+
+                assert_eq!(
+                    (ex_user, ex_target),
+                    trim_and_pad_zeros(&user_input, target_len).expect("trim_and_pad errored")
+                );
+            }
+        }
+
+        // User has 0s in the middle.
+        {
+            let user_input = vec![2., 0., 2.];
+            {
+                let target_len = 2;
+
+                let (ex_user, ex_target) = (
+                    Array1::from_vec(vec![2., 0., 2.]),
+                    Array1::from_vec(vec![2., 0., 2.]),
+                );
+
+                assert_eq!(
+                    (ex_user, ex_target),
+                    trim_and_pad_zeros(&user_input, target_len).expect("trim_and_pad errored")
+                );
+            }
+            {
+                let target_len = 3;
+
+                let (ex_user, ex_target) = (
+                    Array1::from_vec(vec![2., 0., 2.]),
+                    Array1::from_vec(vec![2., 0., 2.]),
+                );
+
+                assert_eq!(
+                    (ex_user, ex_target),
+                    trim_and_pad_zeros(&user_input, target_len).expect("trim_and_pad errored")
+                );
+            }
+            {
+                let target_len = 4;
+
+                let (ex_user, ex_target) = (
+                    Array1::from_vec(vec![2., 0., 2.]),
+                    Array1::from_vec(vec![2., 0., 2., 0.]),
+                );
+
+                assert_eq!(
+                    (ex_user, ex_target),
+                    trim_and_pad_zeros(&user_input, target_len).expect("trim_and_pad errored")
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn trim_and_pad_zeros_no_panic() {
+        // Empty input
+        {
+            let user_input = Vec::new();
+            let result = trim_and_pad_zeros(&user_input, 0);
+            assert!(result.is_err());
+            let result = trim_and_pad_zeros(&user_input, 1);
+            assert!(result.is_err());
+        }
+
+        // Zero only input
+        {
+            let user_input = vec![0.];
+            let result = trim_and_pad_zeros(&user_input, 0);
+            assert!(result.is_err());
+            let result = trim_and_pad_zeros(&user_input, 1);
+            assert!(result.is_err());
+            let result = trim_and_pad_zeros(&user_input, 2);
+            assert!(result.is_err());
+        }
     }
 }
