@@ -462,27 +462,29 @@ fn filtfilt_f64(
 ///
 /// # Errors
 /// The only error occurs if all elements are zero or empty.
-fn trim_and_pad_zeros(
-    user_input: &[f64],
+fn trim_and_pad_zeros<T>(
+    user_input: &[T],
     min_len: usize,
-) -> core::result::Result<(Array1<f64>, Array1<f64>), ()> {
-    let last_nonzero_b = user_input
+) -> core::result::Result<(Array1<T>, Array1<T>), ()>
+where
+    T: PartialEq + num_traits::Zero + Clone,
+{
+    let (last_nonzero_b, _) = user_input
         .iter()
         .enumerate()
         .rev()
-        .find(|(_, e)| **e != 0.)
-        .ok_or(())
-        .map(|(i, _)| i)?;
+        .find(|(_, e)| **e != T::zero())
+        .ok_or(())?;
 
     let user = Array1::from_iter(
         user_input
             .iter()
-            .cloned()
-            .take(last_nonzero_b.checked_add(1).expect("Added with overflow")),
+            .take(last_nonzero_b.checked_add(1).expect("Added with overflow"))
+            .cloned(),
     );
 
     let target = if user.len() < min_len {
-        let pad = (0..(min_len.saturating_sub(user.len()))).map(|_| 0.);
+        let pad = (0..(min_len.saturating_sub(user.len()))).map(|_| T::zero());
         let result = user.iter().cloned().chain(pad);
         Array1::from_iter(result)
     } else {
@@ -935,7 +937,7 @@ mod test {
     fn trim_and_pad_zeros_no_panic() {
         // Empty input
         {
-            let user_input = Vec::new();
+            let user_input: Vec<f64> = Vec::new();
             let result = trim_and_pad_zeros(&user_input, 0);
             assert!(result.is_err());
             let result = trim_and_pad_zeros(&user_input, 1);
