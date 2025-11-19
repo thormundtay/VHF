@@ -162,6 +162,8 @@ use std::cmp::Ordering;
 use std::hint::unreachable_unchecked;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
+#[cfg(test)]
+use std::time::Instant;
 use vhf_common::data_types::{IQMTriplet, Polar};
 use vhf_parse::VHFWord;
 
@@ -602,6 +604,9 @@ impl super::StreamFold {
         };
 
         let func = move |(vhf_iter_idx, pages): <VHFIter as Iterator>::Item| -> WriteBlock {
+            #[cfg(test)]
+            let closure_time = Instant::now();
+
             // Check assumptions of pages_start are valid
             {
                 if vhf_iter_idx == 0 {
@@ -783,7 +788,12 @@ impl super::StreamFold {
 
             // We take the decimated phase and regenerate the corresponding raw words and
             // idx_and_sign offset. This gives us the desired WriteBlock
-            pack_into_write_block(radius, decimated_phase, write_idx)
+            let result = pack_into_write_block(radius, decimated_phase, write_idx);
+
+            #[cfg(test)]
+            log::debug!("Time elapsed for filtfilt: {:?}", closure_time.elapsed());
+
+            result
         };
 
         let func = StreamFoldFunction {

@@ -143,7 +143,7 @@ fn filtfilt_v2_file_trivial_filter() {
         dbg_vhf_sender,
         params_func.pad,
         sinusoidal,
-        PUSH_ARC_DUR,
+        PUSH_ARC_DUR * 10_000, /* Approximal duration in steady-state */
         eng,
     )
     .expect("push_arc_pages failed");
