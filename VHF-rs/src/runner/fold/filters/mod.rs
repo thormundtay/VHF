@@ -521,8 +521,11 @@ impl super::StreamFold {
     /// For performance reasons, the filter used is in fact
     /// [sci_rs::signal::filter::filtfilt1_fir_fft].
     ///
+    /// If the filter is a FIR, trailing zero's are trimmed out from the input.
+    ///
     /// # Panics
     /// - Assumes filtfilt_b to be at least 1-element long.
+    /// - Assumes there is at least one nonzero-element in filtfilt_b.
     /// - filtfilt_a should currently be just `[1.0]`, as only FIR filtfilt is supported.
     // We expect this function to be called at config time, where the numerical values are being
     // interpreted from somewhere else.
@@ -535,25 +538,34 @@ impl super::StreamFold {
         filter_details: StreamFoldMapKernRepr<f64>,
     ) -> Self {
         // FIR specific assumptions for now.
-        assert_eq!(filtfilt_a.len(), 1, "filtfilt currently only supports FIR");
-        assert_eq!(
-            *filtfilt_a.first().unwrap(),
-            1.,
-            "filtfilt currently only supports FIR"
-        );
-        // FIR: Normalize against a[0].
-        let (b, a): (_, Array1<f64>) = {
+        {
+            assert_eq!(filtfilt_a.len(), 1, "filtfilt currently only supports FIR");
+            assert_eq!(
+                *filtfilt_a.first().unwrap(),
+                1.,
+                "filtfilt currently only supports FIR"
+            );
+        }
+
+        // For FIR case, strong requirement that:
+        // 1. trim out trailing 0s (optimization)
+        // 2. and ensure the length of b is at least 2, or filtfilt_fft will panic.
+        // The corresponding `num_before_first_drop` should treat as if ALL trailing 0s of b were
+        // dropped.
+        // This scope also normalizes against a[0].
+        // b_user is what gets used in the representation.
+        let (b_user, b_filter, a): (_, _, Array1<f64>) = {
             let a0 = *filtfilt_a.first().unwrap();
-            (
-                if a0 != 1. {
-                    Array1::from_iter(filtfilt_b.iter().map(|&v| v / a0))
-                } else {
-                    Array1::from_iter(filtfilt_b.iter().cloned())
-                },
-                Array1::ones(1),
-            )
+            let (b_user, b_filter) =
+                trim_and_pad_zeros(filtfilt_b, 2).expect("all filtfilt_b elements were 0!");
+
+            if a0 != 1. {
+                (b_user / a0, b_filter / a0, Array1::ones(1))
+            } else {
+                (b_user, b_filter, Array1::ones(1))
+            }
         };
-        let b_len = b.len();
+        let b_user_len = b_user.len();
         let a_len = a.len();
 
         // For every window, the pages_start offset serves as a look-back into the previous window.
@@ -572,7 +584,7 @@ impl super::StreamFold {
         };
         // See initial_skip derivation below.
         assert!(
-            b_len.max(a_len)
+            b_user_len.max(a_len)
                 < WINDOW_LEN
                     .checked_sub(pages_start)
                     .unwrap()
@@ -625,7 +637,8 @@ impl super::StreamFold {
             // the 0th element of (PAD+1)th page
             let initial_skip = if vhf_iter_idx != 0 {
                 // This is written to not assume FIR
-                let filter_len = b_len.max(a_len);
+                let filter_len = b_user_len.max(a_len); // b_user is without trailing 0s.
+
                 // In the previous (vhf_iter_idx - 1) windows, there are
                 // * (WINDOW_LEN - 2*PAD)*vhf_iter_idx non-overlapping pages.
                 // * PAD*(vhf_iter_idx⊖ 1) overlapping pages.
@@ -715,7 +728,7 @@ impl super::StreamFold {
                 term1.checked_sub_signed(term2).expect("y term too large")
             } else {
                 // This is written to not assume FIR
-                b_len.max(a_len).saturating_sub(1)
+                b_user_len.max(a_len).saturating_sub(1) // b_user is without trailing 0s.
             };
             // This is the write_idx used later down. It is placed up here to panic faster if
             // necessary.
@@ -727,7 +740,7 @@ impl super::StreamFold {
                 // is in fact the value of j such that it's being written out to file
                 if vhf_iter_idx != 0 {
                     let decimation_factor = decimation_factor.get();
-                    let filter_len = b_len.max(a_len);
+                    let filter_len = b_user_len.max(a_len);
 
                     WINDOW_LEN
                         .checked_sub(pad)
@@ -751,7 +764,7 @@ impl super::StreamFold {
                 Array1::from_vec(unwrapped_phase),
                 decimation_factor,
                 initial_skip,
-                b.view(),
+                b_filter.view(),
                 a.view(),
                 fft_processor.clone(),
             )
@@ -762,7 +775,7 @@ impl super::StreamFold {
                 Array1::from_vec(radius),
                 decimation_factor,
                 initial_skip,
-                b.view(),
+                b_filter.view(),
                 a.view(),
                 fft_processor.clone(),
             )
@@ -782,8 +795,10 @@ impl super::StreamFold {
             pad: pages_start,
             op: StreamFoldOp::Map(Some(MapArg {
                 effective_decimation: decimation_factor,
-                // NonZeroUsize::max(self, other) is nightly)
-                num_before_first_drop: b_len.max(decimation_factor.get()).checked_sub(1).unwrap(),
+                num_before_first_drop: b_user_len
+                    .max(decimation_factor.get())
+                    .checked_sub(1)
+                    .unwrap(),
             })),
         };
 
