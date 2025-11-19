@@ -25,6 +25,8 @@ use std::{
 use tempfile::{NamedTempFile, TempDir};
 use test_log::test;
 
+pub(super) const PUSH_ARC_DUR: Duration = Duration::new(0, 100);
+
 /// Rounds up to the appropriate number of pages so that mocked engine pushes all pages through
 /// step_by iterator.
 pub(super) fn required_window_pages(intended_pages: usize, step_by: usize) -> usize {

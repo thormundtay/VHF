@@ -5,7 +5,7 @@ use super::consts::{MMAP_PAGE_LEN, VHF_MMAP_WINDOW_LEN};
 use super::fold::{StreamFold, StreamFoldOp};
 use super::signals::{LinearPhaseArr, SineArr};
 use super::writer::builder::Writers;
-use super::{debug_vhf_new, push_arc_pages, required_window_pages};
+use super::{PUSH_ARC_DUR, debug_vhf_new, push_arc_pages, required_window_pages};
 
 use jiff::Zoned;
 use std::collections::HashMap;
@@ -68,14 +68,9 @@ fn writes_correct_file() {
     let mut signal_expected = signal.clone(); // This will lose the engine
 
     // Add signal into pages. We now add data into the buffer.
-    let push_arc_pages_thread = push_arc_pages(
-        dbg_vhf_sender,
-        params_func.pad,
-        signal,
-        Duration::new(0, 100),
-        eng,
-    )
-    .expect("push_arc_pages failed");
+    let push_arc_pages_thread =
+        push_arc_pages(dbg_vhf_sender, params_func.pad, signal, PUSH_ARC_DUR, eng)
+            .expect("push_arc_pages failed");
 
     let time_start = Zoned::now();
     let mut config = Config::new(None).expect("Config struct could not be made");
@@ -450,14 +445,9 @@ fn python_v1_linear() {
     );
 
     // Add signal into pages. We now add data into the buffer.
-    let push_arc_pages_thread = push_arc_pages(
-        dbg_vhf_sender,
-        params_func.pad,
-        linear,
-        Duration::new(0, 100),
-        eng,
-    )
-    .expect("push_arc_pages failed");
+    let push_arc_pages_thread =
+        push_arc_pages(dbg_vhf_sender, params_func.pad, linear, PUSH_ARC_DUR, eng)
+            .expect("push_arc_pages failed");
 
     let time_start = Zoned::now();
     let mut config = Config::new(None).expect("Config struct could not be made");
@@ -565,14 +555,9 @@ fn python_v1_edgecase() {
     let mut signal_expected = signal.clone(); // This will lose the engine
 
     // Add signal into pages. We now add data into the buffer.
-    let push_arc_pages_thread = push_arc_pages(
-        dbg_vhf_sender,
-        params_func.pad,
-        signal,
-        Duration::new(0, 100),
-        eng,
-    )
-    .expect("push_arc_pages failed");
+    let push_arc_pages_thread =
+        push_arc_pages(dbg_vhf_sender, params_func.pad, signal, PUSH_ARC_DUR, eng)
+            .expect("push_arc_pages failed");
 
     let time_start = Zoned::now();
     let mut config = Config::new(None).expect("Config struct could not be made");

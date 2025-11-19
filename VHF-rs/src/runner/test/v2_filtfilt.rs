@@ -6,17 +6,15 @@ use super::fold::{
     StreamFold, StreamFoldOp,
     repr::{KernReprs, StreamFoldMapKernRepr},
 };
-use super::get_only_file;
 use super::signals::{LinearPhaseArr, SineArr};
 use super::writer::builder::Writers;
-use super::{debug_vhf_new, push_arc_pages, required_window_pages};
+use super::{PUSH_ARC_DUR, debug_vhf_new, get_only_file, push_arc_pages, required_window_pages};
 
 use configparser::ini::Ini;
 use jiff::Zoned;
 use serde_json::json;
 use std::f64::consts::TAU;
 use std::num::NonZeroUsize;
-use std::time::Duration;
 use tempfile::TempDir;
 use vhf_parse::{VHFparse, v2};
 
@@ -145,7 +143,7 @@ fn filtfilt_v2_file_trivial_filter() {
         dbg_vhf_sender,
         params_func.pad,
         sinusoidal,
-        Duration::new(0, 100),
+        PUSH_ARC_DUR,
         eng,
     )
     .expect("push_arc_pages failed");

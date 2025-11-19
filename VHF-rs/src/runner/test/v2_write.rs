@@ -7,7 +7,7 @@ use super::fold::StreamFoldOp;
 use super::get_only_file;
 use super::signals::{LinearPhaseArr, SineArr};
 use super::writer::builder::Writers;
-use super::{debug_vhf_new, push_arc_pages, required_window_pages};
+use super::{PUSH_ARC_DUR, debug_vhf_new, push_arc_pages, required_window_pages};
 
 use approx::{AbsDiffEq, RelativeEq, assert_relative_eq};
 use configparser::ini::Ini;
@@ -17,7 +17,6 @@ use std::env;
 use std::f64::consts::TAU;
 use std::hint::unreachable_unchecked;
 use std::num::NonZeroUsize;
-use std::time::Duration;
 use tempfile::TempDir;
 use test_log::test;
 use vhf_common::data_types::IQMTriplet;
@@ -94,14 +93,9 @@ fn writes_correct_v2_file_basic() {
     );
 
     // Add signal into pages. We now add data into the buffer.
-    let push_arc_pages_thread = push_arc_pages(
-        dbg_vhf_sender,
-        params_func.pad,
-        linear,
-        Duration::new(0, 100),
-        eng,
-    )
-    .expect("push_arc_pages failed");
+    let push_arc_pages_thread =
+        push_arc_pages(dbg_vhf_sender, params_func.pad, linear, PUSH_ARC_DUR, eng)
+            .expect("push_arc_pages failed");
 
     let time_start = Zoned::now();
     let builder = debug_vhf_conf.file_writer().unwrap();
@@ -297,7 +291,7 @@ fn writes_correct_v2_file_insufficient() {
         dbg_vhf_sender,
         params_func.pad,
         sinusoidal,
-        Duration::new(0, 100),
+        PUSH_ARC_DUR,
         eng,
     )
     .expect("push_arc_pages failed");
@@ -497,14 +491,9 @@ fn writes_correct_v2_file_zero() {
     );
 
     // Add signal into pages. We now add data into the buffer.
-    let push_arc_pages_thread = push_arc_pages(
-        dbg_vhf_sender,
-        params_func.pad,
-        linear,
-        Duration::new(0, 100),
-        eng,
-    )
-    .expect("push_arc_pages failed");
+    let push_arc_pages_thread =
+        push_arc_pages(dbg_vhf_sender, params_func.pad, linear, PUSH_ARC_DUR, eng)
+            .expect("push_arc_pages failed");
 
     let time_start = Zoned::now();
     let builder = debug_vhf_conf.file_writer().unwrap();
