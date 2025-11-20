@@ -6,6 +6,7 @@ use itertools::Itertools;
 use ndarray::Array1;
 use ndarray::s as slice_macro;
 use rayon::prelude::*;
+use std::fmt::Debug;
 use std::{
     cmp::Ordering,
     fs::File,
@@ -17,7 +18,6 @@ use vhf_common::data_types::{IQMTriplet, MOverflowRaw, RawVHFWord};
 use vhf_common::write_types::MOverflowWrite;
 
 /// Keeps track of m_overflow for the trace of V2 binary files.
-#[derive(Debug)]
 pub(super) struct RollOver {
     /// This is the offset of the 0th data point.
     initial_m_offset: M,
@@ -233,9 +233,45 @@ impl RollOver {
     }
 }
 
+impl Debug for RollOver {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let idxs = if self.delta_idxs.len() > 4 {
+            let len = self.delta_idxs.len();
+            format!(
+                "[{}, {}, ..., {}, {}]",
+                self.delta_idxs[0],
+                self.delta_idxs[1],
+                self.delta_idxs[len - 2],
+                self.delta_idxs[len - 1]
+            )
+        } else {
+            format!("{:?}", self.delta_idxs)
+        };
+        let signs = if self.delta_idxs.len() > 4 {
+            let len = self.delta_signs.len();
+            format!(
+                "[{}, {}, ..., {}, {}]",
+                self.delta_signs[0],
+                self.delta_signs[1],
+                self.delta_signs[len - 2],
+                self.delta_signs[len - 1]
+            )
+        } else {
+            format!("{:?}", self.delta_signs)
+        };
+
+        f.debug_struct("RollOver")
+            .field("initial_m_offset", &self.initial_m_offset)
+            .field("self.delta_idxs", &idxs)
+            .field("self.delta_signs", &signs)
+            .finish()
+    }
+}
+
 /// Thin wrapper over [RollOver] for unit tests.
 #[cfg(feature = "internals")]
 #[allow(private_interfaces)]
+#[derive(Debug)]
 // #[repr(transparent)] // This wraps the ref and not the struct
 pub struct RollOverMgr<'a>(pub &'a RollOver);
 
