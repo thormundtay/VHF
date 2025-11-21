@@ -269,7 +269,7 @@ fn unwrap_phases_in_window(words: [Page; WINDOW_LEN], word_offset: usize) -> Pol
                 radius: r,
                 phase: p,
             } = wb.into();
-            phase.push(p.mul_add(m_offset as _, std::f64::consts::TAU * ((1 << 16) as f64)));
+            phase.push((m_offset as f64).mul_add(std::f64::consts::TAU * ((1 << 16) as f64), p));
             radius.push(r);
 
             m_offset
