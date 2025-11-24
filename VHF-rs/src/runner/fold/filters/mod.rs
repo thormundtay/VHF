@@ -747,10 +747,8 @@ impl super::StreamFold {
                     let decimation_factor = decimation_factor.get();
                     let filter_len = b_user_len.max(a_len);
 
-                    WINDOW_LEN
-                        .checked_sub(pad)
-                        .and_then(|v| v.checked_mul(vhf_iter_idx))
-                        .and_then(|vi| vi.checked_mul(PAGE_LEN))
+                    vhf_iter_idx
+                        .checked_mul(PAGE_LEN)
                         .and_then(|vip| vip.checked_add(1))
                         .and_then(|vip_add_1| vip_add_1.checked_sub_signed(filter_len as _))
                         .and_then(|vip_prime| {
@@ -763,6 +761,11 @@ impl super::StreamFold {
                     0
                 }
             };
+            log::trace!(
+                "[filtfilt] initial_skip = {}, write_idx = {}",
+                initial_skip,
+                write_idx
+            );
 
             // We can now decimate the phase.
             let decimated_phase = filtfilt_f64(
