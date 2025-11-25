@@ -298,4 +298,12 @@ impl RollOverMgr<'_> {
             .take(self.0.delta_idxs.len() - 1)
             .cloned()
     }
+
+    /// This returns a slice of all idx and signs as picked up from the file.
+    /// The internal representation of capping with the end of length is not cared for.
+    pub fn get_m_overflows(&self) -> impl Iterator<Item = MOverflowRaw> {
+        self.get_delta_idx()
+            .zip(self.get_delta_signs())
+            .map(|(i, s)| MOverflowRaw(i, s))
+    }
 }
