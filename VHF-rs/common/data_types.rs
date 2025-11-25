@@ -1,5 +1,5 @@
 //! Types associated to data created by VHF board.
-use std::f64::consts::TAU;
+use std::{f64::consts::TAU, hint::unreachable_unchecked};
 
 /// Inner type to [RawVHFWord].
 pub type VHFWordT = u64;
@@ -225,7 +225,7 @@ impl From<IQMTriplet> for Polar {
 
 /// Folding or Processing often will record where in the stream does a `m_overflow` event occurs, i.e.:
 /// when the [IQMTriplet] has the `m` value have a over(under)flow occurrence.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct MOverflowRaw(pub usize, pub i8);
 
 impl MOverflowRaw {
@@ -242,6 +242,38 @@ impl From<(usize, i8)> for MOverflowRaw {
     #[inline(always)]
     fn from(value: (usize, i8)) -> Self {
         Self(value.0, value.1)
+    }
+}
+
+impl core::fmt::Debug for MOverflowRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        #[cfg(not(test))]
+        {
+            write!(
+                f,
+                "Overflow({}, {})",
+                &self.0,
+                match self.1 {
+                    1 => '+',
+                    0 => '0',
+                    -1 => '-',
+                    _ => unsafe { unreachable_unchecked() },
+                }
+            )
+        }
+
+        #[cfg(test)]
+        {
+            f.debug_tuple("Overflow")
+                .field(&self.0)
+                .field(match self.1 {
+                    1 => &'+',
+                    0 => &'0',
+                    -1 => &'-',
+                    _ => unsafe { unreachable_unchecked() },
+                })
+                .finish()
+        }
     }
 }
 
