@@ -265,10 +265,10 @@ fn writes_correct_v2_file_insufficient() {
     assert_eq!(PARAMS_STEP_BY, params_func.step_by);
 
     let signal_radius = 7000.;
-    let initial_phase_offset = (i16::MAX as f64 - 70.9) * TAU;
-    let phase_ang_freq = TAU / 755.876;
-    let phase_ang_phi = 0.;
-    let phase_ampl = 883.3;
+    let initial_phase_offset = (i16::MAX as f64 - 70.0) * TAU;
+    let phase_ang_freq = TAU / 2.;
+    let phase_ang_phi = -TAU / 4.;
+    let phase_ampl = 3. * 70.0 * TAU;
     let sinusoidal = SineArr::new(
         total_elements,
         eng.clone(),
@@ -365,6 +365,7 @@ fn writes_correct_v2_file_insufficient() {
 
     // Check m_mgr
     let m_mgr = parser.get_m_mgr().expect("manifold manager not found");
+    log::info!("m_mgr = {:?}", &m_mgr);
     let actual_idx: Vec<_> = m_mgr.get_delta_idx().collect();
     assert_eq!(actual_idx.len(), expected_overflow_idx.len());
     assert!(

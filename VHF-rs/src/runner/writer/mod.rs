@@ -23,7 +23,7 @@ pub(super) const FILE_LAZY_LEN: usize = 1 << 13;
 pub struct WriteBlock {
     pub data: Vec<RawVHFWord>,
     /// None type is for cases where writers aren't expected to check that m_overflow_idx exists.
-    m_overflow_idx: Option<Vec<usize>>,
+    pub(crate) m_overflow_idx: Option<Vec<usize>>,
     /// None type is for cases where writers aren't expected to check that m_overflow_idx exists.
     m_overflow_value: Option<Vec<i8>>,
 }

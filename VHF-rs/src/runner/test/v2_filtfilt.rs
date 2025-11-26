@@ -6,10 +6,11 @@ use super::fold::{
     StreamFold, StreamFoldOp,
     repr::{KernReprs, StreamFoldMapKernRepr},
 };
-use super::signals::{LinearPhaseArr, SineArr};
+use super::signals::SineArr;
 use super::writer::builder::Writers;
 use super::{PUSH_ARC_DUR, debug_vhf_new, get_only_file, push_arc_pages, required_window_pages};
 
+use approx::{RelativeEq, assert_relative_eq};
 use configparser::ini::Ini;
 use jiff::Zoned;
 use serde_json::json;
@@ -113,11 +114,10 @@ fn filtfilt_v2_file_trivial_filter() {
 
     // Define the signal we are testing for.
     let signal_radius = 7000.;
-    let initial_phase_offset = (i16::MAX as f64 - 70.9) * TAU;
-    let phase_ang_freq = TAU / 755.876;
-    // The signal must start within the m_offset = 0 range.
-    let phase_ang_phi = -0.3;
-    let phase_ampl = 883.3;
+    let initial_phase_offset = (i16::MAX as f64 - 70.) * TAU;
+    let phase_ang_freq = TAU / 2.;
+    let phase_ang_phi = -TAU / 4.; // The signal must start within the m_offset = 0 range.
+    let phase_ampl = 3. * 70. * TAU;
     let sinusoidal = SineArr::new(
         total_elements,
         eng.clone(),
@@ -157,7 +157,12 @@ fn filtfilt_v2_file_trivial_filter() {
         .iter()
         .step_by(params_func.step_by)
         .map(|x| (*params_func.func)(x))
-        .try_for_each(|write_block| writer.write_data(write_block))
+        .try_for_each(|write_block| {
+            if let Some(ref idxs) = write_block.m_overflow_idx {
+                dbg!(idxs.first().unwrap(), idxs.last().unwrap());
+            };
+            writer.write_data(write_block)
+        })
         .expect("Writing to v2_writer failed");
     std::mem::drop(writer); // writer needs to be dropped to flush m_overflow_idx...
 
@@ -166,12 +171,8 @@ fn filtfilt_v2_file_trivial_filter() {
     // std::fs::copy(&tmp_file, env::temp_dir().join("v2_sine.bin")).expect("failed_to copy");
     let mut parser = v2::VHFparser::new(&tmp_file, true).expect("Could not make v2 parser");
 
-    // Test that the fold (as represented in the header) is empty.
-    parser
-        .get_header()
-        .stream_fold
-        .iter()
-        .for_each(|fold| assert!(fold.is_empty()));
+    // Test that the fold shows the filter used.
+    log::debug!("TraceDetails = todo");
 
     // Test that the unwrapped phase is identical
     parser
@@ -181,6 +182,48 @@ fn filtfilt_v2_file_trivial_filter() {
         .update_plot_timing(None, None, false)
         .expect("Could not update_plot_timing");
     log::debug!("parser = {parser:?}",);
+
+    // Check the m_overflow idxs are correct
+    let m_mgr = parser.get_m_mgr().expect("m_mgr");
+    let overflows: Vec<_> = m_mgr.get_m_overflows().collect();
+    let issue: Vec<_> = overflows.iter().skip(9724).take(7).collect();
+    dbg!(issue);
+    let issue: Vec<_> = overflows.iter().skip(19453).take(7).collect();
+    dbg!(issue);
+
+    // Check the elements written are identical to the input.
+    let reduced_phase = parser.reduced_phase().expect("Could not get reduced_phase");
+    let result_phase = reduced_phase.take() * TAU;
+    // use vhf_parse::unwrap_phase::VHFWordToUnwrappedPhaseByIter;
+    // let expected_phase = signal_expected.to_unwrapped_phase(0); // We do not use this as it is a replica
+    let mut expected_phase = (0 /*Zero is the index*/ ..result_phase.len()).map(|idx| {
+        (idx as f64)
+            .mul_add(phase_ang_freq, phase_ang_phi)
+            .sin()
+            .mul_add(phase_ampl, initial_phase_offset)
+    });
+    let expected_zeroth_phase = expected_phase
+        .next()
+        .expect("There should be a non-zero number of elements.");
+    log::info!(
+        "expected_zeroth_phase = {expected_zeroth_phase:?}; phase[0]*TAU = {:?}",
+        result_phase.first().unwrap()
+    );
+    assert_relative_eq!(
+        expected_zeroth_phase,
+        result_phase.first().unwrap(),
+        epsilon = 5e-5
+    );
+    expected_phase
+        .zip(result_phase.into_iter().skip(1))
+        .enumerate()
+        .for_each(|(i, (e, r))| {
+            if !e.relative_eq(&r, 5e-5, 0.) {
+                panic!("{e} not relative_eq to {r} at index {i}");
+            }
+        });
+
+    // Check the first element is the same time as the time passed to
 
     tmp_dir.close().expect("Could not close temp_dir.");
     push_arc_pages_thread.join().expect("Failed to join");
