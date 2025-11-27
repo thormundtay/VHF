@@ -38,6 +38,25 @@ function main
       activate_venv
       test_cargo --features=o3 $argv[2..]
       python_test
+    case "watch_image"
+      function compile_and_display
+        set -l f $argv[1]
+        make -s docs_images 2> /dev/null 1> /dev/null
+        and begin
+          if command -sq kitten
+            kitten icat $(echo $f | sed "s/.tex\$/.png/") &
+          end
+        end
+        and make -s docs PRIV=y
+      end
+
+      inotifywait -P -r --event close_write --event modify --format '%w%f' --monitor VHF-rs/**/images \
+      | stdbuf -oL grep -E "/[^.][^/]*\.tex\$" \
+      | while read -L -l file
+        printf "Change in file: $file\n"
+        compile_and_display $file
+      end
+
     case '*'
       echo "Unrecognised command: $argv"
       printf "Consider running `$bold./make.fish help$reset`\n"
