@@ -58,7 +58,7 @@ VHF-common = { path = "common" }
 VHF-parse = { path = "src/parser", default-features = false }
 sci-rs = { version = "0.4.1-fork.1", features = [
   'std',
-], git = "https://www.github.com/thormundtay/sci-rs.git", rev = "0b31dc7bc18" }
+], git = "https://www.github.com/thormundtay/sci-rs.git", rev = "0af0c5b05d6" }
 
 [dev-dependencies]
 approx = { version = "0.5.1" }
