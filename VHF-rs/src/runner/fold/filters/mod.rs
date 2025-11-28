@@ -568,6 +568,7 @@ impl super::StreamFold {
             }
         };
         let b_user_len = b_user.len();
+        let b_filter_len = b_filter.len();
         let a_len = a.len();
 
         // For every window, the pages_start offset serves as a look-back into the previous window.
@@ -746,6 +747,7 @@ impl super::StreamFold {
                 if vhf_iter_idx != 0 {
                     let decimation_factor = decimation_factor.get();
                     let filter_len = b_user_len.max(a_len);
+                    let actual_filter_len = b_filter_len;
 
                     vhf_iter_idx
                         .checked_mul(PAGE_LEN)
@@ -756,6 +758,8 @@ impl super::StreamFold {
                                 .div_ceil(decimation_factor)
                                 .checked_mul(decimation_factor)
                         })
+                        .and_then(|i| i.checked_add(1))
+                        .and_then(|i| i.checked_sub_signed(actual_filter_len as _))
                         .unwrap()
                 } else {
                     0
