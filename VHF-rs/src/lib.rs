@@ -9,6 +9,3 @@ pub mod parser;
 /// Determines things associated to the startup and running of streaming data in VHF board,
 /// primarily through [runner::VHF].
 pub mod runner;
-
-/// Data types common to all VHF related operations.
-pub mod types;

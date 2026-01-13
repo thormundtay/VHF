@@ -1,16 +1,71 @@
-.PHONY: init test
-init:
-	g++ VHF/board_init/set_device_mode.cpp -O3 -o VHF/board_init/set_device_mode
-	sudo chown root:root VHF/board_init/set_device_mode
-	sudo chmod +s VHF/board_init/set_device_mode
-	ln -sf /dev/usbhybrid0 vhf_board.softlink
+.PHONY: init clean all
+
+clean:
+# Clean children
+	$(MAKE) -C VHF/board_init clean
+	$(MAKE) docs_clean
+# Clean ourselves
+	cargo clean
+
+all: init
+
+# Initialisation for end user
+init: vhf_board.softlink teststream.exec clear_FIFO
+	$(MAKE) -C VHF/board_init
 	mkdir Log &
 	mkdir Data &
-	cargo build --release --bin stream && ln -sf target/release/stream run_vhf
-	cargo build --release --bin clear-fifo --features clear-fifo && ln -sf target/release/clear-fifo clear_FIFO
-	ln -sf target/release/clear-fifo teststream.exec
 
-test:
-	cargo build --bin stream
-	cargo build --bin clear-fifo --features clear-fifo
-	cargo test -q
+# Links to the default expected USBHybrid board
+vhf_board.softlink:
+	ln -sf /dev/usbhybrid0 $@
+
+teststream.exec: VHF-rs/src/bin/stream.rs
+# Decouple --release flag from Makefile variable
+	cargo build --release --bin stream
+	ln -sf target/release/stream $@
+
+clear_FIFO: VHF-rs/src/bin/clear-fifo.rs
+# Decouple --release flag from Makefile variable
+	cargo build --release --bin clear-fifo --features clear-fifo
+	ln -sf target/release/clear-fifo $@
+
+# Builds: Cargo will do incremental compilation; will not let Makefile try incremental
+BUILD ?= debug
+ifeq ($(BUILD), release)
+	BUILD_FLAG = "--release "
+else
+	BUILD_FLAG =
+endif
+
+build: stream clear-fifo
+
+.PHONY: stream
+stream: VHF-rs/src/bin/stream.rs
+	cargo build $(BUILD_FLAG)--bin stream
+
+.PHONY: clear-fifo
+clear-fifo: VHF-rs/src/bin/clear-fifo.rs
+	cargo build $(BUILD_FLAG)--bin clear-fifo --features clear-fifo
+
+# Documentation
+PRIV ?= n
+ifeq ($(PRIV), y)
+	DOC_PRIV = --document-private-items
+else
+	DOC_PRIV =
+endif
+
+DOC_TARGETS = $(filter docs%,$(MAKECMDGOALS))
+.PHONY = DOC_TARGETS
+
+docs: docs_images
+ifeq ($(PRIV), n)
+	@echo "Run 'make docs PRIV=y' for private documentation."
+endif
+	cargo doc --features=doc-images $(DOC_PRIV)
+
+docs_images:
+	$(MAKE) -C VHF-rs/src/runner/fold/filters/images all
+
+docs_clean:
+	$(MAKE) -C VHF-rs/src/runner/fold/filters/images clean

@@ -1,0 +1,18 @@
+[package]
+name = "VHF-common"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "vhf_common"
+path = "lib.rs"
+
+[dependencies]
+jiff = { version = "0.2.15", features = ["serde"] }
+serde = { version = "1.0.228", features = ["derive"] }
+
+[dev-dependencies]
+approx = { version = "0.5.1" }
+log = { version = "0.4.28" }
+rand = { version = "0.9.2" }
+test-log = { version = "0.2.18", features = ["trace", "color"] }

@@ -43,7 +43,7 @@ fn main() -> Result<()> {
     let conf = initialisation()?;
     let board_conf = conf.build_board_config()?;
     let params = board_conf.stream_fold_parameters().clone();
-    matches!(params.op, StreamFoldOp::Map);
+    matches!(params.op, StreamFoldOp::Map(None));
     assert!(conf.file_writer().is_ok());
 
     let conf_bind = conf.clone();
@@ -67,15 +67,23 @@ fn main() -> Result<()> {
 
     match body {
         Ok(_) => log::info!("Run completed"),
-        Err(e) => log::error!("Main loop occurred with error = {:?}", e),
+        Err(e) => log::error!("Main loop occurred with error = {e:?}"),
     };
 
-    // VHF cleanup
-    vhf.stop()?;
-
-    // File writer clean up
+    // VHF and file_writer cleanup
+    let vhf_stop = vhf.stop();
     drop(writer_send);
-    writer_thread.join().expect("Could not close writer thread");
+
+    if vhf_stop.is_err() {
+        log::error!("Error occured while trying to stop VHF!");
+        vhf_stop?;
+    }
+
+    let writer_stop = writer_thread.join();
+    if writer_stop.is_err() {
+        log::error!("Error occured while trying to stop writer!");
+        return Err(Error::InternalInconsistency);
+    }
 
     Ok(())
 }

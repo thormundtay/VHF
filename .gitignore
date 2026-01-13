@@ -198,3 +198,7 @@ Archive/20230901 Threading Speed/test_Results
 !Archive/20240720 SAB Figures
 *.npz
 *.png
+
+# Exclude documentation tex-derived output
+**/images/*
+!**/images/*.tex

@@ -3,7 +3,7 @@
 //! The intended entry point for [super::VHF] is to spawn [MMapReader] into a child thread through
 //! the use of [mmap_thread].
 
-use super::super::fold::StreamFold;
+use super::super::fold::StreamFoldFunction;
 use super::{MMAP_BYTES_LEN, consts::MMAP_PAGE_LEN, pages::MmapPage};
 use crate::{Error, Result};
 use jiff::Span;
@@ -16,6 +16,7 @@ use std::sync::{
 };
 use std::thread;
 use std::time::{Duration, Instant};
+use vhf_common::data_types::RawVHFWord;
 
 /// Bottom 12 bytes of [super::board_ioctl_consts::ioctl_read] should be zero'd to align to [MmapPage::Page].
 pub const ALIGN_VHF_OUTPUT_TO_PAGES: usize = 9 + 3;
@@ -61,6 +62,7 @@ pub(super) struct MMapReader {
 }
 
 impl MMapReader {
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
         mmap: Mmap,
         engine_running: Arc<AtomicBool>,
@@ -71,7 +73,7 @@ impl MMapReader {
         next_collect_time: Arc<RwLock<Instant>>,
         total_pages: NonZeroUsize,
         handle: libc::c_int,
-        streamfold: &StreamFold,
+        streamfold: &StreamFoldFunction,
     ) -> Result<Self> {
         let loop_timeout: Duration = (*time_between_mmap_page
             * (4 * super::VHF_MMAP_WINDOW_LEN)
@@ -80,7 +82,7 @@ impl MMapReader {
                 .unwrap())
         .try_into()
         .map_err(Error::Jiff)?;
-        log::debug!("mmap_reader thread loop_timeout = {:?}", loop_timeout);
+        log::debug!("mmap_reader thread loop_timeout = {loop_timeout:?}");
 
         Ok(Self {
             handle,
@@ -110,12 +112,13 @@ impl MMapReader {
 
     /// With the previous (rounded) bytes to current (rounded) byes, create a lazy iterator for
     /// pushing onto buffer.  
-    /// Rounding done must be in accordance with [MMAP_PAGE_LEN]. Note that each [crate::types::RawVHFWord] is 8 bytes.
+    /// Rounding done must be in accordance with [MMAP_PAGE_LEN]. Note that each
+    /// [vhf_common::data_types::RawVHFWord] is 8 bytes.
     fn get_mmap_iter(&self, prev: usize, next: usize) -> impl Iterator<Item = &'_ u64> {
         use bytemuck::try_cast_slice;
         // Bytes rounded to page length should have
-        debug_assert!(prev % (8 * MMAP_PAGE_LEN) == 0);
-        debug_assert!(next % (8 * MMAP_PAGE_LEN) == 0);
+        debug_assert!(prev.is_multiple_of(8 * MMAP_PAGE_LEN));
+        debug_assert!(next.is_multiple_of(8 * MMAP_PAGE_LEN));
         if prev < next {
             try_cast_slice(&self.mmap[prev..next])
                 .unwrap()
@@ -131,7 +134,7 @@ impl MMapReader {
 
     /// This converts Mmap u8s into VHFPages which are placed into [self.buffer].
     /// # Errors
-    /// [super::VHF::ioctl_next] yields Err or has negative value.
+    /// [super::VHF]::ioctl_next yields Err or has negative value.
     fn stream(&mut self) -> Result<()> {
         let mut next_bytes;
         loop {
@@ -185,7 +188,7 @@ impl MMapReader {
                 self.get_mmap_iter(self.prev_bytes, next_bytes)
                     .chunks(MMAP_PAGE_LEN)
                     .into_iter()
-                    .map(|x| x.copied().collect_array().unwrap())
+                    .map(|x| x.copied().map(RawVHFWord::from).collect_array().unwrap())
                     .map(Arc::new)
                     .map(MmapPage::Page)
                     .try_for_each(|x| {
@@ -251,7 +254,7 @@ impl MMapReader {
     /// so that the final next() method can pull out all empty windows.
     fn pad_end(&self) -> Result<()> {
         let pad = self.pad_end_remaining();
-        log::debug!("pad_end called with {} MMapPage::End to pad with", pad);
+        log::debug!("pad_end called with {pad} MMapPage::End to pad with");
         (0..pad)
             .try_for_each(|_| self.transfer_buffer_sender.send(MmapPage::End))
             .expect("Failed to send");
@@ -300,6 +303,7 @@ impl core::ops::Drop for MMapReader {
 }
 
 /// Used as the child thread of [super::VHF] at driving [MMapReader].
+#[allow(clippy::too_many_arguments)]
 pub(super) fn mmap_thread(
     mmap: Mmap,
     engine: Arc<AtomicBool>,
@@ -310,7 +314,7 @@ pub(super) fn mmap_thread(
     next_collect_time: Arc<RwLock<Instant>>,
     total_pages: NonZeroUsize,
     handle: libc::c_int,
-    streamfold: &StreamFold,
+    streamfold: &StreamFoldFunction,
 ) -> Result<()> {
     let mut mmap_reader = MMapReader::new(
         mmap,

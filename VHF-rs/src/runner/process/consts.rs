@@ -1,7 +1,7 @@
 //! All consts shared across [super::super::process] submodules.
 
-/// This is the number of [crate::types::RawVHFWord] in one (kernel-sized) page emitted from the
-/// MMap onto the heap.  
+/// This is the number of [vhf_common::data_types::RawVHFWord] in one (kernel-sized) page emitted
+/// from the MMap onto the heap.  
 /// See [super::pages] in particular.
 pub(in crate::runner) const MMAP_PAGE_LEN: usize = 512;
 

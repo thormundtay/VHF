@@ -1,4 +1,4 @@
-use crate::Result;
+use crate::{Error, Result};
 use configparser::ini;
 use evalexpr::{DefaultNumericTypes, HashMapContext, Value};
 use regex::{Captures, Regex};
@@ -23,34 +23,33 @@ impl PythonMath for String {
         log::debug!("[PythonMath::eval] called with self = {:?}", &self);
         let context = HashMapContext::<DefaultNumericTypes>::new();
         // Replace any 2**n Python expressions as evalexpr crate would coerce into float.
-        let to_eval: Result<String> = if has_pow_2(&self) {
+        let to_eval: String = if has_pow_2(&self) {
             // Check if u32 parse error occurs
             if HAS_POW_2_RE
                 .captures_iter(&self)
                 .any(|captured: Captures| captured["expo"].parse::<u32>().is_err())
             {
-                return Err(crate::Error::ParseUnrecognised(
+                return Err(Error::ParseUnrecognised(
                     "Failed to parse exponent as u32".to_string(),
                 ));
             }
 
             // No parse int error found, we can continue
-            let tmp = HAS_POW_2_RE
+            let result = HAS_POW_2_RE
                 .replace(&self, |captured: &Captures| {
                     // log::trace!("closure: captured = {:?}", captured);
                     let exponent = captured["expo"].parse::<u32>().unwrap();
                     format!("{}", 1 << exponent)
                 })
                 .to_string();
-            log::trace!("Expression to evaluate: {}", tmp);
-            Ok(tmp)
+            log::trace!("Expression to evaluate: {result}");
+            result
         } else {
-            Ok(self)
+            self
         };
         // We let evalexpr handle everything except for powers of 2
         log::debug!("[PythonMath::eval] evaluating on {:?}", &to_eval);
-        let result =
-            evalexpr::eval_with_context(&to_eval.unwrap(), &context).map_err(|e| e.into())?;
+        let result = evalexpr::eval_with_context(&to_eval, &context)?;
         match result {
             Value::Boolean(_) => Err(crate::Error::IniParse(
                 "Could not cast into numeric from Boolean".to_string(),
@@ -84,21 +83,21 @@ pub fn if_enabled_value<T>(
 where
     T: num_traits::bounds::Bounded + Into<u64> + TryFrom<u64>,
 {
-    let key_enable = &format!("{}_enable", key);
+    let key_enable = &format!("{key}_enable");
     let map = config.get_map_ref();
 
     if map
         .get(&section.to_ascii_lowercase())
-        .unwrap_or_else(|| panic!("ini file '{}' section not found.", section))
+        .unwrap_or_else(|| panic!("ini file '{section}' section not found."))
         .get(key_enable)
         .is_none()
     {
-        return Err(crate::Error::ini_missing(section, key));
+        return Err(Error::ini_missing(section, key));
     }
     log::debug!("ini file '{section} - {key_enable}' found.");
     // Check if key_enable is boolean
     if config.getbool(section, key_enable).unwrap().is_none() {
-        return Err(crate::Error::IniParse(
+        return Err(Error::IniParse(
             "ini file '{section} - {key_enable}' was not boolean.".to_string(),
         ));
     }
@@ -115,7 +114,7 @@ where
     // Ok(Some(v)) => key exists, value parsed => bounds(v)
     if let Ok(None) = config.getuint(section, key) {
         log::warn!("ini file '{section} - {key}' not found.");
-        return Err(crate::Error::ini_missing(section, key));
+        return Err(Error::ini_missing(section, key));
     }
 
     let v: u64 = match config.getuint(section, key) {
@@ -125,15 +124,15 @@ where
             Err(e) => return Err(e),
             Ok(Value::Int(v)) => v as u64,
             Ok(t) => {
-                log::trace!("{section} - {key} getuint yielded {}", t);
-                return Err(crate::Error::IniParse(
+                log::error!("{section} - {key} getuint yielded {t}");
+                return Err(Error::IniParse(
                     "ini file '{section} - {key}' was not integer.".to_string(),
                 ));
             }
         },
     };
     if !bound(v) {
-        return Err(crate::Error::IniParse(
+        return Err(Error::IniParse(
             "ini file '{section} - {key}' not within bounds.".to_string(),
         ));
     }
@@ -265,7 +264,7 @@ mod configutil_tests {
         let result: Result<Option<u8>> =
             super::if_enabled_value(&conf, "Board", "vga_num", |v| v <= 8);
         let expected = Some(6u8);
-        log::info!("result = {:?}", result);
+        log::info!("result = {result:?}");
         assert_eq!(result.unwrap(), expected);
     }
 

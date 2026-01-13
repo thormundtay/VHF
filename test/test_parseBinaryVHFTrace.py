@@ -1,17 +1,13 @@
 import pytest
-import logging
 from multiprocessing import Pool
-import numpy as np
 from numpy.typing import NDArray
-import os
 from pathlib import Path
-import subprocess
-import sys
 from typing import Callable
-module_path = str(Path(__file__).parents[1])
-if module_path not in sys.path:
-    sys.path.append(module_path)
-from VHF.parse import BinaryVHFTrace
+from VHF._parse.v1_binary_core import BinaryVHFTrace
+import logging
+import numpy as np
+import os
+import subprocess
 
 compiled_path = "usbhybrid-reference/convert_bin_to_text"
 compiled = Path(__file__).parent.joinpath(compiled_path)

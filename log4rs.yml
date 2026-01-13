@@ -17,7 +17,7 @@ appenders:
     tty_only: false
   file:
     kind: file
-    path: "Log/stream.log"
+    path: "Log/stream-$TIME{%+}.log"
     filters:
       - kind: threshold
         level: debug

@@ -7,8 +7,7 @@ pub(super) mod pages;
 
 use super::Config;
 use super::config::BoardConfig;
-use super::config::typedef::SamplingSpeed;
-use super::fold::StreamFold;
+use super::fold::StreamFoldFunction;
 use crate::{Error, Result};
 use consts::{MMAP_PAGE_LEN, VHF_MMAP_WINDOW_LEN};
 use heapless::Deque;
@@ -29,40 +28,64 @@ use std::sync::{
 };
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
+use vhf_common::config_types::SamplingSpeed;
 
 /// This is the size in bytes of the Mmap that is backed by the VHF device.
 const MMAP_BYTES_LEN: usize = 1 << 22;
 /// The size of the only continuous ring buffer that is [heapless::Deque].
-const DEQUE_CAP: usize = 256;
+pub(super) const DEQUE_CAP: usize = 256;
+
+/// Logs messages as debug in #[cfg(test)], otherwise at their respective levels for #..not(test)
+#[cfg(not(feature = "clear-fifo"))]
+macro_rules! my_log {
+    (error, $msg:expr $(, $($arg:tt)*)?) => {
+        #[cfg(not(test))]
+        log::error!($msg $(, $($arg)*)?);
+        #[cfg(test)]
+        log::debug!($msg $(, $($arg)*)?);
+    };
+    (warn, $msg:expr $(, $($arg:tt)*)?) => {
+        #[cfg(not(test))]
+        log::warn!($msg $(, $($arg)*)?);
+        #[cfg(test)]
+        log::debug!($msg $(, $($arg)*)?);
+    };
+    (info, $msg:expr $(, $($arg:tt)*)?) => {
+        #[cfg(not(test))]
+        log::info!($msg $(, $($arg)*)?);
+        #[cfg(test)]
+        log::debug!($msg $(, $($arg)*)?);
+    };
+}
 
 /// Everything necessary to ensure the lifetime of pulling memory out from the VHF for its runtime
 pub struct VHF<'a> {
-    configuration: BoardConfig<'a>,
-    handle: libc::c_int,
-    raw_handle: std::fs::File,
+    pub(super) configuration: BoardConfig<'a>,
+    pub(super) handle: libc::c_int,
+    pub(super) raw_handle: std::fs::File,
     /// map_reader contains the thread that is responsible for pulling elements out of the MMap
     /// into a [Self::buffer].
     /// More details is as given in [self::mmap_reader].
-    map_reader: Option<JoinHandle<Result<()>>>,
+    pub(super) map_reader: Option<JoinHandle<Result<()>>>,
     /// Used to signal to [self::mmap_reader::MMapReader] has started, and to determine that child has stopped.
-    engine_running: Arc<AtomicBool>,
+    pub(super) engine_running: Arc<AtomicBool>,
     /// Stopped invoked
-    vhf_stop: bool,
+    pub(super) vhf_stop: bool,
     /// Used to receive signal from [self::mmap_reader::MMapReader] that new pages have been placed into
     /// [Self::buffer].
-    buffer_signal: Arc<Condvar>,
+    pub(super) buffer_signal: Arc<Condvar>,
     /// This is the channel used to receive from the child thread.
-    buffer_receive: Receiver<MmapPage>,
+    pub(super) buffer_receive: Receiver<MmapPage>,
     /// buffer is a local mirror of Mmap that is intended for the likes of SlidingWindow
     /// [itertools::Itertools::tuple_windows] and par_map, which has more Rust Semantics than reading straight
     /// out of a Mmap.
-    buffer: Rc<RefCell<Deque<MmapPage, DEQUE_CAP>>>,
+    pub(super) buffer: Rc<RefCell<Deque<MmapPage, DEQUE_CAP>>>,
     /// This is the amount of time between any two pages. Used for determining other timings.
-    time_between_pages: Span,
+    pub(super) time_between_pages: Span,
     /// Expected time when to next wake up mmap_reader thread.
-    wake_mmap: Arc<RwLock<Instant>>,
+    pub(super) wake_mmap: Arc<RwLock<Instant>>,
     /// This is the total number of pages to be read by [Self::map_reader].
-    total_pages_to_read: NonZeroUsize,
+    pub(super) total_pages_to_read: NonZeroUsize,
 }
 
 impl<'a> VHF<'a> {
@@ -71,9 +94,9 @@ impl<'a> VHF<'a> {
     /// # Arguments
     /// - config: [Config]
     ///   Configuration for running VHF.
-    /// - params: [StreamFold]
+    /// - params: [StreamFoldFunction]
     ///   This is to ensure that the same parameters are being used by the driving body and [VHF].
-    pub fn new(config: &'a Config, params: &StreamFold) -> Result<Self> {
+    pub fn new(config: &'a Config, params: &StreamFoldFunction) -> Result<Self> {
         let config: BoardConfig<'_> = config.build_board_config()?;
         let handle = Self::open_dev(
             config
@@ -86,18 +109,19 @@ impl<'a> VHF<'a> {
 
         assert_eq!(config.stream_fold_parameters(), params);
 
-        let time_between_pages: Span = pages::time_between_pages_in_ns(&config.speed)?;
-        log::debug!("Time between pages = {}", time_between_pages);
+        let time_between_pages: Span = pages::time_between_pages_in_ns(config.speed)?;
+        log::debug!("Time between pages = {time_between_pages}");
 
         let wake_mmap = Arc::new(RwLock::new(Instant::now()));
 
         // This will have to be changed as filtering etc means data points are not being passed to
         // file writer.
-        let total_elements_to_read =
-            unsafe { NonZeroUsize::new(config.total_elements_to_read()).unwrap_unchecked() };
+        let total_elements_to_read: NonZeroUsize =
+            unsafe { NonZeroUsize::new_unchecked(config.total_elements_to_read()) }
+                .checked_mul(params.effective_decimation_factor())
+                .ok_or(Error::ExcessData)?;
         let total_pages_to_read: NonZeroUsize = unsafe {
-            NonZeroUsize::new(usize::from(total_elements_to_read).div_ceil(MMAP_PAGE_LEN))
-                .unwrap_unchecked()
+            NonZeroUsize::new_unchecked(usize::from(total_elements_to_read).div_ceil(MMAP_PAGE_LEN))
         };
 
         let engine_running = Arc::new(AtomicBool::new(false));
@@ -109,7 +133,7 @@ impl<'a> VHF<'a> {
             let mut buffer = Deque::new();
             // Left padding is initialisation, and is thus handled in the parent.
             // Right-padding is termination, and therefore has to be handled by the child thread.
-            (0..config.stream_fold.pad)
+            (0..config.stream_fold.func.pad)
                 .try_for_each(|_| buffer.push_back(MmapPage::Empty))
                 .expect("Failed to push_back onto buffer.");
             Rc::new(RefCell::new(buffer))
@@ -127,12 +151,9 @@ impl<'a> VHF<'a> {
                 .try_into()
                 .map_err(Error::Jiff)?;
             debug_assert!(number_of_pages_between_stream_resume < DEQUE_CAP as i64 / 2);
-            log::debug!(
-                "MMapReader time_between_stream_resume = {:?}",
-                time_between_stream_resume
-            );
+            log::debug!("MMapReader time_between_stream_resume = {time_between_stream_resume:?}");
             let next_collect_time = wake_mmap.clone();
-            let streamfold = params.clone();
+            let streamfoldfunc = params.clone();
             thread::Builder::new()
                 .name("mmap_reader".to_string())
                 .spawn(move || {
@@ -146,7 +167,7 @@ impl<'a> VHF<'a> {
                         next_collect_time,
                         total_pages_to_read,
                         handle,
-                        &streamfold,
+                        &streamfoldfunc,
                     )
                 })
                 .map_err(Error::Io)
@@ -204,7 +225,8 @@ impl<'a> VHF<'a> {
                     acc += x as u64;
                     acc
                 });
-            log::debug!("Prepopulating mmap summed to: {}", tmp);
+            // Use of variable to not optimize out.
+            log::debug!("Prepopulating mmap summed to: {tmp}");
         }
 
         Ok(result)
@@ -268,7 +290,7 @@ impl<'a> VHF<'a> {
     pub fn stop(&mut self) -> Result<()> {
         #[cfg(not(feature = "clear-fifo"))]
         {
-            log::info!("VHF stop has been invoked.");
+            my_log!(info, "VHF stop has been invoked.");
         }
         #[cfg(feature = "clear-fifo")]
         {
@@ -306,11 +328,21 @@ impl<'a> VHF<'a> {
             .write(b"stop; config 0;")
             .map_err(Error::Io)?;
         // Stop hostside USB device.
-        let result = board_ioctl_consts::ioctl_end(self.handle).map(|_| ());
+        let result = {
+            #[cfg(not(test))]
+            {
+                board_ioctl_consts::ioctl_end(self.handle).map(|_| ())
+            }
+            #[cfg(test)]
+            {
+                // There is no need to perform ioctl_end in unit tests
+                Ok(())
+            }
+        };
 
         #[cfg(not(feature = "clear-fifo"))]
         {
-            log::info!("VHF stopped!");
+            my_log!(info, "VHF stopped!");
         }
         #[cfg(feature = "clear-fifo")]
         {
@@ -318,13 +350,6 @@ impl<'a> VHF<'a> {
         }
 
         result
-    }
-
-    /// Assumes the USB Machine has started.
-    /// Gets the next index to read up to as given by ioctl
-    #[inline(always)]
-    pub fn ioctl_next(&self) -> Result<libc::c_int> {
-        board_ioctl_consts::ioctl_read(self.handle)
     }
 
     /// Returns an iterable over VHF's buffer.
@@ -365,6 +390,10 @@ impl Drop for VHF<'_> {
     }
 }
 
+/// Immutable iterator of VHF pages.
+///
+/// This struct is created with the [VHF::iter] method on [VHF].  
+/// Releases a window of VHF Pages with the [Self::next] method.
 pub struct VHFIter<'a> {
     /// non-iter parent
     vhf_parent: &'a VHF<'a>,
@@ -431,6 +460,10 @@ impl std::iter::Iterator for VHFIter<'_> {
                 let result = self.buffer.borrow_mut().push_back(page);
                 if result.is_err() {
                     log::error!("Pushing onto internal buffer without sufficient space.");
+                    #[cfg(test)]
+                    {
+                        panic!("Please use a longer delay in the signal generator for the tests.");
+                    }
                     // Discard failed to push page.
                 }
             }
@@ -475,7 +508,7 @@ impl std::iter::Iterator for VHFIter<'_> {
                     let now = Instant::now();
                     if now < target_wakeup {
                         let sleep_for = target_wakeup.saturating_duration_since(now);
-                        log::trace!("Sleeping within 'get_wake for {:?}", sleep_for);
+                        log::trace!("Sleeping within 'get_wake for {sleep_for:?}");
                         thread::sleep(sleep_for);
 
                         // Wait 1 page of time for condvar
@@ -507,10 +540,3 @@ impl std::iter::Iterator for VHFIter<'_> {
         (lb, Some(lb + VHF_MMAP_WINDOW_LEN))
     }
 }
-
-#[cfg(test)]
-mod test_v1_write;
-#[cfg(test)]
-mod test_vhf;
-#[cfg(test)]
-mod test_vhf_step_fold;
